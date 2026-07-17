@@ -29,7 +29,7 @@
   function topBar(def) {
     if (def.showHeader === false) return "";
     return `<div class="doc-top">
-      <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg")}" alt="BASE">
+      <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260717")}" alt="BASE">
       <div class="doc-org">${esc(def.org || ORG_DEFAULT)}<br>${esc(def.headerNote || "Controlled Document — Do Not Reproduce")}</div>
     </div><div class="rule"></div>`;
   }
