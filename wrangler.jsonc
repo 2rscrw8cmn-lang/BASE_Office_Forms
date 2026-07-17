@@ -8,6 +8,7 @@
     {
       "binding": "DB",
       "database_name": "base-office-forms-library",
+      "database_id": "1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab",
       "migrations_dir": "./migrations"
     }
   ]
