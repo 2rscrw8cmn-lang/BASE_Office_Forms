@@ -7,6 +7,7 @@
   const esc = value => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+  const proseHtml = value => esc(value).replace(/\r\n?|\n/g, "<br>");
   const slug = value => String(value || "field").toLowerCase().replace(/[†‡]/g, "")
     .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field";
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -167,8 +168,12 @@
           ? `<div class="section big">${sectionBar(numbered, block.heading)}</div>`
           : `<div class="doc-eyebrow-wrap">${block.eyebrow ? `<div class="eyebrow">${esc(block.eyebrow)}</div>` : ""}<h2 class="doc-h2">${esc(block.heading)}</h2></div>`) : "";
         const paras = block.paras || [];
-        const first = `<div class="avoid">${heading}${paras.length ? `<p class="prose">${esc(paras[0])}</p>` : ""}</div>`;
-        return first + paras.slice(1).map(text => `<p class="prose flow-paragraph">${esc(text)}</p>`).join("");
+        const firstClass = paras.length === 1 ? " prose-last" : "";
+        const first = `<div class="avoid">${heading}${paras.length ? `<p class="prose${firstClass}">${proseHtml(paras[0])}</p>` : ""}</div>`;
+        return first + paras.slice(1).map((text, index) => {
+          const lastClass = index === paras.length - 2 ? " prose-last" : "";
+          return `<p class="prose flow-paragraph${lastClass}">${proseHtml(text)}</p>`;
+        }).join("");
       }
       case "callout": return `<div class="pull avoid"><div class="pull-q">${esc(block.text)}</div>${block.attribution ? `<div class="pull-a">${esc(block.attribution)}</div>` : ""}</div>`;
       case "note": return `<div class="note avoid">${block.title ? `<div class="note-t">${esc(block.title)}</div>` : ""}<div class="note-b">${esc(block.text)}</div></div>`;

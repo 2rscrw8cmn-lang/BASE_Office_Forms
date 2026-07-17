@@ -181,7 +181,7 @@
   function blockEditor(block, index) {
     const base = `blocks.${index}`;
     let body = "";
-    if (block.type === "prose") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Number section", `${base}.number`, block.number !== false)}</div>` + textArea("Paragraphs — blank line between", `${base}.paras`, (block.paras || []).join("\n\n"), "paras");
+    if (block.type === "prose") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Number section", `${base}.number`, block.number !== false)}</div>` + textArea("Paragraphs", `${base}.paras`, (block.paras || []).join("\n\n"), "paras", "Enter = line break. Blank line = new paragraph.");
     if (block.type === "callout") body = textArea("Callout", `${base}.text`, block.text) + textInput("Attribution", `${base}.attribution`, block.attribution);
     if (block.type === "note") body = textInput("Note title", `${base}.title`, block.title) + textArea("Note text", `${base}.text`, block.text);
     if (block.type === "signatory") body = textInput("Name", `${base}.name`, block.name) + textInput("Role", `${base}.role`, block.role);

@@ -375,7 +375,7 @@ p { margin: 0; text-wrap: pretty; }
 .section.big .sec-name { font-size: 14px; letter-spacing: 1.4px; padding: 8px 12px; }
 
 .prose { font: 400 13px/1.6 var(--sans); color: #33333a; margin-bottom: 11px; }
-.prose:last-child { margin-bottom: 0; }
+.prose.prose-last { margin-bottom: 0; }
 
 .pull { border-left: 4px solid var(--accent); padding: 6px 0 6px 18px; margin: 18px 0; }
 .pull-q { font: 700 21px/1.25 var(--sans); color: var(--ink); }
