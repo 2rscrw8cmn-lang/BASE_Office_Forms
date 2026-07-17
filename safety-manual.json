@@ -1,0 +1,64 @@
+{
+  "kind": "document",
+  "no": "SM-1",
+  "tag": "Safety Manual · SM-1",
+  "title": "Construction Safety Manual",
+  "subtitle": "BASE Construction, LLC",
+  "standard": "The minimum safety standards governing all company operations, written to meet or exceed OSHA 29 CFR 1926. Compliance is a condition of employment and of doing business with this company.",
+  "org": "Health, Safety & Environmental Division",
+  "control": { "Revision": "001", "Effective": "2026-07-17", "Classification": "Controlled", "Doc. Control": "BASE-SAF-SM-1" },
+  "authority": "Issued under authority of Travis Bonnett, President",
+  "toc": true,
+  "blocks": [
+    {
+      "type": "prose",
+      "eyebrow": "Front Matter",
+      "heading": "Safety Policy Statement",
+      "number": false,
+      "paras": [
+        "BASE Construction, LLC is committed to providing a safe and healthy workplace for every employee, subcontractor, and visitor on our job sites. Every person on our sites has the authority and the obligation to stop work that appears unsafe.",
+        "This manual establishes the minimum safety standards for all company operations. It applies to every employee, from ownership to newly hired laborers, and to every subcontractor working under our supervision.",
+        "Our goal is zero injuries. We achieve that goal through planning, training, the right equipment, and a jobsite culture where safety comes before schedule and cost."
+      ]
+    },
+    { "type": "callout", "text": "No task is so urgent that it cannot be done safely." },
+    { "type": "signatory", "name": "Travis Bonnett", "role": "President · BASE Construction, LLC" },
+    {
+      "type": "prose",
+      "heading": "Purpose and Scope",
+      "paras": [
+        "This manual applies to all company job sites, shops, yards, and vehicles. It covers company employees and, where applicable, subcontractors and their employees while working on our projects.",
+        "This manual is not a substitute for site-specific hazard assessments, manufacturer instructions, or applicable law. Where a conflict exists between this manual and a legal requirement, the stricter standard governs."
+      ]
+    },
+    {
+      "type": "prose",
+      "heading": "Personal Protective Equipment",
+      "paras": [
+        "Hard hats, eye protection, and high-visibility apparel are required on all active job sites at all times. Additional PPE is required based on the task and the site-specific hazard assessment."
+      ]
+    },
+    {
+      "type": "note",
+      "title": "Stop-Work Authority",
+      "text": "Any worker may stop a task they believe is unsafe, without fear of reprisal. Work resumes only after the hazard is corrected and a supervisor confirms."
+    },
+    {
+      "type": "table",
+      "columns": ["Hazard", "Primary Control", "Reference"],
+      "rows": [
+        ["Falls from height", "Guardrails, PFAS, controlled access", "§ 05"],
+        ["Silica dust", "Wet-cutting, HEPA vacuum, respirator", "§ 18"],
+        ["Electrical", "GFCI, lockout/tagout, qualified persons", "§ 08"]
+      ]
+    },
+    {
+      "type": "ack",
+      "heading": "Employee Acknowledgment",
+      "req": "REQUIRED",
+      "intro": "I acknowledge that I have received, read, and understand the BASE Construction Safety Manual, and I agree to comply with its requirements as a condition of employment.",
+      "fields": [ ["Employee Name (print)", 2], ["Employee ID", 1], ["Date", 1] ],
+      "sign": [ ["Employee Signature", 2], ["Supervisor Signature", 2] ]
+    }
+  ]
+}

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Builder</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* neutral editor chrome; the PREVIEW stays branded */
+  body { background: #f2f2f4; }
+  .app { display: grid; grid-template-columns: 400px 1fr; height: 100vh; }
+  .editor { overflow-y: auto; background: #fff; border-right: 1px solid #d8d8dc; }
+  .previewpane { overflow: auto; padding: 24px; background: var(--page-bg); }
+  .previewscale { transform-origin: top left; }
+
+  .bar { position: sticky; top: 0; z-index: 5; background: #17171a; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .bar .sp { flex: 1; }
+  .ebtn { font: 600 10.5px/1 var(--code); text-transform: uppercase; letter-spacing: .3px; padding: 8px 10px; border: 1px solid #3a3a40; background: #24242a; color: #e7e7ea; cursor: pointer; border-radius: 3px; }
+  .ebtn:hover { background: #33333a; }
+  .ebtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .panel { padding: 14px 14px 4px; border-bottom: 1px solid #ececee; }
+  .panel h3 { font: 700 9px/1 var(--code); text-transform: uppercase; letter-spacing: 1.2px; color: #8a8a90; margin: 0 0 10px; }
+  .lbl { font: 600 9px/1 var(--code); text-transform: uppercase; letter-spacing: .4px; color: #8a8a90; display: block; margin: 9px 0 3px; }
+  .in, .ta, .sel { width: 100%; font: 500 12px/1.4 var(--sans); color: var(--ink); border: 1px solid #d2d2d6; border-radius: 3px; padding: 6px 8px; background: #fff; }
+  .ta { resize: vertical; min-height: 60px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row2 { display: grid; grid-template-columns: 1fr 60px 26px; gap: 6px; align-items: center; margin-top: 5px; }
+  .card { border: 1px solid #e2e2e6; border-radius: 5px; padding: 10px; margin: 10px 14px; background: #fafafb; }
+  .card .head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .card .tag { font: 700 8.5px/1 var(--code); text-transform: uppercase; letter-spacing: .6px; color: #fff; background: var(--accent); padding: 4px 7px; border-radius: 3px; }
+  .card .sp { flex: 1; }
+  .mini { font: 700 12px/1 var(--sans); width: 24px; height: 24px; border: 1px solid #d2d2d6; background: #fff; border-radius: 3px; cursor: pointer; color: #55555c; }
+  .mini:hover { background: #efeff1; }
+  .mini.del:hover { background: #7a1e22; color: #fff; border-color: #7a1e22; }
+  .addrow { font: 600 10px/1 var(--code); color: var(--accent); background: none; border: 1px dashed #d2b6b8; border-radius: 3px; padding: 6px 9px; cursor: pointer; margin-top: 6px; }
+  .addmenu { padding: 12px 14px 20px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .addmenu .ebtn { background: #eee; color: #333; border-color: #ddd; }
+  .addmenu .ebtn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .hint { font: 500 10px/1.4 var(--code); color: #9a9aa0; padding: 0 14px 12px; }
+
+  @media print {
+    .app { display: block; height: auto; }
+    .editor { display: none !important; }
+    .previewpane { overflow: visible; padding: 0; background: #fff; }
+    .previewscale { transform: none !important; width: 100% !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="editor">
+    <div class="bar">
+      <button class="ebtn" data-new="form">New form</button>
+      <button class="ebtn" data-new="document">New document</button>
+      <span class="sp"></span>
+      <button class="ebtn" onclick="loadDef()">Load</button>
+      <button class="ebtn" onclick="saveDef()">Save</button>
+      <button class="ebtn" onclick="copyDef()">Copy def</button>
+      <button class="ebtn on" onclick="printPreview()">Print</button>
+    </div>
+    <div id="ed"></div>
+  </div>
+  <div class="previewpane">
+    <div class="previewscale" id="pv"></div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+let def = BASE.blankForm();
+
+/* ---------- path utilities ---------- */
+function getPath(o, p){ return p.split(".").reduce((a,k)=> a==null?a:a[k], o); }
+function setPath(o, p, v){
+  const ks = p.split("."); const last = ks.pop();
+  let t = o; for (const k of ks) t = t[k];
+  t[last] = v;
+}
+
+/* ---------- preview ---------- */
+function preview(){
+  const clone = JSON.parse(JSON.stringify(def));
+  document.getElementById("pv").innerHTML = BASE.render(clone, { fill:false });
+  fit();
+}
+function fit(){
+  const pane = document.querySelector(".previewpane");
+  const scale = Math.min(1, (pane.clientWidth - 48) / 816);
+  const el = document.getElementById("pv");
+  el.style.transform = "scale(" + scale + ")";
+  el.style.width = (100/scale) + "%";
+}
+window.addEventListener("resize", fit);
+
+/* ---------- editor render ---------- */
+function esc(s){ return BASE.esc(s); }
+function txt(label, path, val){
+  return `<label class="lbl">${label}</label><input class="in" data-path="${path}" value="${esc(val||"")}">`;
+}
+function area(label, path, val){
+  return `<label class="lbl">${label}</label><textarea class="ta" data-path="${path}">${esc(val||"")}</textarea>`;
+}
+
+function metaPanel(){
+  const isDoc = def.kind === "document";
+  const c = def.control || {};
+  return `<div class="panel">
+    <h3>${isDoc ? "Document" : "Form"} details</h3>
+    <div class="two">${txt("No.", "no", def.no)}${isDoc ? txt("Tag", "tag", def.tag) : ""}</div>
+    ${txt("Title", "title", def.title)}
+    ${isDoc ? txt("Subtitle", "subtitle", def.subtitle) : txt("Subtitle", "sub", def.sub)}
+    ${isDoc ? area("Standard / summary line", "standard", def.standard) : ""}
+    ${txt("Division / org", "org", def.org)}
+    <div class="two">${txt("Revision", "control.Revision", c.Revision)}${txt("Effective", "control.Effective", c.Effective)}</div>
+    <div class="two">${txt("Classification", "control.Classification", c.Classification)}${txt("Doc. control", "control.Doc. Control", c["Doc. Control"])}</div>
+    ${isDoc ? txt("Authority line", "authority", def.authority) : ""}
+    ${isDoc ? `<label class="lbl">Table of contents</label><select class="sel" data-path="toc" data-bool><option value="true"${def.toc?" selected":""}>Auto-generate</option><option value="false"${!def.toc?" selected":""}>None</option></select>` : ""}
+  </div>`;
+}
+
+/* rows of [label,width] used by fields / sign / ack */
+function labelWidthRows(base, arr){
+  return (arr||[]).map((x,i) => {
+    const label = Array.isArray(x)?x[0]:x.label, w = Array.isArray(x)?(x[1]||1):(x.w||1);
+    return `<div class="row2">
+      <input class="in" data-path="${base}.${i}.label" value="${esc(label)}" placeholder="Label">
+      <input class="in" data-path="${base}.${i}.w" value="${w}" placeholder="w">
+      <button class="mini del" data-act="delrow" data-base="${base}" data-i="${i}">×</button>
+    </div>`;
+  }).join("") + `<button class="addrow" data-act="addrow" data-base="${base}" data-kind="lw">+ field</button>`;
+}
+
+function sectionCard(s, i){
+  const isDoc = def.kind === "document";
+  const list = isDoc ? "blocks" : "sections";
+  const type = isDoc ? s.type : (s.fields?"fields":s.checks?"checks":"sign");
+  const head = `<div class="head"><span class="tag">${type}</span><span class="sp"></span>
+    <button class="mini" data-act="up" data-i="${i}">↑</button>
+    <button class="mini" data-act="down" data-i="${i}">↓</button>
+    <button class="mini del" data-act="delsec" data-i="${i}">×</button></div>`;
+  let bodyHtml = "";
+
+  if (!isDoc){
+    bodyHtml += `<div class="two">${txt("Section name", `sections.${i}.name`, s.name)}${txt("Tag (right)", `sections.${i}.req`, s.req)}</div>`;
+    if (s.fields) bodyHtml += `<label class="lbl">Fields (label · width)</label>${labelWidthRows(`sections.${i}.fields`, s.fields)}`;
+    if (s.checks){
+      bodyHtml += `<label class="lbl">Options (one per line)</label><textarea class="ta" data-path="sections.${i}.checks" data-list="lines">${esc((s.checks||[]).join("\n"))}</textarea>`;
+      bodyHtml += `<div class="two"><div><label class="lbl">Pick</label><select class="sel" data-path="sections.${i}.single" data-bool><option value="false"${!s.single?" selected":""}>Any (checkbox)</option><option value="true"${s.single?" selected":""}>One (radio)</option></select></div><div>${txt("Columns", `sections.${i}.cols`, s.cols||"")}</div></div>`;
+    }
+    if (s.sign) bodyHtml += `<label class="lbl">Signature fields (label · width)</label>${labelWidthRows(`sections.${i}.sign`, s.sign)}`;
+  } else {
+    if (type==="prose"){
+      bodyHtml += `<div class="two">${txt("Eyebrow (optional)", `blocks.${i}.eyebrow`, s.eyebrow)}<div><label class="lbl">Numbering</label><select class="sel" data-path="blocks.${i}.number" data-bool><option value="true"${s.number!==false?" selected":""}>Auto number</option><option value="false"${s.number===false?" selected":""}>No number</option></select></div></div>`;
+      bodyHtml += txt("Heading", `blocks.${i}.heading`, s.heading);
+      bodyHtml += `<label class="lbl">Paragraphs (blank line between)</label><textarea class="ta" data-path="blocks.${i}.paras" data-list="paras">${esc((s.paras||[]).join("\n\n"))}</textarea>`;
+    }
+    if (type==="callout"){ bodyHtml += area("Quote / callout", `blocks.${i}.text`, s.text) + txt("Attribution (optional)", `blocks.${i}.attribution`, s.attribution); }
+    if (type==="note"){ bodyHtml += txt("Note title", `blocks.${i}.title`, s.title) + area("Note text", `blocks.${i}.text`, s.text); }
+    if (type==="signatory"){ bodyHtml += txt("Name", `blocks.${i}.name`, s.name) + txt("Role", `blocks.${i}.role`, s.role); }
+    if (type==="table"){
+      bodyHtml += `<label class="lbl">Columns (comma-separated)</label><input class="in" data-path="blocks.${i}.columns" data-list="commas" value="${esc((s.columns||[]).join(", "))}">`;
+      bodyHtml += `<label class="lbl">Rows (one per line, cells split by | )</label><textarea class="ta" data-path="blocks.${i}.rows" data-list="rows">${esc((s.rows||[]).map(r=>r.join(" | ")).join("\n"))}</textarea>`;
+    }
+    if (type==="ack"){
+      bodyHtml += `<div class="two">${txt("Heading", `blocks.${i}.heading`, s.heading)}${txt("Tag (right)", `blocks.${i}.req`, s.req)}</div>`;
+      bodyHtml += area("Intro line", `blocks.${i}.intro`, s.intro);
+      bodyHtml += `<label class="lbl">Fields (label · width)</label>${labelWidthRows(`blocks.${i}.fields`, s.fields)}`;
+      bodyHtml += `<label class="lbl">Signature (label · width)</label>${labelWidthRows(`blocks.${i}.sign`, s.sign)}`;
+    }
+  }
+  return `<div class="card">${head}${bodyHtml}</div>`;
+}
+
+function addMenu(){
+  const isDoc = def.kind === "document";
+  const opts = isDoc
+    ? [["prose","Section"],["callout","Callout"],["note","Note"],["signatory","Signatory"],["table","Table"],["ack","Acknowledgment"]]
+    : [["fields","Write-in fields"],["checks","Checkboxes"],["sign","Signature"]];
+  return `<div class="addmenu">` + opts.map(([t,l])=>`<button class="ebtn" data-act="add" data-type="${t}">+ ${l}</button>`).join("") + `</div>`;
+}
+
+function renderEditor(){
+  const list = def.kind==="document" ? (def.blocks||[]) : (def.sections||[]);
+  document.getElementById("ed").innerHTML =
+    metaPanel() +
+    `<div class="hint">${def.kind==="document"?"Blocks":"Sections"} — reorder with ↑ ↓, remove with ×.</div>` +
+    list.map((s,i)=>sectionCard(s,i)).join("") +
+    addMenu();
+}
+function renderAll(){ renderEditor(); preview(); }
+
+/* ---------- new section / block templates ---------- */
+function newSection(t){
+  if (t==="fields") return { name:"New section", req:"REQUIRED", fields:[["Field label",1]] };
+  if (t==="checks") return { name:"New section", req:"SELECT ONE", single:true, checks:["Option A","Option B"] };
+  if (t==="sign")   return { name:"Authorization", req:"REQUIRED", sign:[["Signature",2],["Date",1]] };
+}
+function newBlock(t){
+  if (t==="prose")     return { type:"prose", heading:"New Section", paras:["Write here."] };
+  if (t==="callout")   return { type:"callout", text:"A short, quotable line." };
+  if (t==="note")      return { type:"note", title:"Note", text:"Important reminder." };
+  if (t==="signatory") return { type:"signatory", name:"Name", role:"Title" };
+  if (t==="table")     return { type:"table", columns:["Column A","Column B"], rows:[["",""]] };
+  if (t==="ack")       return { type:"ack", heading:"Employee Acknowledgment", req:"REQUIRED", intro:"I have read and understand this document.", fields:[["Employee Name",2],["Date",1]], sign:[["Signature",2]] };
+}
+
+/* ---------- event handling ---------- */
+document.getElementById("ed").addEventListener("input", e=>{
+  const el = e.target; const p = el.getAttribute("data-path"); if(!p) return;
+  let v = el.value;
+  const listKind = el.getAttribute("data-list");
+  if (listKind==="lines")  v = v.split("\n").map(x=>x.trim()).filter(Boolean);
+  else if (listKind==="paras") v = v.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
+  else if (listKind==="commas") v = v.split(",").map(x=>x.trim()).filter(Boolean);
+  else if (listKind==="rows") v = v.split("\n").map(r=>r.split("|").map(c=>c.trim())).filter(r=>r.join("").length);
+  else if (el.hasAttribute("data-bool")) v = (v==="true");
+  else if (p.endsWith(".w") || p.endsWith(".cols")) v = (v===""?"":Number(v));
+  setPath(def, p, v);
+  preview();
+});
+document.getElementById("ed").addEventListener("change", e=>{ // selects
+  const el=e.target; if(el.tagName==="SELECT"){ preview(); }
+});
+document.getElementById("ed").addEventListener("click", e=>{
+  const b = e.target.closest("[data-act],[data-new]"); if(!b) return;
+  const list = def.kind==="document" ? "blocks" : "sections";
+  const arr = def[list];
+
+  if (b.dataset.new){ def = b.dataset.new==="document"?BASE.blankDoc():BASE.blankForm(); return renderAll(); }
+  const act = b.dataset.act;
+  if (act==="add"){ arr.push(def.kind==="document"?newBlock(b.dataset.type):newSection(b.dataset.type)); return renderAll(); }
+  const i = +b.dataset.i;
+  if (act==="up" && i>0){ [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; return renderAll(); }
+  if (act==="down" && i<arr.length-1){ [arr[i+1],arr[i]]=[arr[i],arr[i+1]]; return renderAll(); }
+  if (act==="delsec"){ arr.splice(i,1); return renderAll(); }
+  if (act==="addrow"){ const t=getPath(def, b.dataset.base); t.push(["New field",1]); return renderAll(); }
+  if (act==="delrow"){ const t=getPath(def, b.dataset.base); t.splice(+b.dataset.i,1); return renderAll(); }
+});
+
+/* ---------- toolbar ---------- */
+function saveDef(){
+  const blob = new Blob([JSON.stringify(def,null,2)], {type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=(def.no||"form")+".json"; a.click();
+}
+function loadDef(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
+  inp.onchange=e=>{ const r=new FileReader(); r.onload=()=>{ try{ def=JSON.parse(r.result); renderAll(); }catch(err){ alert("Bad JSON: "+err.message);} }; r.readAsText(e.target.files[0]); };
+  inp.click();
+}
+function copyDef(){
+  const t=JSON.stringify(def,null,2);
+  navigator.clipboard.writeText(t).then(()=>alert("Definition copied. Paste it into forms, into the viewer, or to Claude."), ()=>prompt("Copy:", t));
+}
+function printPreview(){ preview(); window.print(); }
+
+renderAll();
+</script>
+</body>
+</html>
