@@ -101,7 +101,7 @@
   function textInput(label, path, value, options) {
     options = options || {};
     const type = options.type || "text";
-    return `<label class="lbl">${esc(label)}</label><input class="in" type="${type}" data-path="${esc(path)}"${options.valueType ? ` data-value-type="${options.valueType}"` : ""} value="${esc(value == null ? "" : value)}"${options.min != null ? ` min="${options.min}"` : ""}${options.step ? ` step="${options.step}"` : ""}>`;
+    return `<div class="input-group"><label class="lbl">${esc(label)}</label><input class="in" type="${type}" data-path="${esc(path)}"${options.valueType ? ` data-value-type="${options.valueType}"` : ""} value="${esc(value == null ? "" : value)}"${options.min != null ? ` min="${options.min}"` : ""}${options.step ? ` step="${options.step}"` : ""}></div>`;
   }
 
   function textArea(label, path, value, valueType, hint) {
