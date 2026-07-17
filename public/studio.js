@@ -1,11 +1,14 @@
 (function () {
   "use strict";
 
-  const LIBRARY_KEY = "baseStudio.library.v2";
   const DRAFT_KEY = "baseStudio.draft.v2";
   const $ = selector => document.querySelector(selector);
   const esc = BASE.esc;
   let activeId = null;
+  let activeVersion = null;
+  let activeFolderId = null;
+  let folders = [];
+  let packageContext = null;
   let def = loadInitial();
 
   function clean(value) {
@@ -63,14 +66,6 @@
     return normalize(BASE.blankForm());
   }
 
-  function library() {
-    try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); }
-    catch (_) { return []; }
-  }
-
-  function writeLibrary(items) { localStorage.setItem(LIBRARY_KEY, JSON.stringify(items)); }
-  function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
-
   function getPath(object, path) {
     return path.split(".").reduce((current, key) => current == null ? current : current[key], object);
   }
@@ -79,11 +74,23 @@
     const keys = path.split(".");
     const last = keys.pop();
     let target = object;
-    keys.forEach(key => {
-      if (target[key] == null) target[key] = /^\d+$/.test(keys[keys.indexOf(key) + 1]) ? [] : {};
+    keys.forEach((key, index) => {
+      if (target[key] == null) target[key] = /^\d+$/.test(keys[index + 1]) ? [] : {};
       target = target[key];
     });
     target[last] = value;
+  }
+
+  function syncPackageDocument() {
+    if (!packageContext) return;
+    const item = packageContext.packageDef.documents[packageContext.index];
+    if (item && item.def) item.def = clean(def);
+    else packageContext.packageDef.documents[packageContext.index] = clean(def);
+  }
+
+  function rootDefinition() {
+    syncPackageDocument();
+    return packageContext ? packageContext.packageDef : def;
   }
 
   function status(message, tone) {
@@ -91,11 +98,11 @@
     el.textContent = message;
     el.dataset.tone = tone || "";
     clearTimeout(status.timer);
-    status.timer = setTimeout(() => { el.textContent = "Draft saves automatically in this browser."; el.dataset.tone = ""; }, 3500);
+    status.timer = setTimeout(() => { el.textContent = "Drafts save locally; Save shared publishes to the team library."; el.dataset.tone = ""; }, 3500);
   }
 
   function persist() {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(clean(def)));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(clean(rootDefinition())));
   }
 
   function textInput(label, path, value, options) {
@@ -122,6 +129,7 @@
       ${textInput("Division / Organization", "org", def.org)}
       ${isDoc ? textInput("Tag", "tag", def.tag) + textArea("Summary / standard", "standard", def.standard) : ""}
       ${isDoc ? boolInput("Include cover page", "layout.cover", !(def.layout && def.layout.cover === false)) + boolInput("Generate document contents page", "toc", Boolean(def.toc)) : ""}
+      <label class="lbl">Shared library folder</label><select class="sel" data-library-folder><option value="">Library root</option>${folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === activeFolderId ? " selected" : ""}>${esc(folder.name)}</option>`).join("")}</select>
     </section>`;
   }
 
@@ -203,23 +211,24 @@
     return `<section class="panel package-tools"><h3>Package documents</h3><p class="micro">Save documents to the library, then add them here. The package index and page ranges regenerate automatically.</p><button class="wide-action" data-action="open-library">Add from library</button></section>` +
       (docs.length ? docs.map((item, index) => {
         const doc = item.def || item;
-        return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")}</span></article>`;
+        return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")}</span><button class="wide-action package-edit" data-action="edit-package-document" data-index="${index}">Edit this document</button></article>`;
       }).join("") : `<div class="empty-state">No documents in this package yet.</div>`);
   }
 
   function renderEditor() {
-    $("#ed").innerHTML = commonPanel() + controlPanel() + appearancePanel() + (def.kind === "form" ? formEditor() : def.kind === "document" ? documentEditor() : packageEditor());
+    const packageNav = packageContext ? `<section class="panel package-editing"><h3>Editing package document</h3><p class="micro">Changes are being saved inside ${esc(packageContext.packageDef.title || "this package")}.</p><button class="wide-action" data-action="back-to-package">← Back to package</button></section>` : "";
+    $("#ed").innerHTML = packageNav + commonPanel() + controlPanel() + appearancePanel() + (def.kind === "form" ? formEditor() : def.kind === "document" ? documentEditor() : packageEditor());
   }
 
   function renderPreview() {
     $("#pv").innerHTML = BASE.render(def, { fill: false });
-    requestAnimationFrame(() => { BASE.updatePackageIndex($("#pv")); fit(); });
+    requestAnimationFrame(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit(); });
   }
 
   function renderAll() {
     normalize(def);
     renderEditor(); renderPreview(); persist();
-    $("#kindBadge").textContent = (def.documentType || def.kind).toUpperCase();
+    $("#kindBadge").textContent = `${packageContext ? "PACKAGE ITEM · " : ""}${def.documentType || def.kind}`.toUpperCase();
   }
 
   function fit() {
@@ -278,38 +287,73 @@
     return def.documents;
   }
 
+  function editPackageDocument(index) {
+    const item = def.documents[index];
+    if (!item) return;
+    packageContext = { packageDef: def, index };
+    def = normalize(BASE.clone(item.def || item));
+    renderAll();
+    status("Editing a document inside the package.", "success");
+  }
+
+  function backToPackage() {
+    if (!packageContext) return;
+    syncPackageDocument();
+    def = packageContext.packageDef;
+    packageContext = null;
+    renderAll();
+    status("Package document updated.", "success");
+  }
+
   function saveJson() {
-    const blob = new Blob([JSON.stringify(clean(def), null, 2)], { type: "application/json" });
+    const definition = clean(rootDefinition());
+    const blob = new Blob([JSON.stringify(definition, null, 2)], { type: "application/json" });
     const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob); anchor.download = `${def.no || BASE.slug(def.title)}.json`; anchor.click();
+    anchor.href = URL.createObjectURL(blob); anchor.download = `${definition.no || BASE.slug(definition.title)}.json`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(anchor.href), 500);
-    status("Definition downloaded.", "success");
+    status("Portable JSON backup exported.", "success");
   }
 
   function loadJson() {
     const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
     input.onchange = () => {
       const reader = new FileReader();
-      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; renderAll(); status("Definition loaded.", "success"); } catch (error) { status(`Could not load JSON: ${error.message}`, "error"); } };
+      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; renderAll(); status("Backup imported.", "success"); } catch (error) { status(`Could not import backup: ${error.message}`, "error"); } };
       reader.readAsText(input.files[0]);
     };
     input.click();
   }
 
-  function saveLibrary() {
-    const items = library();
-    const now = new Date().toISOString();
-    if (!activeId) activeId = uid();
-    const entry = { id: activeId, title: def.title || "Untitled", no: def.no || "", kind: def.kind, documentType: def.documentType || def.kind, updated: now, def: clean(def) };
-    const index = items.findIndex(item => item.id === activeId);
-    if (index >= 0) items[index] = entry; else items.unshift(entry);
-    writeLibrary(items); status("Saved to this browser’s library.", "success");
+  async function saveLibrary() {
+    try {
+      const document = clean(rootDefinition());
+      status("Saving to the shared library…");
+      const saved = await BASE_LIBRARY.saveDocument(document, { id: activeId, folderId: activeFolderId, version: activeVersion });
+      activeId = saved.document.id;
+      activeVersion = saved.document.version;
+      activeFolderId = saved.document.folderId || null;
+      status(`Saved to the shared library · version ${saved.document.version}.`, "success");
+      return saved.document;
+    } catch (error) {
+      status(`Could not save: ${error.message}`, "error");
+      throw error;
+    }
   }
 
-  function openLibrary() {
-    const items = library();
-    const canAdd = def.kind === "package";
-    showModal("Document library", items.length ? `<div class="library-list">${items.map(item => `<div class="library-row"><div><strong>${esc(item.title)}</strong><span>${esc(item.documentType)} · ${esc(item.no)} · ${new Date(item.updated).toLocaleDateString()}</span></div>${canAdd && item.kind !== "package" ? `<button data-library-add="${item.id}">Add</button>` : `<button data-library-open="${item.id}">Open</button>`}<button class="danger" data-library-delete="${item.id}">Delete</button></div>`).join("")}</div>` : `<div class="empty-state">No saved documents yet.</div>`);
+  async function openLibrary(folderId) {
+    try {
+      const selectedFolder = folderId === undefined ? "" : folderId;
+      const items = await BASE_LIBRARY.listDocuments(selectedFolder ? { folderId: selectedFolder } : {});
+      const canAdd = !packageContext && def.kind === "package";
+      const folderTools = `<div class="library-tools"><select class="sel" id="libraryFolderFilter"><option value="">All folders</option>${folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === selectedFolder ? " selected" : ""}>${esc(folder.name)}</option>`).join("")}</select><button data-action="new-folder">New folder</button></div>`;
+      const rows = items.length ? `<div class="library-list">${items.map(item => {
+        const owned = Boolean(BASE_LIBRARY.editKey(item.id));
+        return `<div class="library-row"><div><strong>${esc(item.title)}</strong><span>${esc(item.documentType || item.kind)} · ${esc(item.no)} · v${item.version} · ${new Date(item.updated).toLocaleDateString()}</span></div>${canAdd && item.kind !== "package" ? `<button data-library-add="${item.id}">Add</button>` : `<button data-library-open="${item.id}">${owned ? "Open" : "Open copy"}</button>`}<button data-library-view="${item.id}">View link</button>${owned ? `<button data-library-edit="${item.id}">Edit link</button><button class="danger" data-library-delete="${item.id}">Delete</button>` : ""}</div>`;
+      }).join("")}</div>` : `<div class="empty-state">No shared documents in this folder yet.</div>`;
+      showModal("Shared document library", folderTools + rows);
+    } catch (error) {
+      showModal("Shared document library", `<div class="empty-state">The shared library is unavailable.<br>${esc(error.message)}</div>`);
+    }
   }
 
   function showModal(title, body) {
@@ -329,10 +373,13 @@
   }
 
   async function copyShareLink() {
-    const url = new URL("viewer.html", location.href); url.hash = `d=${encodePayload(def)}`;
-    if (url.href.length > 60000) return status("This definition is too large for a reliable URL. Save its JSON or package instead.", "error");
-    try { await navigator.clipboard.writeText(url.href); status("View-only share link copied.", "success"); }
-    catch (_) { showModal("Copy share link", `<textarea class="modal-text">${esc(url.href)}</textarea>`); }
+    let shareUrl = "";
+    try {
+      if (!activeId) await saveLibrary();
+      shareUrl = BASE_LIBRARY.viewUrl(activeId);
+      await navigator.clipboard.writeText(shareUrl); status("Shared view/fill link copied.", "success");
+    }
+    catch (error) { showModal("Copy share link", shareUrl ? `<textarea class="modal-text">${esc(shareUrl)}</textarea>` : `<div class="empty-state">${esc(error.message)}</div>`); }
   }
 
   async function copyAIKit() {
@@ -354,6 +401,7 @@
     const el = event.target;
     if (el.dataset.path) { setPath(def, el.dataset.path, parseValue(el)); renderPreview(); persist(); }
     if (el.dataset.controlVisible) { def.controlVisibility[el.dataset.controlVisible] = el.checked; renderPreview(); persist(); }
+    if (el.matches("[data-library-folder]")) activeFolderId = el.value || null;
   });
   $("#ed").addEventListener("click", event => {
     const button = event.target.closest("button"); if (!button) return;
@@ -367,43 +415,95 @@
       if (action === "delete-item") array.splice(index, 1); else move(array, index, action === "move-up" ? -1 : 1);
       return renderAll();
     }
+    if (action === "edit-package-document") return editPackageDocument(Number(button.dataset.index));
+    if (action === "back-to-package") return backToPackage();
     if (action === "open-library") openLibrary();
   });
 
-  $("#modal").addEventListener("click", event => {
+  $("#modal").addEventListener("change", event => {
+    if (event.target.id === "libraryFolderFilter") openLibrary(event.target.value);
+  });
+
+  $("#modal").addEventListener("click", async event => {
     const button = event.target.closest("button");
     if (event.target.matches(".modal-backdrop") || (button && button.dataset.action === "close-modal")) return closeModal();
     if (!button) return;
-    const items = library();
+    if (button.dataset.action === "new-folder") {
+      const name = window.prompt("New shared folder name:");
+      if (!name) return;
+      try { const folder = await BASE_LIBRARY.createFolder(name); folders = await BASE_LIBRARY.listFolders(); closeModal(); activeFolderId = folder.id; renderAll(); await openLibrary(folder.id); }
+      catch (error) { status(`Could not create folder: ${error.message}`, "error"); }
+      return;
+    }
     if (button.dataset.libraryOpen) {
-      const item = items.find(entry => entry.id === button.dataset.libraryOpen); if (!item) return;
-      def = normalize(BASE.clone(item.def)); activeId = item.id; closeModal(); renderAll(); status("Opened from library.", "success");
+      try {
+        const item = await BASE_LIBRARY.getDocument(button.dataset.libraryOpen);
+        const key = BASE_LIBRARY.editKey(item.id);
+        def = normalize(BASE.clone(item.definition)); activeId = key ? item.id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; packageContext = null;
+        closeModal(); renderAll(); status(key ? "Opened shared library document." : "Opened a public document as a new copy.", "success");
+      } catch (error) { status(`Could not open document: ${error.message}`, "error"); }
+      return;
     }
     if (button.dataset.libraryAdd) {
-      const item = items.find(entry => entry.id === button.dataset.libraryAdd); if (!item) return;
-      def.documents.push({ sourceId: item.id, def: clean(item.def) }); closeModal(); renderAll(); status("Added to package.", "success");
+      try {
+        const item = await BASE_LIBRARY.getDocument(button.dataset.libraryAdd);
+        def.documents.push({ sourceId: item.id, def: clean(item.definition) }); closeModal(); renderAll(); status("Added shared document to package.", "success");
+      } catch (error) { status(`Could not add document: ${error.message}`, "error"); }
+      return;
+    }
+    if (button.dataset.libraryView) {
+      const link = BASE_LIBRARY.viewUrl(button.dataset.libraryView);
+      try { await navigator.clipboard.writeText(link); status("Shared link copied.", "success"); }
+      catch (_) { showModal("Copy shared link", `<textarea class="modal-text">${esc(link)}</textarea>`); }
+      return;
+    }
+    if (button.dataset.libraryEdit) {
+      const link = BASE_LIBRARY.editUrl(button.dataset.libraryEdit, BASE_LIBRARY.editKey(button.dataset.libraryEdit));
+      try { await navigator.clipboard.writeText(link); status("Private edit link copied.", "success"); }
+      catch (_) { showModal("Copy private edit link", `<textarea class="modal-text">${esc(link)}</textarea>`); }
+      return;
     }
     if (button.dataset.libraryDelete) {
-      writeLibrary(items.filter(entry => entry.id !== button.dataset.libraryDelete)); openLibrary();
+      if (!window.confirm("Delete this shared document? This cannot be undone.")) return;
+      try { await BASE_LIBRARY.deleteDocument(button.dataset.libraryDelete); if (activeId === button.dataset.libraryDelete) { activeId = null; activeVersion = null; } await openLibrary($("#libraryFolderFilter") ? $("#libraryFolderFilter").value : ""); }
+      catch (error) { status(`Could not delete document: ${error.message}`, "error"); }
+      return;
     }
     if (button.dataset.action === "apply-ai") {
-      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); activeId = null; closeModal(); renderAll(); status("AI JSON imported.", "success"); }
+      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); closeModal(); renderAll(); status("AI JSON imported.", "success"); }
       catch (error) { status(`Invalid AI JSON: ${error.message}`, "error"); }
     }
   });
 
-  $("#newButton").addEventListener("click", () => { def = normalize(BASE.fromTemplate($("#templateSelect").value)); activeId = null; renderAll(); status("New template created.", "success"); });
+  $("#newButton").addEventListener("click", () => { def = normalize(BASE.fromTemplate($("#templateSelect").value)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; renderAll(); status("New template created.", "success"); });
   $("#loadButton").addEventListener("click", loadJson);
   $("#downloadButton").addEventListener("click", saveJson);
-  $("#saveButton").addEventListener("click", saveLibrary);
+  $("#saveButton").addEventListener("click", () => saveLibrary().catch(() => {}));
   $("#libraryButton").addEventListener("click", openLibrary);
   $("#shareButton").addEventListener("click", copyShareLink);
   $("#aiButton").addEventListener("click", copyAIKit);
   $("#aiImportButton").addEventListener("click", importAI);
-  $("#printButton").addEventListener("click", () => { renderPreview(); setTimeout(() => { BASE.updatePackageIndex($("#pv")); window.print(); }, 140); });
-  window.addEventListener("beforeprint", () => BASE.updatePackageIndex($("#pv")));
+  $("#printButton").addEventListener("click", () => { renderPreview(); setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140); });
+  window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
 
+  async function initialize() {
+    try { folders = await BASE_LIBRARY.listFolders(); }
+    catch (error) { status(`Shared library unavailable: ${error.message}`, "error"); }
+    const id = new URLSearchParams(location.search).get("id");
+    if (id) {
+      try {
+        const item = await BASE_LIBRARY.getDocument(id);
+        const suppliedKey = new URLSearchParams(location.hash.slice(1)).get("key") || "";
+        if (suppliedKey) BASE_LIBRARY.rememberEditKey(id, suppliedKey);
+        const key = suppliedKey || BASE_LIBRARY.editKey(id);
+        def = normalize(BASE.clone(item.definition)); activeId = key ? id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null;
+        status(key ? "Opened editable shared document." : "Opened shared document as a copy.", "success");
+      } catch (error) { status(`Could not open shared document: ${error.message}`, "error"); }
+    }
+    renderAll();
+  }
+
   $("#templateSelect").innerHTML = BASE.templateCatalog.map(item => `<option value="${esc(item.id)}">${esc(item.label)}</option>`).join("");
-  renderAll();
+  initialize();
 })();

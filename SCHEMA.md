@@ -108,9 +108,10 @@ Block types (`type` field):
 }
 ```
 
-The studio normally adds package documents from its saved browser library. The package
-stores snapshots so downloaded JSON and shared links remain portable. Cover and index
-entries are regenerated from the current `documents` array whenever the package renders.
+The studio adds package documents from the shared library and stores snapshots so JSON
+backups and links remain portable. Each embedded document can be edited directly inside
+the package. Cover and page ranges are regenerated from the current `documents` array
+after automatic Letter-page pagination.
 
 ---
 

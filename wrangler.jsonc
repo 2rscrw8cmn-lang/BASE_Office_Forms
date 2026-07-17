@@ -2,5 +2,18 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "base-office-forms",
   "compatibility_date": "2026-07-17",
-  "pages_build_output_dir": "./public"
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./public",
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "base-office-forms-library",
+      "migrations_dir": "./migrations"
+    }
+  ]
 }

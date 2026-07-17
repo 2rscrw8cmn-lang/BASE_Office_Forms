@@ -51,8 +51,12 @@ starting points: sections and blocks can be added, removed, reordered, and custo
 - Custom multi-document package
 
 Packages generate a cover and index from their current document list whenever they are
-rendered or exported. Documents are saved in the browser library and can be added to a
-package from there. JSON downloads remain the portable backup and interchange format.
+rendered or exported. Every embedded package document can be opened and edited directly
+inside the package. Shared-library documents can also be added as package snapshots.
+
+The shared library is stored in Cloudflare D1 and is available across browsers and
+devices. Folders organize public templates; private edit links control who can update an
+existing record. JSON exports remain portable disaster-recovery and interchange backups.
 
 ## Reference sources
 

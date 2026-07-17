@@ -18,27 +18,28 @@
 <body>
 <div class="usebar">
   <a href="index.html">Home</a><a href="builder.html">Studio</a>
-  <select id="librarySelect"><option value="">Saved form library</option></select><button id="openSaved">Open</button>
-  <button id="loadDefinition">Load definition</button><span class="spacer"></span>
-  <button id="loadAnswers">Load AI answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Download answers</button><button class="accent" onclick="window.print()">Export PDF</button>
+  <select id="librarySelect"><option value="">Shared form library</option></select><button id="openSaved">Open</button>
+  <button id="loadDefinition">Import form backup</button><span class="spacer"></span>
+  <button id="loadAnswers">Import answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Export answers</button><button class="accent" onclick="window.print()">Export PDF</button>
 </div>
 <div id="notice">Load any form definition created in the studio, then fill it here or import an AI answer file.</div>
 <main id="root"></main>
 <script src="engine.js"></script>
+<script src="library-api.js"></script>
 <script>
 (function () {
-  const LIBRARY_KEY = "baseStudio.library.v2";
   let definition = BASE.fromTemplate("authorization");
 
   function clean(value) { const copy = BASE.clone(value); delete copy._ready; delete copy._schema; return copy; }
   function render() {
     if (definition.kind !== "form") {
       document.getElementById("root").innerHTML = BASE.render(definition);
-      requestAnimationFrame(() => BASE.updatePackageIndex(document.getElementById("root")));
+      requestAnimationFrame(() => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
       document.getElementById("notice").textContent = "This is not a fillable form, but it can be reviewed and exported as PDF.";
       return;
     }
     document.getElementById("root").innerHTML = BASE.render(definition, { fill: true });
+    requestAnimationFrame(() => BASE.paginate(document.getElementById("root")));
     document.getElementById("notice").textContent = `${definition.no || "Form"} — fields can be typed here or populated from an AI answer JSON file.`;
   }
   function prepared() { return BASE.prepareForm(definition); }
@@ -69,13 +70,16 @@
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500);
   }
-  function refreshLibrary() {
-    let items = []; try { items = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); } catch (_) {}
-    document.getElementById("librarySelect").innerHTML = `<option value="">Saved form library</option>` + items.filter(item => item.kind === "form").map(item => `<option value="${BASE.esc(item.id)}">${BASE.esc(item.title)} (${BASE.esc(item.no)})</option>`).join("");
+  async function refreshLibrary() {
+    try {
+      const items = await BASE_LIBRARY.listDocuments({ kind: "form" });
+      document.getElementById("librarySelect").innerHTML = `<option value="">Shared form library</option>` + items.map(item => `<option value="${BASE.esc(item.id)}">${BASE.esc(item.title)} (${BASE.esc(item.no)})</option>`).join("");
+    } catch (error) { document.getElementById("notice").textContent = `Shared library unavailable: ${error.message}`; }
   }
-  document.getElementById("openSaved").onclick = () => {
+  document.getElementById("openSaved").onclick = async () => {
     const id = document.getElementById("librarySelect").value; if (!id) return;
-    const items = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); const item = items.find(entry => entry.id === id); if (item) { definition = BASE.clone(item.def); render(); }
+    try { const item = await BASE_LIBRARY.getDocument(id); definition = BASE.clone(item.definition); render(); }
+    catch (error) { document.getElementById("notice").textContent = `Could not open form: ${error.message}`; }
   };
   document.getElementById("loadDefinition").onclick = () => filePicker(data => { definition = data.definition || data; render(); });
   document.getElementById("loadAnswers").onclick = () => filePicker(applyValues);
@@ -86,6 +90,7 @@
     const prompt = `Complete BASE form ${definition.no} — ${definition.title}. Return ONLY JSON in this shape: {"form":"${definition.no}","answers":{<field id>:<value>}}. Use arrays for choose_any fields. Leave unknown values empty.\n\nFIELDS:\n${JSON.stringify(fields, null, 2)}\n\nFORM CONTEXT:\n${JSON.stringify(clean(definition), null, 2)}`;
     try { await navigator.clipboard.writeText(prompt); alert("AI fill spec copied."); } catch (_) { window.prompt("Copy this AI fill spec:", prompt); }
   };
+  window.addEventListener("beforeprint", () => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
   refreshLibrary(); render();
 })();
 </script>

@@ -17,30 +17,48 @@
 </style>
 </head>
 <body>
-<div class="viewerbar"><strong id="label">Shared BASE document</strong><a id="editLink" href="builder.html">Edit a copy</a><button id="download">Download JSON</button><button class="accent" onclick="window.print()">Export PDF</button></div>
+<div class="viewerbar"><strong id="label">Shared BASE document</strong><a id="editLink" href="builder.html">Edit a copy</a><button id="answers" hidden>Export answers</button><button id="download">Export backup</button><button class="accent" onclick="window.print()">Export PDF</button></div>
 <main id="root"></main>
 <script src="engine.js"></script>
+<script src="library-api.js"></script>
 <script>
-(function () {
+(async function () {
   function decode(payload) {
     const padded = payload.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((payload.length + 3) % 4);
     const binary = atob(padded); const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
     return JSON.parse(new TextDecoder().decode(bytes));
   }
+  function download(name, value) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 500);
+  }
   try {
-    const match = location.hash.match(/^#d=(.+)$/); if (!match) throw new Error("No shared document was included in this link.");
-    const definition = decode(match[1]);
+    const id = new URLSearchParams(location.search).get("id");
+    const match = location.hash.match(/^#d=(.+)$/);
+    if (!id && !match) throw new Error("No shared document was included in this link.");
+    const record = id ? await BASE_LIBRARY.getDocument(id) : null;
+    const definition = record ? record.definition : decode(match[1]);
     document.getElementById("root").innerHTML = BASE.render(definition, { fill: definition.kind === "form" });
-    requestAnimationFrame(() => BASE.updatePackageIndex(document.getElementById("root")));
+    requestAnimationFrame(() => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
     document.getElementById("label").textContent = definition.title || "Shared BASE document";
     document.title = `BASE — ${definition.title || "Shared Document"}`;
-    document.getElementById("editLink").href = `builder.html#d=${match[1]}`;
-    document.getElementById("download").onclick = () => {
-      const blob = new Blob([JSON.stringify(definition, null, 2)], { type: "application/json" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${definition.no || "BASE-document"}.json`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 500);
-    };
-    window.addEventListener("beforeprint", () => BASE.updatePackageIndex(document.getElementById("root")));
+    document.getElementById("editLink").href = id ? BASE_LIBRARY.editUrl(id, BASE_LIBRARY.editKey(id)) : `builder.html#d=${match[1]}`;
+    document.getElementById("editLink").textContent = id && BASE_LIBRARY.editKey(id) ? "Edit document" : "Edit a copy";
+    document.getElementById("download").onclick = () => download(`${definition.no || "BASE-document"}.json`, definition);
+    if (definition.kind === "form") {
+      const answers = document.getElementById("answers"); answers.hidden = false;
+      answers.onclick = () => {
+        const values = {};
+        BASE.prepareForm(definition)._schema.forEach(field => {
+          if (field.type === "text") values[field.id] = document.querySelector(`[name="${field.id}"]`)?.value || "";
+          else if (field.type === "choose_one") values[field.id] = document.querySelector(`[name="${field.id}"]:checked`)?.value || "";
+          else values[field.id] = [...document.querySelectorAll(`[name="${field.id}"]:checked`)].map(input => input.value);
+        });
+        download(`${definition.no || "form"}-answers.json`, { form: definition.no || "", answers: values });
+      };
+    }
+    window.addEventListener("beforeprint", () => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
   } catch (error) {
     document.getElementById("root").innerHTML = `<div class="error"><h1>Document unavailable</h1><p>${BASE.esc(error.message)}</p></div>`;
     document.getElementById("download").disabled = true;

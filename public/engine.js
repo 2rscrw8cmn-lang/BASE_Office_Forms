@@ -28,10 +28,10 @@
 
   function topBar(def) {
     if (def.showHeader === false) return "";
-    return `<div class="doc-top">
+    return `<div class="page-header"><div class="doc-top">
       <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260717")}" alt="BASE">
       <div class="doc-org">${esc(def.org || ORG_DEFAULT)}<br>${esc(def.headerNote || "Controlled Document — Do Not Reproduce")}</div>
-    </div><div class="rule"></div>`;
+    </div><div class="rule"></div></div>`;
   }
 
   function ctrlGrid(def, numberLabel) {
@@ -97,21 +97,21 @@
     return form;
   }
 
-  function fieldsBlock(fields, fill, tall) {
+  function fieldsBlock(fields, fill, tall, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
     const template = normalized.map(field => `${field.w}fr`).join(" ");
     return `<div class="grid" style="--tpl:${template};">` + normalized.map(field => {
       const height = tall ? Math.max(76, field.height) : field.height;
       const input = fill
         ? ((field.multiline || height >= 70)
-          ? `<textarea class="ftx" name="${esc(field.id)}"></textarea>`
-          : `<input class="fin" name="${esc(field.id)}">`)
+          ? `<textarea class="ftx" name="${esc((namePrefix || "") + field.id)}"></textarea>`
+          : `<input class="fin" name="${esc((namePrefix || "") + field.id)}">`)
         : "";
       return `<div class="field${height >= 70 ? " field-tall" : ""}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
     }).join("") + `</div>`;
   }
 
-  function checksBlock(section, fill) {
+  function checksBlock(section, fill, namePrefix) {
     const columns = Math.max(1, Number(section.cols) || 1);
     const type = section.single ? "radio" : "checkbox";
     return `<div class="check-box${columns > 1 ? " cols" : ""}" style="--ccols:${columns}">` +
@@ -119,25 +119,25 @@
         const raw = String(option);
         const marker = raw.match(/([†‡])\s*$/);
         const text = raw.replace(/[†‡]\s*$/, "").trim();
-        const input = fill ? `<input type="${type}" name="${esc(section._gid || slug(section.name))}" value="${esc(text)}">` : "";
+        const input = fill ? `<input type="${type}" name="${esc((namePrefix || "") + (section._gid || slug(section.name)))}" value="${esc(text)}">` : "";
         return `<label class="check">${input}<span class="box"></span>${esc(text)}${marker ? `<sup class="dagger">${marker[1]}</sup>` : ""}</label>`;
       }).join("") + `</div>`;
   }
 
-  function signBlock(fields, fill) {
+  function signBlock(fields, fill, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
     return `<div class="sign-grid" style="--sign-tpl:${normalized.map(field => field.w + "fr").join(" ")};">` +
-      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc(field.id)}">` : ""}</div>`).join("") +
+      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
       `</div>`;
   }
 
-  function formSection(section, counter, fill) {
-    if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill)).join("")}</div>`;
+  function formSection(section, counter, fill, namePrefix) {
+    if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill, namePrefix)).join("")}</div>`;
     const no = String(++counter.n).padStart(2, "0");
     let body = "";
-    if (section.fields) body = fieldsBlock(section.fields, fill, section.tall);
-    else if (section.checks) body = checksBlock(section, fill);
-    else if (section.sign) body = signBlock(section.sign, fill);
+    if (section.fields) body = fieldsBlock(section.fields, fill, section.tall, namePrefix);
+    else if (section.checks) body = checksBlock(section, fill, namePrefix);
+    else if (section.sign) body = signBlock(section.sign, fill, namePrefix);
     else if (section.text) body = `<p class="prose">${esc(section.text)}</p>`;
     return `<section class="section">${sectionBar(no, section.name, section.req)}${body}</section>`;
   }
@@ -147,12 +147,12 @@
     prepareForm(form);
     const counter = { n: 0 };
     const footnotes = (form.footnotes || []).length ? `<div class="footnote">${form.footnotes.map(esc).join("<br>")}</div>` : "";
-    return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}">${topBar(form)}
+    return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}" data-paginate="true">${topBar(form)}
       <div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>
       <h1 class="form-title">${esc(form.title)}</h1>
       ${form.sub ? `<p class="form-sub">${esc(form.sub)}</p>` : ""}
       ${ctrlGrid(form, "Form No.")}
-      ${(form.sections || []).map(section => formSection(section, counter, options.fill)).join("")}${footnotes}</div>`;
+      <div class="page-flow">${(form.sections || []).map(section => formSection(section, counter, options.fill, options.namePrefix)).join("")}${footnotes}</div></div>`;
   }
 
   function docFields(block) {
@@ -166,7 +166,9 @@
         const heading = block.heading ? (numbered
           ? `<div class="section big">${sectionBar(numbered, block.heading)}</div>`
           : `<div class="doc-eyebrow-wrap">${block.eyebrow ? `<div class="eyebrow">${esc(block.eyebrow)}</div>` : ""}<h2 class="doc-h2">${esc(block.heading)}</h2></div>`) : "";
-        return `<div class="avoid">${heading}${(block.paras || []).map(text => `<p class="prose">${esc(text)}</p>`).join("")}</div>`;
+        const paras = block.paras || [];
+        const first = `<div class="avoid">${heading}${paras.length ? `<p class="prose">${esc(paras[0])}</p>` : ""}</div>`;
+        return first + paras.slice(1).map(text => `<p class="prose flow-paragraph">${esc(text)}</p>`).join("");
       }
       case "callout": return `<div class="pull avoid"><div class="pull-q">${esc(block.text)}</div>${block.attribution ? `<div class="pull-a">${esc(block.attribution)}</div>` : ""}</div>`;
       case "note": return `<div class="note avoid">${block.title ? `<div class="note-t">${esc(block.title)}</div>` : ""}<div class="note-b">${esc(block.text)}</div></div>`;
@@ -197,7 +199,7 @@
         entries.push([label, block.heading || "Acknowledgment"]);
       }
     });
-    return `<div class="${sheetClass(doc, "toc-sheet")}" style="${appearance(doc)}">${topBar(doc)}<h2 class="form-title page-title">Contents</h2><div class="toc">` +
+    return `<div class="${sheetClass(doc, "toc-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}<h2 class="form-title page-title">Contents</h2><div class="toc page-flow">` +
       entries.map(([no, title]) => `<div class="formrow static"><span class="no">${no}</span><span class="nm">${esc(title)}</span></div>`).join("") + `</div></div>`;
   }
 
@@ -214,18 +216,19 @@
         ${doc.standard ? `<p class="cover-standard">${esc(doc.standard)}</p>` : ""}</div>
         ${ctrlGrid(doc, "Document No.")}${doc.authority ? `<div class="cover-auth">${esc(doc.authority)}</div>` : ""}</div>`;
       if (doc.toc) output += tocSheet(doc);
-      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}">${topBar(doc)}<div class="doc-body">${bodyContent}</div></div>`;
+      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     } else {
-      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}">${topBar(doc)}
+      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}
         <div class="form-tag">${esc(doc.tag || doc.documentType || "Document")}</div><h1 class="form-title">${esc(doc.title)}</h1>
-        ${doc.subtitle ? `<p class="form-sub">${esc(doc.subtitle)}</p>` : ""}${ctrlGrid(doc, "Document No.")}<div class="doc-body">${bodyContent}</div></div>`;
+        ${doc.subtitle ? `<p class="form-sub">${esc(doc.subtitle)}</p>` : ""}${ctrlGrid(doc, "Document No.")}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     }
     return output;
   }
 
-  function renderPackage(pkg) {
+  function renderPackage(pkg, options) {
+    options = options || {};
     const documents = (pkg.documents || []).map(item => item.def || item).filter(item => item && item.kind !== "package");
-    const rendered = documents.map(item => render(item, { fill: false }));
+    const rendered = documents.map((item, index) => render(item, { fill: Boolean(options.fill), namePrefix: `package_${index}_` }));
     let page = 3;
     const entries = rendered.map((html, index) => {
       const pages = Math.max(1, (html.match(/class="sheet/g) || []).length);
@@ -235,7 +238,7 @@
       return { no: documents[index].no || String(index + 1).padStart(2, "0"), title: documents[index].title || "Untitled", range: start === end ? String(start) : `${start}-${end}` };
     });
     const cover = `<div class="${sheetClass(pkg, "cover package-cover")}" style="${appearance(pkg)}">${topBar(pkg)}<div class="cover-mid"><div class="form-tag">${esc(pkg.tag || "Document Package")}</div><h1 class="cover-title">${esc(pkg.title)}</h1><div class="cover-bar"></div>${pkg.subtitle ? `<div class="cover-sub">${esc(pkg.subtitle)}</div>` : ""}<p class="cover-standard">${documents.length} controlled document${documents.length === 1 ? "" : "s"} · Index generated ${today()}</p></div>${ctrlGrid(pkg, "Package No.")}</div>`;
-    const index = `<div class="${sheetClass(pkg, "package-index")}" style="${appearance(pkg)}">${topBar(pkg)}<h2 class="form-title page-title">Package Index</h2><div class="package-index-list">${entries.map((entry, i) => `<div class="package-index-row" data-package-index="${i}"><span class="seq">${String(i + 1).padStart(2, "0")}</span><span><strong>${esc(entry.title)}</strong><small>${esc(entry.no)}</small></span><span class="leader"></span><span class="pages">${entry.range}</span></div>`).join("")}</div></div>`;
+    const index = `<div class="${sheetClass(pkg, "package-index")}" style="${appearance(pkg)}" data-paginate="true">${topBar(pkg)}<h2 class="form-title page-title">Package Index</h2><div class="package-index-list page-flow">${entries.map((entry, i) => `<div class="package-index-row" data-package-index="${i}"><span class="seq">${String(i + 1).padStart(2, "0")}</span><span><strong>${esc(entry.title)}</strong><small>${esc(entry.no)}</small></span><span class="leader"></span><span class="pages">${entry.range}</span></div>`).join("")}</div></div>`;
     return cover + index + rendered.map((html, index) => `<div class="package-document" data-package-item="${index + 1}">${html}</div>`).join("");
   }
 
@@ -243,12 +246,11 @@
     if (!container || !container.querySelectorAll) return;
     const documents = [...container.querySelectorAll(".package-document")];
     if (!documents.length) return;
-    let page = 3;
+    const allSheets = [...container.querySelectorAll(".sheet")];
+    const firstDocumentSheet = documents[0] && documents[0].querySelector(".sheet");
+    let page = Math.max(1, allSheets.indexOf(firstDocumentSheet) + 1);
     documents.forEach((documentElement, index) => {
-      const pages = [...documentElement.querySelectorAll(".sheet")].reduce((total, sheet) => {
-        const pageHeight = sheet.classList.contains("landscape") ? 816 : 1056;
-        return total + Math.max(1, Math.ceil(sheet.scrollHeight / pageHeight));
-      }, 0) || 1;
+      const pages = Math.max(1, documentElement.querySelectorAll(".sheet").length);
       const start = page, end = page + pages - 1;
       const target = container.querySelector(`.package-index-row[data-package-index="${index}"] .pages`);
       if (target) target.textContent = start === end ? String(start) : `${start}-${end}`;
@@ -256,9 +258,53 @@
     });
   }
 
+  function paginate(container) {
+    if (!container || !container.querySelectorAll) return;
+    [...container.querySelectorAll('.sheet[data-paginate="true"]')].forEach(source => {
+      if (source.dataset.paginationReady === "true") return;
+      const flow = source.querySelector(":scope > .page-flow");
+      if (!flow) return;
+      const items = [...flow.children];
+      flow.replaceChildren();
+      let page = source;
+      let pageFlow = flow;
+      let lastPage = source;
+      const pageHeight = source.classList.contains("landscape") ? 816 : 1056;
+      const continuation = () => {
+        const next = source.cloneNode(false);
+        next.removeAttribute("id");
+        next.removeAttribute("data-paginate");
+        next.dataset.autoPage = "true";
+        const header = source.querySelector(":scope > .page-header");
+        if (header) next.appendChild(header.cloneNode(true));
+        const nextFlow = flow.cloneNode(false);
+        nextFlow.replaceChildren();
+        next.appendChild(nextFlow);
+        lastPage.after(next);
+        lastPage = next;
+        page = next;
+        pageFlow = nextFlow;
+      };
+      items.forEach(item => {
+        if (item.classList.contains("page-break")) {
+          if (pageFlow.children.length) continuation();
+          return;
+        }
+        pageFlow.appendChild(item);
+        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length > 1) {
+          pageFlow.removeChild(item);
+          continuation();
+          pageFlow.appendChild(item);
+        }
+        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length === 1) page.classList.add("oversize");
+      });
+      source.dataset.paginationReady = "true";
+    });
+  }
+
   function render(definition, options) {
     const def = clone(definition || blankForm());
-    if (def.kind === "package") return renderPackage(def);
+    if (def.kind === "package") return renderPackage(def, options || {});
     if (def.kind === "document") return renderDoc(def);
     return renderForm(def, options || {});
   }
@@ -351,5 +397,5 @@
     return blankDoc();
   }
 
-  root.BASE = { render, renderForm, renderDoc, renderPackage, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
+  root.BASE = { render, renderForm, renderDoc, renderPackage, paginate, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
 })(window);

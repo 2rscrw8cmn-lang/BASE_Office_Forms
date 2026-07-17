@@ -43,6 +43,7 @@ p { margin: 0; text-wrap: pretty; }
 /* ---- The page ---- */
 .sheet {
   width: var(--sheet-w);
+  height: 11in;
   min-height: 11in;
   margin: 0 auto 22px;
   background: var(--paper);
@@ -255,8 +256,8 @@ p { margin: 0; text-wrap: pretty; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; background: #fff; }
   .sheet {
-    width: auto; margin: 0; box-shadow: none; min-height: 0;
-    padding: 0.5in 0.7in;
+    width: 8.5in; height: 11in; min-height: 11in; margin: 0; box-shadow: none;
+    padding: var(--pad-y, .5in) var(--pad-x, .7in);
     break-after: page;
   }
   .section, .sec-head, .field, .check-box { break-inside: avoid; }
@@ -405,7 +406,11 @@ p { margin: 0; text-wrap: pretty; }
   background: var(--paper, #fff);
   font-size: calc(1em * var(--body-scale, 1));
 }
-.sheet.landscape { width: 11in; min-height: 8.5in; page: landscape-page; }
+.sheet.landscape { width: 11in; height: 8.5in; min-height: 8.5in; page: landscape-page; }
+.sheet.oversize { height: auto; overflow: visible; }
+.page-header { flex: none; }
+.page-flow { min-height: 0; }
+.flow-paragraph { break-inside: auto; }
 .doc-body { margin-top: 20px; }
 .page-title { margin-top: 22px; }
 .formrow.static { cursor: default; }
@@ -445,7 +450,7 @@ p { margin: 0; text-wrap: pretty; }
 @page landscape-page { size: letter landscape; margin: 0; }
 @media print {
   .sheet { padding: var(--pad-y, .5in) var(--pad-x, .7in); }
-  .sheet.landscape { width: auto; min-height: 0; }
+  .sheet.landscape { width: 11in; height: 8.5in; min-height: 8.5in; }
   .package-document { display: contents; }
   .page-break { height: 0; }
 }

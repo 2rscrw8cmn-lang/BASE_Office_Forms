@@ -53,12 +53,15 @@
   .editor-hint,.micro { color:#929299; font:500 9px/1.45 var(--code); }
   .editor-hint { padding:11px 14px 0; }
   .package-card strong { display:block; font:700 12px/1.3 var(--sans); } .package-card>span { display:block; margin-top:3px; font:500 9px/1 var(--code); color:#888; }
+  .package-edit { margin-top:9px; }
   .empty-state { margin:16px; padding:20px; text-align:center; color:#999; border:1px dashed #d4d4d8; font:500 10px/1.5 var(--code); }
   .modal { position:fixed; inset:0; z-index:100; } .modal[hidden] { display:none; }
   .modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }
   .modal-card { position:relative; width:min(680px,calc(100% - 32px)); max-height:80vh; overflow:auto; margin:10vh auto; background:#fff; border-radius:7px; box-shadow:0 20px 70px rgba(0,0,0,.25); padding:18px; }
   .modal-head { display:flex; align-items:center; margin-bottom:13px; } .modal-head h2 { margin:0; font:800 17px/1 var(--sans); text-transform:uppercase; } .modal-head button { margin-left:auto; border:0; background:none; font-size:22px; cursor:pointer; }
-  .library-row { display:grid; grid-template-columns:1fr auto auto; gap:7px; align-items:center; padding:10px 0; border-bottom:1px solid #eee; }
+  .library-tools { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-bottom:10px; }
+  .library-tools button { padding:7px 10px; border:1px solid #ddd; background:#fff; border-radius:3px; cursor:pointer; }
+  .library-row { display:grid; grid-template-columns:minmax(0,1fr) repeat(4,auto); gap:7px; align-items:center; padding:10px 0; border-bottom:1px solid #eee; }
   .library-row strong,.library-row span { display:block; } .library-row span { margin-top:3px; color:#888; font:500 9px/1.3 var(--code); }
   .library-row button { padding:7px 9px; border:1px solid #ddd; background:#fff; border-radius:3px; cursor:pointer; }
   .modal-text { width:100%; min-height:100px; padding:9px; border:1px solid #ccc; font:500 10px/1.5 var(--code); } .modal-text.tall { min-height:300px; }
@@ -72,18 +75,19 @@
   <aside class="editor">
     <div class="bar">
       <select id="templateSelect" aria-label="Document template"></select><button id="newButton">New</button>
-      <button id="loadButton">Load JSON</button><button id="downloadButton">Download JSON</button>
-      <button id="saveButton">Save</button><button id="libraryButton">Library</button>
-      <button id="shareButton">Copy link</button><button id="aiButton">AI kit</button><button id="aiImportButton">Import AI</button>
+      <button id="loadButton" title="Restore a portable document backup file">Import backup</button><button id="downloadButton" title="Download a portable JSON backup">Export backup</button>
+      <button id="saveButton" title="Save or update this document in the shared Cloudflare library">Save shared</button><button id="libraryButton">Shared library</button>
+      <button id="shareButton" title="Copy a public view or fill link">Share link</button><button id="aiButton">AI kit</button><button id="aiImportButton">Import AI</button>
       <button id="printButton" class="accent">Export PDF</button>
     </div>
-    <div class="studio-head"><strong>BASE Document Studio</strong><span id="kindBadge"></span><div id="status">Draft saves automatically in this browser.</div></div>
+    <div class="studio-head"><strong>BASE Document Studio</strong><span id="kindBadge"></span><div id="status">Drafts save locally; Save shared publishes to the team library.</div></div>
     <div id="ed"></div>
   </aside>
   <main class="previewpane"><div class="previewscale" id="pv"></div></main>
 </div>
 <div class="modal" id="modal" hidden><div class="modal-backdrop"></div><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button data-action="close-modal" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
 <script src="engine.js"></script>
+<script src="library-api.js"></script>
 <script src="studio.js"></script>
 </body>
 </html>
