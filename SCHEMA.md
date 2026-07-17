@@ -33,7 +33,9 @@ To generate one by describing it, paste this file plus a request like:
 ```
 
 Section types (one per section object):
-- `fields`: `[[label, width], …]` — write-in boxes. Width is relative (2 is twice as wide as 1).
+- `fields`: either `[[label, width], …]` or objects such as
+  `{ "label": "Description", "w": 2, "height": 92, "multiline": true }`.
+  Width is relative; height is the write-in area in screen pixels.
 - `checks`: `["Option", …]` — add `"single": true` for pick-one (radio), `"cols": N` for a grid.
   End a label with `†` or `‡` to tie it to a footnote.
 - `sign`: `[[label, width], …]` — signature / authorization boxes.
@@ -76,14 +78,72 @@ Block types (`type` field):
 - `note`: `title`, `text` — a bordered reminder box.
 - `signatory`: `name`, `role`.
 - `table`: `columns: [...]`, `rows: [[...], ...]`.
+- `list`: `heading`, `items: [...]`, optional `ordered: true`.
+- `checklist`: `heading`, `items: [...]`.
+- `keyvalue`: `items: [[label, value], ...]` for memo and cover-sheet metadata.
+- `fields`: a form-style field block inside a document.
+- `checks`: a form-style choice block inside a document.
+- `signature`: a signature-field block.
 - `ack`: acknowledgment block with `fields` and `sign` (same shape as a form).
+- `pagebreak`: forces the following content onto a new printed page.
 
 `toc: true` auto-builds the contents page from every numbered `prose` block and `ack`.
 
 ---
 
+## Package
+
+```json
+{
+  "kind": "package",
+  "documentType": "Proposal Package",
+  "no": "PROP-1",
+  "title": "Project Proposal",
+  "subtitle": "Prepared for Example Client",
+  "control": { "Revision": "1.0", "Effective": "2026-07-17", "Classification": "Internal", "Doc. Control": "BASE-PROP-1" },
+  "documents": [
+    { "def": { "kind": "document", "no": "LTR-1", "title": "Cover Letter", "blocks": [] } },
+    { "def": { "kind": "document", "no": "QUAL-1", "title": "Company Qualifications", "blocks": [] } }
+  ]
+}
+```
+
+The studio normally adds package documents from its saved browser library. The package
+stores snapshots so downloaded JSON and shared links remain portable. Cover and index
+entries are regenerated from the current `documents` array whenever the package renders.
+
+---
+
+## Shared controls and appearance
+
+Forms, documents, and packages may use:
+
+```json
+{
+  "showControl": true,
+  "controlVisibility": {
+    "no": true,
+    "Revision": true,
+    "Effective": true,
+    "Classification": false,
+    "Doc. Control": true
+  },
+  "showHeader": true,
+  "appearance": {
+    "accent": "#7a1e22",
+    "ink": "#232327",
+    "orientation": "portrait",
+    "marginX": 0.7,
+    "marginY": 0.55,
+    "bodyScale": 1
+  }
+}
+```
+
+---
+
 ## Rules for a valid definition
-- `kind` is `"form"` or `"document"`.
-- Widths and `cols` are numbers; everything else is a string (or list of strings).
-- Don't invent new keys — if something doesn't fit a block type above, use `prose` or a `note`.
+- `kind` is `"form"`, `"document"`, or `"package"`.
+- Widths, heights, margins, scale, and `cols` are numbers; visibility and layout toggles are booleans.
+- Prefer the documented keys. If something does not fit a block type above, use `prose` or `note`.
 - Keep `no` unique; it's the id used for the file name and links.

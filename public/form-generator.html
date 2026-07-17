@@ -3,247 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BASE — Forms</title>
+<title>BASE — Fill & Export</title>
+<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg">
 <link rel="stylesheet" href="base.css">
+<style>
+  .usebar { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:8.5in; max-width:calc(100% - 24px); margin:0 auto 14px; padding:10px; background:#17171a; }
+  .usebar a,.usebar button,.usebar select { padding:8px 10px; border:1px solid #44444a; background:#29292e; color:#fff; text-decoration:none; font:600 9px/1 var(--code); text-transform:uppercase; cursor:pointer; }
+  .usebar select { min-width:150px; text-transform:none; }
+  .usebar .spacer { flex:1; } .usebar .accent { background:var(--accent); border-color:var(--accent); }
+  #notice { width:8.5in; max-width:calc(100% - 24px); margin:0 auto 10px; color:#777; font:500 9px/1.4 var(--code); }
+  @media print { .usebar,#notice { display:none; } }
+</style>
 </head>
 <body>
-
-<!-- ============================================================
-     FORM DEFINITIONS  — the only thing you edit to add a form.
-     Field building blocks:
-       fields: [[label, width], …]              → write-in boxes
-       checks: […]  (+ single:true for "pick one", cols:N for grid)
-       sign:   [[label, width], …]              → signature row
-       row:    [ {…}, {…} ]                     → two sections side by side
-       footnotes: […]
-     Every field gets a stable id automatically (used for fill/agent).
-     ============================================================ -->
+<div class="usebar">
+  <a href="index.html">Home</a><a href="builder.html">Studio</a>
+  <select id="librarySelect"><option value="">Saved form library</option></select><button id="openSaved">Open</button>
+  <button id="loadDefinition">Load definition</button><span class="spacer"></span>
+  <button id="loadAnswers">Load AI answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Download answers</button><button class="accent" onclick="window.print()">Export PDF</button>
+</div>
+<div id="notice">Load any form definition created in the studio, then fill it here or import an AI answer file.</div>
+<main id="root"></main>
+<script src="engine.js"></script>
 <script>
-const ORG = "Office Process &amp; Compliance Division";
+(function () {
+  const LIBRARY_KEY = "baseStudio.library.v2";
+  let definition = BASE.fromTemplate("authorization");
 
-const FORMS = [
-  {
-    no: "RR-1",
-    title: "Restroom Request Authorization",
-    sub: "Submit prior to departure from assigned workstation. Retain duplicate for records.",
-    control: { Revision:"4.2", Effective:"2026-01-15", Classification:"Internal", "Doc. Control":"BASE-FAC-RR-1" },
-    sections: [
-      { name:"Requestor Identification", req:"REQUIRED",
-        fields:[ ["Employee Name",2.2], ["Employee ID",1], ["Date",1], ["Time of Request · 24-HR",1.3] ] },
-      { row:[
-        { name:"Type of Visit", req:"SELECT ONE", single:true,
-          checks:["Standard","Expedited","Emergency †"] },
-        { name:"Anticipated Duration", req:"SELECT ONE", single:true, cols:2,
-          checks:["Under 2 min","2–5 min","5–10 min","Over 10 min ‡"] },
-      ]},
-      { name:"Supervisor Authorization", req:"REQUIRED",
-        sign:[ ["Supervisor Signature",2], ["Badge No.",1], ["Time Authorized",1] ] },
-    ],
-    footnotes:[
-      "† Emergency requests may proceed pending authorization; retroactive approval required within one business day.",
-      "‡ Durations over 10 minutes require secondary review under Form RR-1M.",
-    ],
-  },
-
-  {
-    no: "TB-1",
-    title: "Toolbox Talk Attendance Record",
-    sub: "Complete at the start of each safety briefing. File with the daily report.",
-    control: { Revision:"1.0", Effective:"2026-07-17", Classification:"Internal", "Doc. Control":"BASE-SAF-TB-1" },
-    sections: [
-      { name:"Briefing Details", req:"REQUIRED",
-        fields:[ ["Project / Job No.",2], ["Date",1], ["Location",2], ["Presenter",1.5] ] },
-      { name:"Topic Covered", req:"REQUIRED",
-        fields:[ ["Topic",3], ["Duration (min)",1] ] },
-      { name:"Hazards Discussed", req:"SELECT ANY", cols:3,
-        checks:["Fall protection","Electrical","Housekeeping","PPE","Heat / cold","Silica dust","Ladders","Traffic","Other"] },
-      { name:"Supervisor Sign-Off", req:"REQUIRED",
-        sign:[ ["Supervisor Signature",2], ["Date",1] ] },
-    ],
-  },
-];
-</script>
-
-<div id="root"></div>
-
-<!-- ============================================================
-     ENGINE — prepares ids, renders, fills, exports. Rarely touched.
-     ============================================================ -->
-<script>
-/* ---- id helpers ---- */
-const slug = s => String(s).toLowerCase().replace(/[†‡]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
-function prepare(f){
-  if (f._ready) return f;
-  const seen = {}, schema = [];
-  const uid = b => { b = b||"field"; seen[b]=(seen[b]||0)+1; return seen[b]>1 ? b+"_"+seen[b] : b; };
-  const walk = s => {
-    if (s.row){ s.row.forEach(walk); return; }
-    if (s.fields) s.fields = s.fields.map(([label,w,ex]) => {
-      const id = uid(slug(ex||label)); schema.push({id,type:"text",label}); return {label,w:w||1,id};
-    });
-    if (s.sign) s.sign = s.sign.map(([label,w,ex]) => {
-      const id = uid(slug(ex||label)); schema.push({id,type:"text",label}); return {label,w:w||1,id};
-    });
-    if (s.checks){
-      s._gid = uid(slug(s.name||"choice"));
-      s._opts = s.checks.map(c => c.replace(/[†‡]\s*$/,"").trim());
-      schema.push({id:s._gid, type:s.single?"choose_one":"choose_any", label:s.name, options:s._opts});
+  function clean(value) { const copy = BASE.clone(value); delete copy._ready; delete copy._schema; return copy; }
+  function render() {
+    if (definition.kind !== "form") {
+      document.getElementById("root").innerHTML = BASE.render(definition);
+      requestAnimationFrame(() => BASE.updatePackageIndex(document.getElementById("root")));
+      document.getElementById("notice").textContent = "This is not a fillable form, but it can be reviewed and exported as PDF.";
+      return;
     }
+    document.getElementById("root").innerHTML = BASE.render(definition, { fill: true });
+    document.getElementById("notice").textContent = `${definition.no || "Form"} — fields can be typed here or populated from an AI answer JSON file.`;
+  }
+  function prepared() { return BASE.prepareForm(definition); }
+  function values() {
+    const result = {};
+    prepared()._schema.forEach(field => {
+      if (field.type === "text") { const input = document.querySelector(`[name="${field.id}"]`); result[field.id] = input ? input.value : ""; }
+      else if (field.type === "choose_one") { const input = document.querySelector(`[name="${field.id}"]:checked`); result[field.id] = input ? input.value : ""; }
+      else result[field.id] = [...document.querySelectorAll(`[name="${field.id}"]:checked`)].map(input => input.value);
+    });
+    return result;
+  }
+  function applyValues(input) {
+    if (definition.kind !== "form") return;
+    const data = input.answers || input;
+    prepared()._schema.forEach(field => {
+      const value = data[field.id]; if (value == null) return;
+      if (field.type === "text") { const element = document.querySelector(`[name="${field.id}"]`); if (element) element.value = value; }
+      else { const wanted = Array.isArray(value) ? value : [value]; document.querySelectorAll(`[name="${field.id}"]`).forEach(element => element.checked = wanted.includes(element.value)); }
+    });
+  }
+  function filePicker(callback) {
+    const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
+    input.onchange = () => { const reader = new FileReader(); reader.onload = () => { try { callback(JSON.parse(reader.result)); } catch (error) { alert(`Could not read JSON: ${error.message}`); } }; reader.readAsText(input.files[0]); };
+    input.click();
+  }
+  function download(name, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500);
+  }
+  function refreshLibrary() {
+    let items = []; try { items = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); } catch (_) {}
+    document.getElementById("librarySelect").innerHTML = `<option value="">Saved form library</option>` + items.filter(item => item.kind === "form").map(item => `<option value="${BASE.esc(item.id)}">${BASE.esc(item.title)} (${BASE.esc(item.no)})</option>`).join("");
+  }
+  document.getElementById("openSaved").onclick = () => {
+    const id = document.getElementById("librarySelect").value; if (!id) return;
+    const items = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); const item = items.find(entry => entry.id === id); if (item) { definition = BASE.clone(item.def); render(); }
   };
-  f.sections.forEach(walk);
-  f._schema = schema; f._ready = true; return f;
-}
-
-/* ---- render pieces ---- */
-function ctrlGrid(no, control){
-  const cells = [["Form No.",no], ...Object.entries(control||{})];
-  return `<div class="doc-control" style="--dc-cols:${cells.length}">` +
-    cells.map(([l,v]) => `<div class="dc-cell"><div class="dc-label">${l}</div><div class="dc-val">${v}</div></div>`).join("") +
-    `</div>`;
-}
-function head(f){
-  return `<header>
-    <div class="doc-top">
-     <img class="doc-logo" src="assets/base-logo.svg" alt="BASE">
-      <div class="doc-org">${ORG}<br>Controlled Document — Do Not Reproduce</div>
-    </div>
-    <div class="rule"></div>
-    <div class="form-tag">Form ${f.no}</div>
-    <h1 class="form-title">${f.title}</h1>
-    ${f.sub ? `<p class="form-sub">${f.sub}</p>` : ""}
-    ${ctrlGrid(f.no, f.control)}
-  </header>`;
-}
-function fieldsBlock(fields, tall){
-  const tpl = fields.map(x => x.w+"fr").join(" ");
-  return `<div class="grid" style="--tpl:${tpl};">` + fields.map(x =>
-    `<div class="field${tall?" field-tall":""}"><div class="field-label">${x.label}</div>` +
-    (tall ? `<textarea class="ftx" name="${x.id}"></textarea>` : `<input class="fin" name="${x.id}">`) +
-    `</div>`).join("") + `</div>`;
-}
-function checksBlock(s){
-  const cls = s.cols ? `check-box cols" style="--ccols:${s.cols}` : "check-box";
-  const type = s.single ? "radio" : "checkbox";
-  return `<div class="${cls}">` + s.checks.map((c,i) => {
-    const m = c.match(/([†‡])\s*$/); const txt = c.replace(/[†‡]\s*$/,"").trim();
-    const dag = m ? `<sup class="dagger">${m[1]}</sup>` : "";
-    return `<label class="check"><input type="${type}" name="${s._gid}" value="${txt}"><span class="box"></span>${txt}${dag}</label>`;
-  }).join("") + `</div>`;
-}
-function signBlock(sign){
-  const tpl = sign.map(x => x.w+"fr").join(" ");
-  return `<div class="sign-grid" style="--sign-tpl:${tpl};">` + sign.map(x =>
-    `<div class="sign"><div class="field-label">${x.label}</div><input class="fin" name="${x.id}"></div>`
-  ).join("") + `</div>`;
-}
-function body(s){
-  if (s.fields) return fieldsBlock(s.fields, s.tall);
-  if (s.checks) return checksBlock(s);
-  if (s.sign)   return signBlock(s.sign);
-  return "";
-}
-function section(s, ctr){
-  if (s.row) return `<div class="grid" style="--cols:2; --gap:14px;">` + s.row.map(x=>section(x,ctr)).join("") + `</div>`;
-  const n = String(++ctr.n).padStart(2,"0");
-  return `<section class="section">
-    <div class="sec-head"><div class="sec-no">${n}</div><div class="sec-name">${s.name}</div>${s.req?`<div class="sec-req">${s.req}</div>`:""}</div>
-    ${body(s)}
-  </section>`;
-}
-function renderForm(f){
-  prepare(f); const ctr = {n:0};
-  const foot = (f.footnotes||[]).length ? `<div class="footnote">${f.footnotes.join("<br>")}</div>` : "";
-  const bar = `<div class="toolbar">
-    <button class="btn ghost" onclick="location.hash='#/'">← Register</button>
-    <span class="sp"></span>
-    <button class="btn ghost" onclick="loadAnswers('${f.no}')">Load answers</button>
-    <button class="btn ghost" onclick="copySpec('${f.no}')">Copy AI fill-spec</button>
-    <button class="btn" onclick="downloadAnswers('${f.no}')">Download answers</button>
-    <button class="btn accent" onclick="window.print()">Print / Save PDF</button>
-  </div>`;
-  return bar + `<div class="sheet" id="sheet-${f.no}">${head(f)}${f.sections.map(s=>section(s,ctr)).join("")}${foot}</div>`;
-}
-function renderRegister(){
-  const rows = FORMS.map(f => `<a class="formrow" href="#/${f.no}"><span class="no">${f.no}</span><span class="nm">${f.title}</span></a>`).join("");
-  return `<div class="sheet">
-    <header>
-       <div class="doc-top"><img class="doc-logo" src="assets/base-logo.svg" alt="BASE">
-        <div class="doc-org">${ORG}<br>Controlled Document — Do Not Reproduce</div></div>
-      <div class="rule"></div>
-      <div class="form-tag">Master Register · MR-0</div>
-      <h1 class="form-title">Office Process Forms — Controlled Index</h1>
-      <p class="form-sub">Select a form to open it. Fill it in here, hand off the link, print it, or load an agent's answers.</p>
-    </header>
-    <div style="margin-top:20px;">${rows}</div>
-  </div>`;
-}
-
-/* ---- fill / export ---- */
-function byNo(no){ return FORMS.find(f=>f.no===no); }
-function applyAnswers(f, values){
-  prepare(f);
-  f._schema.forEach(fld => {
-    const v = values[fld.id]; if (v==null) return;
-    if (fld.type==="text"){ const el=document.querySelector(`[name="${fld.id}"]`); if(el) el.value=v; }
-    else {
-      const want = Array.isArray(v) ? v : [v];
-      document.querySelectorAll(`[name="${fld.id}"]`).forEach(el => { el.checked = want.includes(el.value); });
-    }
-  });
-}
-function collectAnswers(f){
-  prepare(f); const out = {};
-  f._schema.forEach(fld => {
-    if (fld.type==="text"){ const el=document.querySelector(`[name="${fld.id}"]`); out[fld.id]=el?el.value:""; }
-    else if (fld.type==="choose_one"){ const el=document.querySelector(`[name="${fld.id}"]:checked`); out[fld.id]=el?el.value:""; }
-    else { out[fld.id]=[...document.querySelectorAll(`[name="${fld.id}"]:checked`)].map(e=>e.value); }
-  });
-  return out;
-}
-function downloadAnswers(no){
-  const f = byNo(no); const data = { form:no, answers: collectAnswers(f) };
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `${no}-answers.json`; a.click();
-}
-function loadAnswers(no){
-  const inp = document.createElement("input"); inp.type="file"; inp.accept="application/json,.json";
-  inp.onchange = e => { const r=new FileReader(); r.onload = () => {
-    try { const d = JSON.parse(r.result); applyAnswers(byNo(no), d.answers||d); }
-    catch(err){ alert("Couldn't read that JSON: "+err.message); }
-  }; r.readAsText(e.target.files[0]); };
-  inp.click();
-}
-function copySpec(no){
-  const f = byNo(no); prepare(f);
-  const lines = f._schema.map(s => {
-    if (s.type==="text") return `- ${s.id} (text): ${s.label}`;
-    if (s.type==="choose_one") return `- ${s.id} (choose ONE of: ${s.options.join(", ")}): ${s.label}`;
-    return `- ${s.id} (choose ANY of: ${s.options.join(", ")}) → array: ${s.label}`;
-  }).join("\n");
-  const spec =
-`Fill out BASE form ${no} — "${f.title}".
-Return ONLY a JSON object: { "form": "${no}", "answers": { <field id>: <value> } }.
-For "choose ANY" fields the value is an array of the chosen labels. Leave unknown fields as "".
-
-Fields:
-${lines}`;
-  navigator.clipboard.writeText(spec).then(
-    () => alert("AI fill-spec copied. Paste it to your agent; load the JSON it returns with “Load answers.”"),
-    () => { prompt("Copy this spec for your agent:", spec); }
-  );
-}
-
-/* ---- routing ---- */
-function route(){
-  const no = decodeURIComponent((location.hash.match(/^#\/(.+)$/)||[])[1] || "");
-  const f = no && byNo(no);
-  document.getElementById("root").innerHTML = f ? renderForm(f) : renderRegister();
-  window.scrollTo(0,0);
-}
-window.addEventListener("hashchange", route);
-route();
+  document.getElementById("loadDefinition").onclick = () => filePicker(data => { definition = data.definition || data; render(); });
+  document.getElementById("loadAnswers").onclick = () => filePicker(applyValues);
+  document.getElementById("downloadAnswers").onclick = () => download(`${definition.no || "form"}-answers.json`, { form: definition.no || "", answers: definition.kind === "form" ? values() : {} });
+  document.getElementById("copySpec").onclick = async () => {
+    if (definition.kind !== "form") return alert("Load a form definition first.");
+    const fields = prepared()._schema;
+    const prompt = `Complete BASE form ${definition.no} — ${definition.title}. Return ONLY JSON in this shape: {"form":"${definition.no}","answers":{<field id>:<value>}}. Use arrays for choose_any fields. Leave unknown values empty.\n\nFIELDS:\n${JSON.stringify(fields, null, 2)}\n\nFORM CONTEXT:\n${JSON.stringify(clean(definition), null, 2)}`;
+    try { await navigator.clipboard.writeText(prompt); alert("AI fill spec copied."); } catch (_) { window.prompt("Copy this AI fill spec:", prompt); }
+  };
+  refreshLibrary(); render();
+})();
 </script>
-
 </body>
 </html>

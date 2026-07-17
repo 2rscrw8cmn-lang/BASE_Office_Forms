@@ -1,6 +1,6 @@
 # BASE Forms & Documents Kit
 
-One locked visual identity (`public/base.css`) + one renderer (`public/engine.js`).
+One controlled visual identity (`public/base.css`) + one renderer (`public/engine.js`).
 Everything you make is a small **definition** (a JSON object). Create them two ways —
 click through the builder, or describe them and let Claude generate them — and both
 forms and full documents come out in the same house style.
@@ -17,13 +17,15 @@ public/assets/base-logo.svg  the logo, once
 ```
 
 ## Create — by clicking (public/builder.html)
-Open it, hit **New form** or **New document**. Add sections/blocks from the menu,
-type your labels, tick options — the right pane previews it live in the BASE style.
-Then **Save** (a .json definition), **Copy def**, or **Print / Save PDF**.
+Open the studio and choose a template. Add sections or blocks, adjust write-in height,
+page setup, colors, and document-control visibility, then preview it live. Save to the
+browser library, download JSON, copy a view-only link, hand the definition to AI, or
+export through the browser's PDF print workflow.
 
-Forms give you: write-in fields, checkboxes (pick-one or any), signature rows.
-Documents give you: numbered prose sections, the maroon callout, note boxes,
-signatory blocks, tables, an auto contents page, and acknowledgment blocks.
+Forms provide adjustable write-in fields, checkboxes, signatures, and answer JSON.
+Documents provide prose, lists, checklists, tables, key/value rows, callouts, notes,
+signatures, acknowledgments, cover pages, and generated contents pages. Packages combine
+saved documents and regenerate their cover and index for export. See `DOCUMENT_TYPES.md`.
 
 Try it now: New document isn't blank if you **Load** `public/safety-manual.json`.
 
