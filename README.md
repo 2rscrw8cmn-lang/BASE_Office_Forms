@@ -43,19 +43,19 @@ An AI agent fills it the same way — **Copy AI fill-spec**, hand it to the agen
 load the `{field: value}` JSON it returns, and the form renders completed.
 
 ## Deploy on Cloudflare
-This repository is configured as a Cloudflare Workers Static Assets project. The
-`public/` directory contains the landing page and all deployable assets, while
-`wrangler.jsonc` keeps deployment settings in the repo so local development and
-production use the same asset layout.
+This repository is configured as a Cloudflare Pages project. The `public/` directory
+contains the landing page and all deployable assets, while `wrangler.jsonc` declares
+the Pages build output so local development and Cloudflare builds use the same layout.
 
 ```bash
 npm install
+npm run build
 npm run dev
 npm run deploy:dry-run
 npm run deploy
 ```
 
-`npm run deploy` publishes the `public/` static site with Wrangler. It will ask you to log in if
+`npm run deploy` publishes the `public/` static site to the `base-office-forms` Pages project with Wrangler. It will ask you to log in if
 the current machine is not authenticated with Cloudflare. The site is also still
 usable by opening `public/index.html` directly, though a local web server is recommended for
 testing asset paths.

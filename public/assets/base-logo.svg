@@ -1,7 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 92" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 286 96" role="img" aria-labelledby="title desc">
   <title id="title">BASE</title>
   <desc id="desc">BASE forms and documents logo</desc>
-  <rect width="320" height="92" rx="4" fill="#7a1e22"/>
-  <path fill="#fff" d="M22 18h42c18 0 28 7 28 20 0 8-4 14-11 17 9 3 14 9 14 18 0 14-11 21-31 21H22V18Zm18 14v17h22c8 0 12-3 12-9s-4-8-12-8H40Zm0 30v18h25c8 0 12-3 12-9s-4-9-12-9H40Z"/>
-  <text x="106" y="61" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="47" font-weight="800" letter-spacing="5">BASE</text>
+  <rect x="1" y="1" width="284" height="94" fill="#fff" stroke="#9a9a9a" stroke-width="2"/>
+  <text x="7" y="75" fill="#55565a" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="400">B</text>
+  <path fill="#8b2529" d="M90 15 L60 78 H78 L85 62 H103 L111 78 H129 L90 15 Z"/>
+  <path fill="#fff" d="M80 52 H101 V58 H80 Z"/>
+  <text x="135" y="75" fill="#55565a" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="400">S</text>
+  <text x="207" y="75" fill="#55565a" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="400">E</text>
 </svg>
