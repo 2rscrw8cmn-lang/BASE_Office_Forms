@@ -104,7 +104,7 @@ function ctrlGrid(no, control){
 function head(f){
   return `<header>
     <div class="doc-top">
-      <img class="doc-logo" src="assets/base-logo.jpg" alt="BASE">
+     <img class="doc-logo" src="assets/base-logo.svg" alt="BASE">
       <div class="doc-org">${ORG}<br>Controlled Document — Do Not Reproduce</div>
     </div>
     <div class="rule"></div>
@@ -167,7 +167,7 @@ function renderRegister(){
   const rows = FORMS.map(f => `<a class="formrow" href="#/${f.no}"><span class="no">${f.no}</span><span class="nm">${f.title}</span></a>`).join("");
   return `<div class="sheet">
     <header>
-      <div class="doc-top"><img class="doc-logo" src="assets/base-logo.jpg" alt="BASE">
+       <div class="doc-top"><img class="doc-logo" src="assets/base-logo.svg" alt="BASE">
         <div class="doc-org">${ORG}<br>Controlled Document — Do Not Reproduce</div></div>
       <div class="rule"></div>
       <div class="form-tag">Master Register · MR-0</div>

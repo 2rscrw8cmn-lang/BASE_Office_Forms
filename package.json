@@ -1,0 +1,16 @@
+{
+  "name": "base-office-forms",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BASE forms and documents kit hosted as a Cloudflare static-assets Worker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "types": "wrangler types",
+    "check": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}

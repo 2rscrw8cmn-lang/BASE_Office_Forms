@@ -20,7 +20,7 @@
   }
   function topBar(org, right) {
     return `<div class="doc-top">
-      <img class="doc-logo" src="assets/base-logo.jpg" alt="BASE">
+      <img class="doc-logo" src="assets/base-logo.svg" alt="BASE">
       <div class="doc-org">${org || ORG_DEFAULT}<br>Controlled Document — Do Not Reproduce</div>
     </div><div class="rule"></div>` + (right || "");
   }

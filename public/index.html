@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="BASE Forms and Documents Kit">
+<title>BASE — Forms &amp; Documents</title>
+<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg">
+<link rel="stylesheet" href="base.css">
+<style>
+  body { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+  .home { width: min(760px, 100%); background: var(--paper); padding: 42px; box-shadow: 0 2px 26px rgba(0,0,0,.13); }
+  .home-logo { width: 180px; height: auto; }
+  .home-rule { height: 3px; background: var(--ink); margin: 22px 0 30px; }
+  .home-rule::after { content: ""; display: block; height: 1px; background: var(--ink); margin-top: 3px; }
+  h1 { font: 800 clamp(28px, 6vw, 52px)/.98 var(--sans); text-transform: uppercase; margin: 0; }
+  .intro { max-width: 560px; font: 500 12px/1.6 var(--code); color: var(--mono); margin: 14px 0 28px; }
+  .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .action { display: block; padding: 18px; border: 1px solid var(--ink); color: var(--ink); text-decoration: none; }
+  .action:hover { background: var(--hover); border-color: var(--accent); }
+  .action strong { display: block; font: 700 13px/1.2 var(--sans); text-transform: uppercase; letter-spacing: .8px; }
+  .action span { display: block; margin-top: 7px; font: 500 10px/1.5 var(--code); color: var(--mono); }
+  .meta { margin-top: 28px; font: 500 9px/1.5 var(--code); color: var(--mono); }
+  @media (max-width: 560px) { .home { padding: 28px 22px; } .actions { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="home">
+  <img class="home-logo" src="assets/base-logo.svg" alt="BASE">
+  <div class="home-rule"></div>
+  <h1>Forms &amp; Documents</h1>
+  <p class="intro">Create controlled forms and documents in the BASE design system, then fill, print, or hand them off to an agent.</p>
+  <div class="actions">
+    <a class="action" href="builder.html"><strong>Open Builder</strong><span>Create or edit a form or document definition.</span></a>
+    <a class="action" href="form-generator.html"><strong>Open Forms</strong><span>Choose a form, fill it in, and download answers.</span></a>
+  </div>
+  <p class="meta">Office Process &amp; Compliance Division · Controlled Document System</p>
+</main>
+</body>
+</html>

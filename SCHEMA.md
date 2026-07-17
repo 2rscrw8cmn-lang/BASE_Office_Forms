@@ -2,7 +2,7 @@
 
 Every form and document is one JSON object — a **definition**. The builder makes them,
 and Claude / Claude Code can make them from a plain description. Any definition loads
-into `builder.html` (Load) and renders through `engine.js`, so it always looks on-brand.
+into `public/builder.html` (Load) and renders through `public/engine.js`, so it always looks on-brand.
 
 To generate one by describing it, paste this file plus a request like:
 *"Make a definition for a subcontractor daily sign-in form: company, worker name, trade
