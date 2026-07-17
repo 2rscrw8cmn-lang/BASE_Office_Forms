@@ -4,11 +4,6 @@
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./public",
-  "observability": {
-    "enabled": true,
-    "logs": { "enabled": true, "head_sampling_rate": 1 },
-    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
-  },
   "d1_databases": [
     {
       "binding": "DB",
