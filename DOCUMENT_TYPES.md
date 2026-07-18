@@ -52,7 +52,9 @@ starting points: sections and blocks can be added, removed, reordered, and custo
 
 Packages generate a cover and index from their current document list whenever they are
 rendered or exported. Every embedded package document can be opened and edited directly
-inside the package. Shared-library documents can also be added as package snapshots.
+inside the package. Users can add blank documents, blank forms, built-in templates, or
+shared-library snapshots, then duplicate, reorder, or remove them without leaving the
+package editor.
 
 The shared library is stored in Cloudflare D1 and is available across browsers and
 devices. Folders organize public templates; private edit links control who can update an

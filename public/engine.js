@@ -3,6 +3,7 @@
   "use strict";
 
   const ORG_DEFAULT = "Office Process & Compliance Division";
+  const HEADER_NOTE_DEFAULT = "Controlled Document — Do Not Reproduce";
   const CONTROL_KEYS = ["Revision", "Effective", "Classification", "Doc. Control"];
   const esc = value => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -29,9 +30,12 @@
 
   function topBar(def) {
     if (def.showHeader === false) return "";
+    const organization = def.org === undefined ? ORG_DEFAULT : def.org;
+    const headerNote = def.headerNote === undefined ? HEADER_NOTE_DEFAULT : def.headerNote;
+    const headerText = [organization, headerNote].filter(Boolean).map(esc).join("<br>");
     return `<div class="page-header"><div class="doc-top">
       <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260718")}" alt="BASE">
-      <div class="doc-org">${esc(def.org || ORG_DEFAULT)}<br>${esc(def.headerNote || "Controlled Document — Do Not Reproduce")}</div>
+      <div class="doc-org">${headerText}</div>
     </div><div class="rule"></div></div>`;
   }
 
@@ -139,7 +143,7 @@
     if (section.fields) body = fieldsBlock(section.fields, fill, section.tall, namePrefix);
     else if (section.checks) body = checksBlock(section, fill, namePrefix);
     else if (section.sign) body = signBlock(section.sign, fill, namePrefix);
-    else if (section.text) body = `<p class="prose">${esc(section.text)}</p>`;
+    else if (section.text) body = `<p class="prose">${proseHtml(section.text)}</p>`;
     return `<section class="section">${sectionBar(no, section.name, section.req)}${body}</section>`;
   }
 
@@ -321,19 +325,19 @@
   }
 
   function blankForm() {
-    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "", org: ORG_DEFAULT,
+    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("NEW-1"), controlVisibility: {}, showControl: true, appearance: {},
       sections: [{ name: "Section One", req: "REQUIRED", fields: [{ label: "Field label", w: 1, height: 46 }] }], footnotes: [] };
   }
 
   function blankDoc() {
-    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "", org: ORG_DEFAULT,
+    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("DOC-1"), controlVisibility: {}, showControl: true, appearance: {}, authority: "", toc: true, layout: { cover: true },
       blocks: [{ type: "prose", heading: "First Section", paras: ["Write the first paragraph here."] }] };
   }
 
   function blankPackage() {
-    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "", org: ORG_DEFAULT,
+    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("PKG-1"), controlVisibility: {}, showControl: true, appearance: {}, documents: [] };
   }
 

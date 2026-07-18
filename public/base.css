@@ -332,12 +332,34 @@ p { margin: 0; text-wrap: pretty; }
 .app-crumbs i { font-style: normal; color: #aaa6a2; }
 .global-search {
   grid-column: 4; height: 44px; border: 1px solid #dedbd7; border-radius: 5px; display: flex;
-  align-items: center; gap: 11px; padding: 0 15px; background: #fff; box-shadow: 0 1px 2px rgba(35,35,39,.02);
+  align-items: center; gap: 11px; padding: 0 15px; background: #fff; box-shadow: 0 1px 2px rgba(35,35,39,.02); position: relative;
 }
 .global-search:focus-within { border-color: #aaa6a2; box-shadow: 0 0 0 3px rgba(122,30,34,.06); }
 .global-search svg { width: 18px; height: 18px; fill: none; stroke: #3a393d; stroke-width: 1.6; flex: none; }
 .global-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: none; font: 400 13px/1 var(--sans); color: var(--ink); }
 .global-search input::placeholder { color: #a19fa2; }
+.search-popover {
+  position: absolute; top: calc(100% + 9px); left: 0; right: 0; max-height: min(560px, calc(100vh - 110px));
+  overflow-y: auto; padding: 8px 0; background: #fff; border: 1px solid #d9d6d2; border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(31,29,27,.16); z-index: 90;
+}
+.search-popover[hidden] { display: none; }
+.search-result-group + .search-result-group { margin-top: 7px; padding-top: 7px; border-top: 1px solid #ebe8e5; }
+.search-result-label { padding: 8px 15px 6px; color: #8c898d; font: 600 7px/1 var(--code); text-transform: uppercase; letter-spacing: .9px; }
+.search-result {
+  min-height: 55px; padding: 8px 14px; display: grid; grid-template-columns: 27px minmax(0,1fr) auto;
+  align-items: center; gap: 11px; color: #39373b; text-decoration: none; border-left: 2px solid transparent;
+}
+.search-result:hover,.search-result.is-active { background: #fcf7f6; border-left-color: #b3252b; }
+.search-result-icon {
+  width: 27px; height: 31px; display: grid; place-items: center; color: #5d5a5f; border: 1px solid #d4d1cd;
+  border-radius: 2px; background: #fbfaf9; font: 600 8px/1 var(--code);
+}
+.search-result strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px/1.25 var(--sans); }
+.search-result small { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #918e92; font: 500 7px/1.2 var(--code); }
+.search-result b { color: #bf282e; font: 400 15px/1 var(--sans); }
+.search-loading,.search-empty { padding: 24px 16px; color: #777479; text-align: center; font: 400 10px/1.5 var(--sans); }
+.search-warning { padding: 8px 15px 4px; color: #9b7274; font: 400 8px/1.4 var(--sans); }
 .user-placeholder {
   grid-column: 6; width: 46px; height: 46px; border: 0; border-radius: 50%; background: #f1efed;
   color: #4c4a4d; cursor: default; font: 600 9px/1 var(--sans); text-transform: uppercase; letter-spacing: .3px;

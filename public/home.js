@@ -3,17 +3,13 @@
 
   const rows = document.getElementById("libraryRows");
   const count = document.getElementById("libraryCount");
-  const search = document.getElementById("searchInput");
   const filters = document.getElementById("libraryFilters");
   const templateGrid = document.getElementById("templateGrid");
   const templateCount = document.getElementById("templateCount");
   let documents = [];
   let activeKind = "";
 
-  search.value = new URLSearchParams(location.search).get("q") || "";
-
   function esc(value) { return BASE.esc(value == null ? "" : String(value)); }
-  function searchable(item) { return [item.title, item.no, item.documentType, item.kind, item.status].filter(Boolean).join(" ").toLowerCase(); }
   function labelKind(kind) { return kind === "form" ? "Form" : kind === "package" ? "Package" : "Document"; }
   function formatDate(value) {
     if (!value) return "—";
@@ -22,8 +18,7 @@
   }
 
   function renderDocuments() {
-    const query = search.value.trim().toLowerCase();
-    const visible = documents.filter(item => (!activeKind || item.kind === activeKind) && (!query || searchable(item).includes(query)));
+    const visible = documents.filter(item => !activeKind || item.kind === activeKind);
     count.textContent = `${visible.length} ${visible.length === 1 ? "record" : "records"}`;
     rows.innerHTML = visible.length ? visible.map(item => {
       const owned = Boolean(BASE_LIBRARY.editKey(item.id));
@@ -39,8 +34,7 @@
   }
 
   function renderTemplates() {
-    const query = search.value.trim().toLowerCase();
-    const visible = BASE.templateCatalog.filter(item => !query || item.label.toLowerCase().includes(query));
+    const visible = BASE.templateCatalog;
     templateCount.textContent = `${visible.length} available`;
     templateGrid.innerHTML = visible.map(item => `<a href="builder.html?template=${encodeURIComponent(item.id)}"><span>${esc(item.label)}</span><small>Open in Studio</small><b aria-hidden="true">→</b></a>`).join("");
   }
@@ -54,9 +48,6 @@
     filters.querySelectorAll("button").forEach(item => item.classList.toggle("active", item === button));
     renderDocuments();
   });
-  document.getElementById("globalSearch").addEventListener("submit", event => event.preventDefault());
-  search.addEventListener("input", render);
-
   BASE_LIBRARY.listDocuments().then(items => {
     documents = items;
     render();

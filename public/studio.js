@@ -48,7 +48,13 @@
         if (block.sign) block.sign = block.sign.map(fieldObject);
       });
     }
-    if (value.kind === "package") value.documents = value.documents || [];
+    if (value.kind === "package") {
+      value.documents = value.documents || [];
+      value.documents.forEach(item => {
+        const child = item && (item.def || item);
+        if (child && child.kind && child.kind !== "package") normalize(child);
+      });
+    }
     return value;
   }
 
@@ -126,10 +132,12 @@
       <div class="two">${textInput(isPackage ? "Package No." : (def.kind === "form" ? "Form No." : "Document No."), "no", def.no)}${textInput("Type", "documentType", def.documentType)}</div>
       ${textInput("Title", "title", def.title)}
       ${textInput(isDoc ? "Subtitle" : "Supporting line", isDoc || isPackage ? "subtitle" : "sub", isDoc || isPackage ? def.subtitle : def.sub)}
-      ${textInput("Division / Organization", "org", def.org)}
-      ${isDoc ? textInput("Tag", "tag", def.tag) + textArea("Summary / standard", "standard", def.standard) : ""}
+      <div class="two">${textInput("Division / Organization", "org", def.org)}${textInput("Header notice", "headerNote", def.headerNote === undefined ? "Controlled Document — Do Not Reproduce" : def.headerNote)}</div>
+      ${def.kind === "form" ? textInput("Display label", "typeLabel", def.typeLabel || "Form") + textArea("Footnotes — one per line", "footnotes", (def.footnotes || []).join("\n"), "lines") : ""}
+      ${isDoc || isPackage ? textInput("Cover tag", "tag", def.tag) : ""}
+      ${isDoc ? textArea("Summary / standard", "standard", def.standard) + textArea("Issuing authority", "authority", def.authority) : ""}
       ${isDoc ? boolInput("Include cover page", "layout.cover", !(def.layout && def.layout.cover === false)) + boolInput("Generate document contents page", "toc", Boolean(def.toc)) : ""}
-      <label class="lbl">Shared library folder</label><select class="sel" data-library-folder><option value="">Library root</option>${folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === activeFolderId ? " selected" : ""}>${esc(folder.name)}</option>`).join("")}</select>
+      ${packageContext ? "" : `<label class="lbl">Shared library folder</label><select class="sel" data-library-folder><option value="">Library root</option>${folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === activeFolderId ? " selected" : ""}>${esc(folder.name)}</option>`).join("")}</select>`}
     </section>`;
   }
 
@@ -145,7 +153,7 @@
   function appearancePanel() {
     const a = def.appearance || {};
     return `<details class="panel collapsible"><summary>Appearance & page setup</summary>
-      <div class="color-grid">${textInput("Accent", "appearance.accent", a.accent || "#7a1e22", { type: "color" })}${textInput("Ink", "appearance.ink", a.ink || "#232327", { type: "color" })}</div>
+      <div class="color-grid">${textInput("Accent", "appearance.accent", a.accent || "#7a1e22", { type: "color" })}${textInput("Ink", "appearance.ink", a.ink || "#232327", { type: "color" })}${textInput("Paper", "appearance.paper", a.paper || "#ffffff", { type: "color" })}</div>
       <div class="two">${textInput("Horizontal margin (in)", "appearance.marginX", a.marginX || .7, { type: "number", valueType: "number", min: .25, step: .05 })}${textInput("Vertical margin (in)", "appearance.marginY", a.marginY || .55, { type: "number", valueType: "number", min: .25, step: .05 })}</div>
       <div class="two"><div><label class="lbl">Orientation</label><select class="sel" data-path="appearance.orientation"><option value="portrait"${a.orientation !== "landscape" ? " selected" : ""}>Portrait</option><option value="landscape"${a.orientation === "landscape" ? " selected" : ""}>Landscape</option></select></div>${textInput("Content scale", "appearance.bodyScale", a.bodyScale || 1, { type: "number", valueType: "number", min: .8, step: .05 })}</div>
       ${boolInput("Show branded header", "showHeader", def.showHeader !== false)}
@@ -166,8 +174,33 @@
     return `<div class="card-head"><span class="tag">${esc(type)}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}">×</button></div>`;
   }
 
+  function blockIcon(type) {
+    const icons = {
+      prose: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
+      fields: `<rect x="4" y="5" width="16" height="6" rx="1"/><rect x="4" y="14" width="7" height="5" rx="1"/><rect x="13" y="14" width="7" height="5" rx="1"/>`,
+      checks: `<circle cx="6" cy="6" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="6" cy="18" r="1.5"/><path d="M10 6h9M10 12h9M10 18h9"/>`,
+      checklist: `<path d="m4 6 1.5 1.5L8 4.5M11 6h9M4 12l1.5 1.5L8 10.5M11 12h9M4 18l1.5 1.5L8 16.5M11 18h9"/>`,
+      list: `<path d="M7 6h13M7 12h13M7 18h13M3.5 6h.1M3.5 12h.1M3.5 18h.1"/>`,
+      table: `<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M9 4v16M15 4v16"/>`,
+      keyvalue: `<path d="M4 5h5v5H4zM12 6h8M4 14h5v5H4zM12 15h8"/>`,
+      callout: `<path d="M6 7h5v5H7l-2 4M14 7h5v5h-4l-2 4"/>`,
+      note: `<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/>`,
+      signature: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`,
+      ack: `<circle cx="9" cy="7" r="3"/><path d="M3.5 19c.5-4 2.5-6 5.5-6 2 0 3.5.8 4.5 2M15 18l2 2 4-5"/>`,
+      signatory: `<circle cx="12" cy="7" r="3"/><path d="M5 20c.5-5 3-7 7-7s6.5 2 7 7"/>`,
+      pagebreak: `<path d="M4 7h16M4 17h16M8 12h8M12 9v6"/>`,
+      text: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
+      sign: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`
+    };
+    return `<span class="block-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${icons[type] || icons.prose}</svg></span>`;
+  }
+
   function pickerButton(attribute, type, label, description) {
-    return `<button ${attribute}="${type}"><strong>+ ${esc(label)}</strong><span>${esc(description)}</span></button>`;
+    return `<button ${attribute}="${type}">${blockIcon(type)}<span class="block-copy"><strong>${esc(label)}</strong><span>${esc(description)}</span></span></button>`;
+  }
+
+  function pickerGroup(title, buttons) {
+    return `<h4 class="block-group-title">${esc(title)}</h4>${buttons.join("")}`;
   }
 
   function formEditor() {
@@ -178,12 +211,15 @@
         if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields");
         if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields");
         if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
+        if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
         return `<article class="card">${cardHead(type, index, "section")}${body}</article>`;
       }).join("") + `<div class="addmenu">
-        ${pickerButton("data-add-section", "fields", "Fields", "Collect names, dates, project details, or other written responses.")}
-        ${pickerButton("data-add-section", "checks", "Choices", "Let the recipient select one or more defined options.")}
-        ${pickerButton("data-add-section", "sign", "Signature", "Add authorization, approval, and date fields.")}
-        ${pickerButton("data-add-section", "text", "Instructions", "Place quiet guidance or explanatory text in the form.")}
+        ${pickerGroup("Collect information", [
+          pickerButton("data-add-section", "fields", "Fields", "Names, dates, project details, or written responses."),
+          pickerButton("data-add-section", "checks", "Choices", "One or more options selected by the recipient."),
+          pickerButton("data-add-section", "text", "Instructions", "Guidance or explanatory text within the form."),
+          pickerButton("data-add-section", "sign", "Signature", "Authorization, approval, and date fields.")
+        ])}
       </div>`;
   }
 
@@ -213,29 +249,37 @@
     return `<div class="editor-hint">Document blocks — combine narrative, forms, tables, checklists, signatures, and page breaks.</div>` +
       (def.blocks || []).map(blockEditor).join("") +
       `<div class="addmenu">
-        ${pickerButton("data-add-block", "prose", "Text section", "Add a heading with one or more narrative paragraphs.")}
-        ${pickerButton("data-add-block", "fields", "Fields", "Collect structured written information in labeled areas.")}
-        ${pickerButton("data-add-block", "checks", "Choices", "Present selectable options for a reader or respondent.")}
-        ${pickerButton("data-add-block", "checklist", "Checklist", "Create a task or compliance list with check boxes.")}
-        ${pickerButton("data-add-block", "list", "List", "Add ordered steps or a simple bulleted list.")}
-        ${pickerButton("data-add-block", "table", "Table", "Organize repeated records into columns and rows.")}
-        ${pickerButton("data-add-block", "keyvalue", "Key / value", "Show compact label-and-value pairs for document facts.")}
-        ${pickerButton("data-add-block", "callout", "Callout", "Emphasize a quotation or important statement.")}
-        ${pickerButton("data-add-block", "note", "Note", "Set aside a short caution, reminder, or explanation.")}
-        ${pickerButton("data-add-block", "signature", "Signature", "Add signature, approval, and date fields.")}
-        ${pickerButton("data-add-block", "ack", "Acknowledgment", "Capture a statement of understanding and signature.")}
-        ${pickerButton("data-add-block", "signatory", "Signatory", "Identify the author or responsible person by name and role.")}
-        ${pickerButton("data-add-block", "pagebreak", "Page break", "Start the next block on a new printed page.")}
+        ${pickerGroup("Write & organize", [
+          pickerButton("data-add-block", "prose", "Text section", "Heading with one or more narrative paragraphs."),
+          pickerButton("data-add-block", "list", "List", "Ordered steps or a simple bulleted list."),
+          pickerButton("data-add-block", "table", "Table", "Repeated records organized into columns and rows."),
+          pickerButton("data-add-block", "keyvalue", "Key / value", "Compact label-and-value pairs for document facts.")
+        ])}
+        ${pickerGroup("Collect & verify", [
+          pickerButton("data-add-block", "fields", "Fields", "Structured written information in labeled areas."),
+          pickerButton("data-add-block", "checks", "Choices", "Selectable options for a reader or respondent."),
+          pickerButton("data-add-block", "checklist", "Checklist", "A task or compliance list with check boxes.")
+        ])}
+        ${pickerGroup("Approve & acknowledge", [
+          pickerButton("data-add-block", "signature", "Signature", "Signature, approval, and date fields."),
+          pickerButton("data-add-block", "ack", "Acknowledgment", "A statement of understanding with signature."),
+          pickerButton("data-add-block", "signatory", "Signatory", "The author or responsible person by name and role.")
+        ])}
+        ${pickerGroup("Emphasize & arrange", [
+          pickerButton("data-add-block", "note", "Note", "A short caution, reminder, or explanation."),
+          pickerButton("data-add-block", "callout", "Callout", "A quotation or important statement with emphasis."),
+          pickerButton("data-add-block", "pagebreak", "Page break", "Start the next block on a new printed page.")
+        ])}
       </div>`;
   }
 
   function packageEditor() {
     const docs = def.documents || [];
-    return `<section class="panel package-tools"><h3>Package documents</h3><p class="micro">Save documents to the library, then add them here. The package index and page ranges regenerate automatically.</p><button class="wide-action" data-action="open-library">Add from library</button></section>` +
+    return `<section class="panel package-tools"><h3>Package documents</h3><p class="micro">A package is a controlled snapshot of several documents. Add a new item here or bring in an existing library record; its cover and page index regenerate automatically.</p><div class="package-add-grid"><button data-action="add-package-blank" data-kind="document">+ Blank document</button><button data-action="add-package-blank" data-kind="form">+ Blank form</button><button data-action="open-package-templates">+ From template</button><button data-action="open-library">+ From library</button></div></section>` +
       (docs.length ? docs.map((item, index) => {
         const doc = item.def || item;
-        return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")}</span><button class="wide-action package-edit" data-action="edit-package-document" data-index="${index}">Edit this document</button></article>`;
-      }).join("") : `<div class="empty-state">No documents in this package yet.</div>`);
+        return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")} · ${esc(doc.kind || "document")}${item.sourceId ? " · Library snapshot" : ""}</span><div class="package-card-actions"><button class="wide-action" data-action="duplicate-package-document" data-index="${index}">Duplicate</button><button class="wide-action package-edit" data-action="edit-package-document" data-index="${index}">Edit document</button></div></article>`;
+      }).join("") : `<div class="empty-state">This package is empty. Add a blank item, use a template, or bring in a controlled document from the library.</div>`);
   }
 
   function renderEditor() {
@@ -308,6 +352,32 @@
     if (noun === "section") return def.sections;
     if (noun === "block") return def.blocks;
     return def.documents;
+  }
+
+  function addBlankPackageDocument(kind) {
+    if (def.kind !== "package") return;
+    const document = kind === "form" ? BASE.blankForm() : BASE.blankDoc();
+    def.documents.push({ def: clean(document) });
+    const index = def.documents.length - 1;
+    renderAll();
+    editPackageDocument(index);
+    status(`Blank ${kind === "form" ? "form" : "document"} added to the package.`, "success");
+  }
+
+  function openPackageTemplates() {
+    const choices = BASE.templateCatalog.filter(item => !["package", "proposal", "safety-package"].includes(item.id));
+    showModal("Add a template to this package", `<p class="micro">The template becomes an editable document inside this package. Changes here do not alter the original template.</p><div class="package-template-list">${choices.map(item => `<button data-package-template="${esc(item.id)}"><strong>${esc(item.label)}</strong><span>Add to package →</span></button>`).join("")}</div>`);
+  }
+
+  function duplicatePackageDocument(index) {
+    const item = def.documents[index];
+    if (!item) return;
+    const source = clean(item.def || item);
+    source.title = `${source.title || "Untitled"} Copy`;
+    if (source.no) source.no = `${source.no}-COPY`;
+    def.documents.splice(index + 1, 0, { def: source });
+    renderAll();
+    status("Package document duplicated as an independent copy.", "success");
   }
 
   function editPackageDocument(index) {
@@ -439,7 +509,10 @@
       return renderAll();
     }
     if (action === "edit-package-document") return editPackageDocument(Number(button.dataset.index));
+    if (action === "duplicate-package-document") return duplicatePackageDocument(Number(button.dataset.index));
     if (action === "back-to-package") return backToPackage();
+    if (action === "add-package-blank") return addBlankPackageDocument(button.dataset.kind);
+    if (action === "open-package-templates") return openPackageTemplates();
     if (action === "open-library") openLibrary();
   });
 
@@ -451,6 +524,13 @@
     const button = event.target.closest("button");
     if (event.target.matches(".modal-backdrop") || (button && button.dataset.action === "close-modal")) return closeModal();
     if (!button) return;
+    if (button.dataset.packageTemplate) {
+      if (def.kind !== "package" || packageContext) return;
+      const document = BASE.fromTemplate(button.dataset.packageTemplate);
+      def.documents.push({ def: clean(document) });
+      closeModal(); renderAll(); status(`${document.title || "Template"} added to the package.`, "success");
+      return;
+    }
     if (button.dataset.action === "new-folder") {
       const name = window.prompt("New shared folder name:");
       if (!name) return;

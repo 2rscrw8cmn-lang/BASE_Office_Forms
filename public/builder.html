@@ -41,6 +41,7 @@
   .in:focus,.ta:focus,.sel:focus { outline:0; border-color:#9d9994; box-shadow:0 0 0 3px rgba(122,30,34,.045); }
   .ta { min-height:76px; resize:vertical; } .sel { height:34px; }
   .two,.color-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .color-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .input-group { min-width:0; }
   .toggle { display:flex; gap:8px; align-items:center; margin:10px 0; font:400 10px/1.35 var(--sans); color:#555258; }
   .toggle input { accent-color:var(--accent); } .toggle.compact { margin:0; min-width:105px; }
@@ -59,16 +60,24 @@
   .addrow { margin-top:7px; padding:8px 10px; border:1px dashed #cda9ab; color:var(--accent); background:#fff; border-radius:3px; cursor:pointer; font:600 8px/1 var(--code); }
   .addmenu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:18px; padding:18px 16px 24px; border-top:1px solid #e5e2df; }
   .addmenu::before { content:'Add a block'; grid-column:1/-1; margin-bottom:3px; color:#4b484d; font:400 18px/1 Georgia,'Times New Roman',serif; }
-  .addmenu button { min-height:67px; padding:11px 12px; border:1px solid #dcd9d5; background:#fff; border-radius:4px; cursor:pointer; text-align:left; color:#39373b; }
+  .block-group-title { grid-column:1/-1; margin:11px 0 1px; color:#858286; font:600 7px/1 var(--code); text-transform:uppercase; letter-spacing:.85px; }
+  .block-group-title:first-of-type { margin-top:4px; }
+  .addmenu button { min-height:74px; padding:11px 12px; display:grid; grid-template-columns:29px minmax(0,1fr); gap:10px; align-items:start; border:1px solid #dcd9d5; background:#fff; border-radius:4px; cursor:pointer; text-align:left; color:#39373b; }
   .addmenu button strong { display:block; font:500 10px/1.2 var(--sans); }
-  .addmenu button span { display:block; margin-top:5px; color:#8a878b; font:400 8px/1.4 var(--sans); }
+  .addmenu .block-copy>span { display:block; margin-top:5px; color:#8a878b; font:400 8px/1.4 var(--sans); }
+  .block-icon { width:29px; height:29px; display:grid; place-items:center; margin:0; color:#646166; border:1px solid #dfdcd8; border-radius:3px; background:#fbfaf9; }
+  .block-icon svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
   .addmenu button:hover { border-color:#b54a4e; background:#fdf9f8; }
+  .addmenu button:hover .block-icon { color:#9d2026; border-color:#d9b5b6; background:#fff; }
   .wide-action,.modal-primary { padding:9px 11px; border:1px solid #d7d4d0; background:#fff; border-radius:3px; cursor:pointer; font:500 9px/1 var(--sans); }
   .wide-action:hover { border-color:var(--accent); color:var(--accent); } .wide-action { width:100%; }
   .editor-hint,.micro { color:#8f8c90; font:400 9px/1.5 var(--sans); }
   .editor-hint { padding:16px 22px 3px; }
-  .package-card strong { display:block; font:600 12px/1.3 var(--sans); } .package-card>span { display:block; margin-top:3px; font:500 8px/1 var(--code); color:#888; }
-  .package-edit { margin-top:9px; }
+  .package-card strong { display:block; font:600 12px/1.3 var(--sans); } .package-card>span { display:block; margin-top:4px; font:500 8px/1 var(--code); color:#888; text-transform:capitalize; }
+  .package-add-grid,.package-card-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:13px; }
+  .package-add-grid button { min-height:38px; padding:8px; border:1px solid #d7d4d0; border-radius:3px; background:#fff; color:#4b484d; cursor:pointer; font:500 9px/1.25 var(--sans); }
+  .package-add-grid button:hover { border-color:#b54a4e; color:#982329; background:#fdf9f8; }
+  .package-card-actions .wide-action { margin:0; }
   .empty-state { margin:16px; padding:24px; text-align:center; color:#8e8b8f; border:1px dashed #d4d1cd; font:400 10px/1.5 var(--sans); }
   .modal { position:fixed; inset:0; z-index:100; } .modal[hidden] { display:none; }
   .modal-backdrop { position:absolute; inset:0; background:rgba(28,26,25,.38); backdrop-filter:blur(2px); }
@@ -79,10 +88,15 @@
   .library-row { display:grid; grid-template-columns:minmax(0,1fr) repeat(4,auto); gap:7px; align-items:center; padding:12px 0; border-bottom:1px solid #ebe8e5; }
   .library-row strong,.library-row span { display:block; } .library-row span { margin-top:4px; color:#888; font:500 8px/1.3 var(--code); }
   .library-row button { padding:7px 9px; border:1px solid #ddd; background:#fff; border-radius:3px; cursor:pointer; }
+  .package-template-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:16px; }
+  .package-template-list button { min-height:60px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:16px; border:1px solid #ddd9d5; border-radius:4px; background:#fff; color:#3d3a3f; cursor:pointer; text-align:left; }
+  .package-template-list button:hover { border-color:#b54a4e; background:#fdf9f8; }
+  .package-template-list strong { font:500 11px/1.25 var(--sans); }
+  .package-template-list span { color:#9d2026; font:500 8px/1 var(--code); white-space:nowrap; }
   .modal-text { width:100%; min-height:100px; padding:10px; border:1px solid #ccc; font:500 10px/1.5 var(--code); } .modal-text.tall { min-height:300px; }
   .modal-primary { margin-top:8px; background:var(--accent); color:#fff; border-color:var(--accent); }
   @media (max-width:1050px) { .app { grid-template-columns:minmax(390px,460px) minmax(0,1fr); } .studio-commandbar .secondary { display:none; } }
-  @media (max-width:760px) { body { overflow:auto; height:auto; } .studio-commandbar { overflow-x:auto; } .app { display:block; height:auto; } .editor { max-height:none; } .previewpane { min-height:70vh; } .addmenu { grid-template-columns:1fr; } }
+  @media (max-width:760px) { body { overflow:auto; height:auto; } .studio-commandbar { overflow-x:auto; } .app { display:block; height:auto; } .editor { max-height:none; } .previewpane { min-height:70vh; } .addmenu,.package-template-list { grid-template-columns:1fr; } .color-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media print { body { overflow:visible; } .app-topbar,.studio-commandbar,.preview-head { display:none!important; } .app { display:block; height:auto; } .editor,.modal { display:none!important; } .previewpane { overflow:visible; padding:0; background:#fff; } .previewscale { transform:none!important; width:100%!important; } }
 </style>
 </head>
@@ -115,6 +129,7 @@
 <div class="modal" id="modal" hidden><div class="modal-backdrop"></div><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button data-action="close-modal" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
 <script src="engine.js"></script>
 <script src="library-api.js"></script>
+<script src="global-search.js"></script>
 <script src="studio.js"></script>
 </body>
 </html>

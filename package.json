@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "BASE forms and documents kit hosted on Cloudflare Pages",
   "scripts": {
-    "build": "node -e \"const fs=require('fs'); for (const file of ['public/index.html','public/home.js','public/builder.html','public/studio.js','public/engine.js','public/library-api.js','public/form-generator.html','public/viewer.html','public/assets/base-logo.svg','functions/api/[[path]].ts','migrations/0001_shared_library.sql','migrations/0002_schema_marker.sql']) { if (!fs.existsSync(file)) throw new Error('Missing '+file); } console.log('BASE Pages build ready');\"",
+    "build": "node -e \"const fs=require('fs'); for (const file of ['public/index.html','public/home.js','public/global-search.js','public/builder.html','public/studio.js','public/engine.js','public/library-api.js','public/form-generator.html','public/viewer.html','public/assets/base-logo.svg','functions/api/[[path]].ts','migrations/0001_shared_library.sql','migrations/0002_schema_marker.sql']) { if (!fs.existsSync(file)) throw new Error('Missing '+file); } console.log('BASE Pages build ready');\"",
     "dev": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public --project-name base-office-forms",
     "deploy:dry-run": "npm run build",
