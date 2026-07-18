@@ -18,6 +18,8 @@
   .studio-commandbar button:hover { border-color:#aaa6a2; background:#fbfaf9; }
   .studio-commandbar .accent { padding-inline:17px; background:#a92228; border-color:#a92228; color:#fff; }
   .studio-commandbar .accent:hover { background:#8e1b20; border-color:#8e1b20; }
+  .studio-commandbar .danger-command { color:#982329; border-color:#d8b9ba; background:#fffafa; }
+  .studio-commandbar .danger-command:hover { color:#fff; border-color:#982329; background:#982329; }
   .app { display:grid; grid-template-columns:minmax(430px, 510px) minmax(0, 1fr); height:calc(100vh - 130px); }
   .editor { min-width:0; overflow-y:auto; overflow-x:hidden; background:#fcfbfa; border-right:1px solid #dedbd7; }
   .previewpane { min-width:0; overflow:auto; padding:0 26px 36px; background:#eeece9; }
@@ -68,8 +70,12 @@
   .icon-toggle { display:grid; place-items:center; height:31px; border:1px solid #d7d4d0; border-radius:3px; background:#fff; font:600 12px/1 var(--code); }
   .icon-toggle input { position:absolute; opacity:0; } .icon-toggle:has(input:checked) { background:var(--accent); color:#fff; }
   .addrow { margin-top:7px; padding:8px 10px; border:1px dashed #cda9ab; color:var(--accent); background:#fff; border-radius:3px; cursor:pointer; font:600 8px/1 var(--code); }
-  .addmenu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:16px; padding:14px 16px 20px; border-top:1px solid #e5e2df; }
-  .addmenu::before { content:'Add a block'; grid-column:1/-1; margin-bottom:1px; color:#4b484d; font:400 17px/1 Georgia,'Times New Roman',serif; }
+  .block-picker { margin-top:16px; border-top:1px solid #e5e2df; }
+  .block-picker>summary { padding:15px 20px; list-style:none; cursor:pointer; color:#4b484d; font:400 17px/1 Georgia,'Times New Roman',serif; }
+  .block-picker>summary::-webkit-details-marker { display:none; }
+  .block-picker>summary::after { content:'+'; float:right; color:#969397; font:400 16px/1 var(--sans); }
+  .block-picker[open]>summary::after { content:'−'; }
+  .addmenu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:0 16px 20px; }
   .block-group-title { grid-column:1/-1; margin:8px 0 0; color:#858286; font:600 7px/1 var(--code); text-transform:uppercase; letter-spacing:.85px; }
   .block-group-title:first-of-type { margin-top:3px; }
   .addmenu button { min-height:54px; padding:8px 9px; display:grid; grid-template-columns:25px minmax(0,1fr); gap:8px; align-items:center; border:1px solid #dcd9d5; background:#fff; border-radius:4px; cursor:pointer; text-align:left; color:#39373b; }
@@ -79,6 +85,8 @@
   .block-icon svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
   .addmenu button:hover { border-color:#b54a4e; background:#fdf9f8; }
   .addmenu button:hover .block-icon { color:#9d2026; border-color:#d9b5b6; background:#fff; }
+  .preview-jump { outline:2px solid rgba(157,32,38,.55); outline-offset:5px; animation:preview-jump 1.35s ease both; }
+  @keyframes preview-jump { 0%,100% { outline-color:transparent; } 18%,70% { outline-color:rgba(157,32,38,.55); } }
   .wide-action,.modal-primary { padding:9px 11px; border:1px solid #d7d4d0; background:#fff; border-radius:3px; cursor:pointer; font:500 9px/1 var(--sans); }
   .wide-action:hover { border-color:var(--accent); color:var(--accent); } .wide-action { width:100%; }
   .editor-hint,.micro { color:#8f8c90; font:400 9px/1.5 var(--sans); }
@@ -126,7 +134,7 @@
   <div class="command-group secondary"><button id="loadButton" title="Restore a portable document backup file">Import backup</button><button id="downloadButton" title="Download a portable JSON backup">Export backup</button></div>
   <div class="command-group">
     <button id="libraryButton">Controlled documents</button><button id="shareButton">Share</button><button id="aiButton" class="secondary">AI kit</button><button id="aiImportButton" class="secondary">Import AI</button>
-    <button id="printButton">Export PDF</button><button id="saveButton" class="accent" title="Save or update this document in the shared Cloudflare library">Save to library</button>
+    <button id="printButton">Export PDF</button><button id="deleteButton" class="danger-command" title="Delete the current document from the shared library" hidden>Delete</button><button id="saveButton" class="accent" title="Save or update this document in the shared Cloudflare library">Save to library</button>
   </div>
 </div>
 <div class="app">

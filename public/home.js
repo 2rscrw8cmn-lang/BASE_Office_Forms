@@ -23,13 +23,13 @@
     rows.innerHTML = visible.length ? visible.map(item => {
       const owned = Boolean(BASE_LIBRARY.editKey(item.id));
       const href = owned ? BASE_LIBRARY.editUrl(item.id, BASE_LIBRARY.editKey(item.id)) : BASE_LIBRARY.viewUrl(item.id);
-      return `<a class="library-home-row" role="row" href="${esc(href)}">
-        <span class="document-cell" role="cell"><i aria-hidden="true"></i><span><strong>${esc(item.title || "Untitled")}</strong><small>${esc(item.no || "No document number")}</small></span></span>
+      return `<div class="library-home-row" role="row">
+        <a class="document-cell" role="cell" href="${esc(href)}"><i aria-hidden="true"></i><span><strong>${esc(item.title || "Untitled")}</strong><small>${esc(item.no || "No document number")}</small></span></a>
         <span role="cell">${esc(item.documentType || labelKind(item.kind))}</span>
         <span role="cell">v${esc(item.version || 1)}</span>
         <span role="cell">${esc(formatDate(item.updated))}</span>
-        <span class="row-arrow" aria-hidden="true">→</span>
-      </a>`;
+        <span class="library-row-actions" role="cell"><a class="row-arrow" href="${esc(href)}" aria-label="Open ${esc(item.title || "document")}">→</a>${owned ? `<button data-delete-document="${esc(item.id)}" aria-label="Delete ${esc(item.title || "document")}" title="Delete from controlled documents">×</button>` : ""}</span>
+      </div>`;
     }).join("") : `<div class="library-empty">No controlled documents match this view.</div>`;
   }
 
@@ -47,6 +47,21 @@
     activeKind = button.dataset.kind;
     filters.querySelectorAll("button").forEach(item => item.classList.toggle("active", item === button));
     renderDocuments();
+  });
+  rows.addEventListener("click", async event => {
+    const button = event.target.closest("button[data-delete-document]");
+    if (!button) return;
+    const item = documents.find(document => document.id === button.dataset.deleteDocument);
+    if (!item || !window.confirm(`Delete “${item.title || item.no || "this document"}” from controlled documents? This cannot be undone.`)) return;
+    button.disabled = true;
+    try {
+      await BASE_LIBRARY.deleteDocument(item.id);
+      documents = documents.filter(document => document.id !== item.id);
+      renderDocuments();
+    } catch (error) {
+      button.disabled = false;
+      window.alert(`Could not delete document: ${error.message}`);
+    }
   });
   BASE_LIBRARY.listDocuments().then(items => {
     documents = items;

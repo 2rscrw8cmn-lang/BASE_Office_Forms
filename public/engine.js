@@ -141,6 +141,10 @@
       `</div>`;
   }
 
+  function markPreview(html, collection, index) {
+    return String(html || "").replace(/^<([a-z][a-z0-9-]*)/i, `<$1 data-preview-${collection}="${index}"`);
+  }
+
   function formSection(section, counter, fill, namePrefix) {
     if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill, namePrefix)).join("")}</div>`;
     if (section.type) return docBlock(section, counter, fill, namePrefix);
@@ -163,11 +167,46 @@
       <h1 class="form-title">${esc(form.title)}</h1>
       ${form.sub ? `<p class="form-sub">${esc(form.sub)}</p>` : ""}
       ${ctrlGrid(form, "Form No.")}
-      <div class="page-flow">${(form.sections || []).map(section => formSection(section, counter, options.fill, options.namePrefix)).join("")}${footnotes}</div></div>`;
+      <div class="page-flow">${(form.sections || []).map((section, index) => markPreview(formSection(section, counter, options.fill, options.namePrefix), "section", index)).join("")}${footnotes}</div></div>`;
   }
 
   function docFields(block, fill, namePrefix) {
     return fieldsBlock(block.fields || [], Boolean(fill), block.tall, namePrefix);
+  }
+
+  function structuredTable(block, className) {
+    const columns = block.columns || [];
+    const header = `<tr>${columns.map(column => `<th>${esc(column)}</th>`).join("")}</tr>`;
+    const rows = (block.rows || []).map(row => `<tr>${columns.map((_, index) => `<td>${esc(row[index] == null ? "" : row[index])}</td>`).join("")}</tr>`).join("");
+    return `<div class="structured-block ${className || ""} avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<table class="dtable"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function numericValue(value) {
+    const normalized = String(value == null ? "" : value).replace(/[^0-9.-]/g, "");
+    if (!normalized) return null;
+    const number = Number(normalized);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function money(value, currency) {
+    const fixed = Number(value).toFixed(2);
+    const parts = fixed.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return `${currency || "$"}${parts.join(".")}`;
+  }
+
+  function budgetBlock(block) {
+    const currency = block.currency || "$";
+    let total = 0;
+    const rows = (block.rows || []).map(row => {
+      const qty = numericValue(row[2]);
+      const unitCost = numericValue(row[3]);
+      const enteredAmount = numericValue(row[4]);
+      const amount = enteredAmount == null && qty != null && unitCost != null ? qty * unitCost : enteredAmount;
+      if (amount != null) total += amount;
+      return `<tr><td>${esc(row[0] || "")}</td><td>${esc(row[1] || "")}</td><td>${esc(row[2] || "")}</td><td class="money">${unitCost == null ? esc(row[3] || "") : money(unitCost, currency)}</td><td class="money">${amount == null ? "" : money(amount, currency)}</td></tr>`;
+    }).join("");
+    return `<div class="structured-block budget-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<table class="dtable budget-table"><thead><tr><th>Cost Code</th><th>Description</th><th>Qty</th><th>Unit Cost</th><th>Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th colspan="4">Budget Total</th><td class="money">${money(total, currency)}</td></tr></tfoot></table></div>`;
   }
 
   function docBlock(block, counter, fill, namePrefix) {
@@ -196,6 +235,11 @@
       case "list": return `<div class="list-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<${block.ordered ? "ol" : "ul"}>${(block.items || []).map(item => `<li>${esc(item)}</li>`).join("")}</${block.ordered ? "ol" : "ul"}></div>`;
       case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<label class="checkline">${fill ? `<input type="checkbox" name="${esc((namePrefix || "") + (block._gid || slug(block.heading || "checklist")))}" value="${esc(item)}">` : ""}<span class="box"></span><span>${esc(item)}</span></label>`).join("")}</div>`;
       case "keyvalue": return `<div class="keyvalue avoid">${(block.items || []).map(item => `<div class="key">${esc(item[0] || item.label)}</div><div class="value">${esc(item[1] || item.value)}</div>`).join("")}</div>`;
+      case "budget": return budgetBlock(block);
+      case "schedule": return structuredTable(block, "schedule-block");
+      case "contacts": return structuredTable(block, "contacts-block");
+      case "revisions": return structuredTable(block, "revisions-block");
+      case "evidence": return structuredTable(block, "evidence-block");
       case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block, fill, namePrefix)}</section>`;
       case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}</section>`;
       case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
@@ -222,7 +266,7 @@
 
   function renderDoc(doc) {
     const counter = { n: 0 };
-    const bodyContent = (doc.blocks || []).map(block => docBlock(block, counter, false, "")).join("");
+    const bodyContent = (doc.blocks || []).map((block, index) => markPreview(docBlock(block, counter, false, ""), "block", index)).join("");
     const hasCover = !(doc.layout && doc.layout.cover === false);
     let output = "";
     if (hasCover) {

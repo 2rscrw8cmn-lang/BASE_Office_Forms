@@ -9,7 +9,14 @@
   let activeFolderId = null;
   let folders = [];
   let packageContext = null;
+  const collapsedItems = new WeakSet();
+  const panelStates = new Map();
   let def = loadInitial();
+
+  function openAttribute(key, defaultOpen) {
+    const open = panelStates.has(key) ? panelStates.get(key) : defaultOpen;
+    return open ? " open" : "";
+  }
 
   function clean(value) {
     const copy = BASE.clone(value);
@@ -128,7 +135,7 @@
   function commonPanel() {
     const isDoc = def.kind === "document";
     const isPackage = def.kind === "package";
-    return `<section class="panel"><h3>${esc(def.documentType || def.kind)} details</h3>
+    return `<details class="panel collapsible" data-panel-key="details"${openAttribute("details", true)}><summary>${esc(def.documentType || def.kind)} details</summary>
       <div class="two">${textInput(isPackage ? "Package No." : (def.kind === "form" ? "Form No." : "Document No."), "no", def.no)}${textInput("Type", "documentType", def.documentType)}</div>
       ${textInput("Title", "title", def.title)}
       ${textInput(isDoc ? "Subtitle" : "Supporting line", isDoc || isPackage ? "subtitle" : "sub", isDoc || isPackage ? def.subtitle : def.sub)}
@@ -138,21 +145,21 @@
       ${isDoc ? textArea("Summary / standard", "standard", def.standard) + textArea("Issuing authority", "authority", def.authority) : ""}
       ${isDoc ? boolInput("Include cover page", "layout.cover", !(def.layout && def.layout.cover === false)) + boolInput("Generate document contents page", "toc", Boolean(def.toc)) : ""}
       ${packageContext ? "" : `<label class="lbl">Shared library folder</label><select class="sel" data-library-folder><option value="">Library root</option>${folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === activeFolderId ? " selected" : ""}>${esc(folder.name)}</option>`).join("")}</select>`}
-    </section>`;
+    </details>`;
   }
 
   function controlPanel() {
     const c = def.control || {};
     const v = def.controlVisibility || {};
-    return `<section class="panel"><h3>Document control</h3>${boolInput("Show document-control strip", "showControl", def.showControl !== false)}
+    return `<details class="panel collapsible" data-panel-key="control"${openAttribute("control", true)}><summary>Document control</summary>${boolInput("Show document-control strip", "showControl", def.showControl !== false)}
       <div class="control-row"><label class="toggle compact"><input type="checkbox" data-control-visible="no"${v.no !== false ? " checked" : ""}><span>No.</span></label></div>
       ${BASE.controlKeys.map(key => `<div class="control-row"><label class="toggle compact"><input type="checkbox" data-control-visible="${esc(key)}"${v[key] !== false ? " checked" : ""}><span>${esc(key)}</span></label><input class="in" data-control-value="${esc(key)}" value="${esc(c[key] || "")}"></div>`).join("")}
-    </section>`;
+    </details>`;
   }
 
   function appearancePanel() {
     const a = def.appearance || {};
-    return `<details class="panel collapsible"><summary>Appearance & page setup</summary>
+    return `<details class="panel collapsible" data-panel-key="appearance"${openAttribute("appearance", false)}><summary>Appearance & page setup</summary>
       <div class="color-grid">${textInput("Accent", "appearance.accent", a.accent || "#7a1e22", { type: "color" })}${textInput("Ink", "appearance.ink", a.ink || "#232327", { type: "color" })}${textInput("Paper", "appearance.paper", a.paper || "#ffffff", { type: "color" })}</div>
       <div class="two">${textInput("Horizontal margin (in)", "appearance.marginX", a.marginX || .7, { type: "number", valueType: "number", min: .25, step: .05 })}${textInput("Vertical margin (in)", "appearance.marginY", a.marginY || .55, { type: "number", valueType: "number", min: .25, step: .05 })}</div>
       <div class="two"><div><label class="lbl">Orientation</label><select class="sel" data-path="appearance.orientation"><option value="portrait"${a.orientation !== "landscape" ? " selected" : ""}>Portrait</option><option value="landscape"${a.orientation === "landscape" ? " selected" : ""}>Landscape</option></select></div>${textInput("Content scale", "appearance.bodyScale", a.bodyScale || 1, { type: "number", valueType: "number", min: .8, step: .05 })}</div>
@@ -174,8 +181,9 @@
     return `<div class="card-head"><span class="tag">${esc(type)}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}">×</button></div>`;
   }
 
-  function editorCard(type, index, noun, title, body) {
-    return `<details class="card editor-card" open><summary class="editor-card-summary"><span class="tag">${esc(type)}</span><span class="editor-card-title">${esc(title || "Untitled block")}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}" title="Move up">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}" title="Move down">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button><span class="collapse-indicator" aria-hidden="true"></span></summary><div class="editor-card-body">${body}</div></details>`;
+  function editorCard(type, index, noun, title, body, item) {
+    const open = collapsedItems.has(item) ? "" : " open";
+    return `<details class="card editor-card" data-editor-noun="${noun}" data-index="${index}"${open}><summary class="editor-card-summary"><span class="tag">${esc(type)}</span><span class="editor-card-title">${esc(title || "Untitled block")}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}" title="Move up">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}" title="Move down">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button><span class="collapse-indicator" aria-hidden="true"></span></summary><div class="editor-card-body">${body}</div></details>`;
   }
 
   function blockIcon(type) {
@@ -193,6 +201,11 @@
       ack: `<circle cx="9" cy="7" r="3"/><path d="M3.5 19c.5-4 2.5-6 5.5-6 2 0 3.5.8 4.5 2M15 18l2 2 4-5"/>`,
       attachments: `<path d="M8 7v10a4 4 0 0 0 8 0V6a3 3 0 0 0-6 0v10a2 2 0 0 0 4 0V8"/>`,
       approval: `<path d="M4 6h9M4 12h7M4 18h6M14 16l2.5 2.5L21 13"/>`,
+      budget: `<path d="M4 7h16M4 12h16M4 17h16M8 4v16M17 4v16"/>`,
+      schedule: `<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M7 3v4M17 3v4M3 10h18M7 14h3M13 14h4M7 18h5"/>`,
+      contacts: `<circle cx="8" cy="8" r="3"/><path d="M3 19c.5-4 2-6 5-6s4.5 2 5 6M15 7h6M15 11h5M16 15h4"/>`,
+      revisions: `<path d="M6 3h10l3 3v15H6zM15 3v4h4M9 11h7M9 15h7M9 19h5"/>`,
+      evidence: `<rect x="3" y="5" width="18" height="15" rx="1"/><circle cx="9" cy="10" r="2"/><path d="m5 18 5-5 3 3 2-2 4 4"/>`,
       signatory: `<circle cx="12" cy="7" r="3"/><path d="M5 20c.5-5 3-7 7-7s6.5 2 7 7"/>`,
       pagebreak: `<path d="M4 7h16M4 17h16M8 12h8M12 9v6"/>`,
       text: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
@@ -210,7 +223,7 @@
   }
 
   function blockPicker(attribute) {
-    return `<div class="addmenu">
+    return `<details class="block-picker" data-panel-key="block-picker"${openAttribute("block-picker", true)}><summary>Add a block</summary><div class="addmenu">
       ${pickerGroup("Write & organize", [
         pickerButton(attribute, "prose", "Text section", "Narrative with an optional numbered heading."),
         pickerButton(attribute, "list", "List", "Ordered steps or a simple bulleted list."),
@@ -223,6 +236,13 @@
         pickerButton(attribute, "checklist", "Checklist", "Tasks or compliance items with check boxes."),
         pickerButton(attribute, "attachments", "Attachments", "Drawing, file, and reference tracking rows.")
       ])}
+      ${pickerGroup("Plan & track", [
+        pickerButton(attribute, "budget", "Budget", "Cost codes, quantities, unit costs, and totals."),
+        pickerButton(attribute, "schedule", "Schedule", "Milestones, owners, dates, and status."),
+        pickerButton(attribute, "contacts", "Project contacts", "Companies, roles, and contact information."),
+        pickerButton(attribute, "revisions", "Revision history", "Track revisions, dates, authors, and changes."),
+        pickerButton(attribute, "evidence", "Evidence log", "Photo, file, location, and caption references.")
+      ])}
       ${pickerGroup("Approve & acknowledge", [
         pickerButton(attribute, "signature", "Signature", "Signature, authorization, and date fields."),
         pickerButton(attribute, "ack", "Acknowledgment", "A statement of understanding with signature."),
@@ -234,7 +254,7 @@
         pickerButton(attribute, "callout", "Callout", "An important statement with emphasis."),
         pickerButton(attribute, "pagebreak", "Page break", "Start the next block on a new printed page.")
       ])}
-    </div>`;
+    </div></details>`;
   }
 
   function formEditor() {
@@ -247,7 +267,7 @@
         if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields");
         if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
         if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
-        return editorCard(type, index, "section", section.name || "Untitled section", body);
+        return editorCard(type, index, "section", section.name || "Untitled section", body, section);
       }).join("") + blockPicker("data-add-form-block");
   }
 
@@ -264,6 +284,8 @@
     if (block.type === "list") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Numbered list", `${base}.ordered`, Boolean(block.ordered))}</div>` + textArea("Items — one per line", `${base}.items`, (block.items || []).join("\n"), "lines");
     if (block.type === "checklist") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Checklist items", `${base}.items`, (block.items || []).join("\n"), "lines");
     if (block.type === "keyvalue") body = textArea("Rows — Label | Value", `${base}.items`, (block.items || []).map(row => row.join(" | ")).join("\n"), "rows");
+    if (["schedule", "contacts", "revisions", "evidence"].includes(block.type)) body = textInput("Heading", `${base}.heading`, block.heading) + textInput("Columns — comma separated", `${base}.columns`, (block.columns || []).join(", "), { valueType: "commas" }) + textArea("Rows — one per line, cells separated by |", `${base}.rows`, (block.rows || []).map(row => row.join(" | ")).join("\n"), "rows");
+    if (block.type === "budget") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Currency symbol", `${base}.currency`, block.currency || "$")}</div>` + textArea("Cost rows — Code | Description | Qty | Unit cost | Amount (optional)", `${base}.rows`, (block.rows || []).map(row => row.join(" | ")).join("\n"), "rows", "Leave Amount blank to calculate Quantity × Unit cost.");
     if (["fields", "signature", "ack", "attachments"].includes(block.type)) {
       body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>`;
       if (block.type === "ack") body += textArea("Acknowledgment text", `${base}.intro`, block.intro);
@@ -273,8 +295,8 @@
     if (block.type === "checks") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, Boolean(block.single))}${textInput("Columns", `${base}.cols`, block.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
     if (block.type === "approval") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>` + textArea("Decision options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, block.single !== false)}${textInput("Columns", `${base}.cols`, block.cols || 2, { type: "number", valueType: "number", min: 1 })}</div>` + fieldRows(`${base}.fields`, block.fields || [], "Review / response fields") + fieldRows(`${base}.sign`, block.sign || [], "Reviewer sign-off");
     if (block.type === "pagebreak") body = `<p class="micro">Forces the following content onto a new printed page.</p>`;
-    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, pagebreak: "Page break" };
-    return editorCard(block.type, index, noun, titles[block.type] || "Untitled block", body);
+    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, budget: block.heading, schedule: block.heading, contacts: block.heading, revisions: block.heading, evidence: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, pagebreak: "Page break" };
+    return editorCard(block.type, index, noun, titles[block.type] || "Untitled block", body, block);
   }
 
   function documentEditor() {
@@ -285,7 +307,7 @@
 
   function packageEditor() {
     const docs = def.documents || [];
-    return `<section class="panel package-tools"><h3>Package documents</h3><p class="micro">A package is a controlled snapshot of several documents. Add a new item here or bring in an existing library record; its cover and page index regenerate automatically.</p><div class="package-add-grid"><button data-action="add-package-blank" data-kind="document">+ Blank document</button><button data-action="add-package-blank" data-kind="form">+ Blank form</button><button data-action="open-package-templates">+ From template</button><button data-action="open-library">+ From library</button></div></section>` +
+    return `<details class="panel collapsible package-tools" data-panel-key="package-tools"${openAttribute("package-tools", true)}><summary>Package documents</summary><p class="micro">A package is a controlled snapshot of several documents. Add a new item here or bring in an existing library record; its cover and page index regenerate automatically.</p><div class="package-add-grid"><button data-action="add-package-blank" data-kind="document">+ Blank document</button><button data-action="add-package-blank" data-kind="form">+ Blank form</button><button data-action="open-package-templates">+ From template</button><button data-action="open-library">+ From library</button></div></details>` +
       (docs.length ? docs.map((item, index) => {
         const doc = item.def || item;
         return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")} · ${esc(doc.kind || "document")}${item.sourceId ? " · Library snapshot" : ""}</span><div class="package-card-actions"><button class="wide-action" data-action="duplicate-package-document" data-index="${index}">Duplicate</button><button class="wide-action package-edit" data-action="edit-package-document" data-index="${index}">Edit document</button></div></article>`;
@@ -306,6 +328,22 @@
     normalize(def);
     renderEditor(); renderPreview(); persist();
     $("#kindBadge").textContent = `${packageContext ? "PACKAGE ITEM · " : ""}${def.documentType || def.kind}`.toUpperCase();
+    updateCommandState();
+  }
+
+  function updateCommandState() {
+    const button = $("#deleteButton");
+    if (button) button.hidden = !activeId || !BASE_LIBRARY.editKey(activeId) || Boolean(packageContext);
+  }
+
+  function jumpToPreview(collection, index) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const target = $(`#pv [data-preview-${collection}="${index}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("preview-jump");
+      setTimeout(() => target.classList.remove("preview-jump"), 1400);
+    }));
   }
 
   function fit() {
@@ -336,7 +374,9 @@
       sign: { name: "Authorization", req: "REQUIRED", sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
       text: { name: "Instructions", text: "Add instructions here." }
     };
-    def.sections.push(templates[type]); renderAll();
+    def.sections.push(templates[type]);
+    const index = def.sections.length - 1;
+    renderAll(); jumpToPreview("section", index);
   }
 
   function newBlock(type) {
@@ -349,17 +389,26 @@
       ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46 }], sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
       attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46 }, { label: "Attachment / drawing / reference 2", w: 1, height: 46 }] },
       approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments", w: 1, height: 78, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
+      budget: { type, heading: "Budget / Cost Breakdown", currency: "$", rows: [["01", "Labor", "1", "0.00", ""], ["02", "Materials", "1", "0.00", ""], ["03", "Equipment", "1", "0.00", ""]] },
+      schedule: { type, heading: "Schedule / Milestones", columns: ["Milestone", "Owner", "Start", "Due", "Status"], rows: [["Milestone one", "", "", "", "Not Started"], ["Milestone two", "", "", "", "Not Started"]] },
+      contacts: { type, heading: "Project Contacts", columns: ["Company / Person", "Role", "Email", "Phone"], rows: [["", "", "", ""], ["", "", "", ""]] },
+      revisions: { type, heading: "Revision History", columns: ["Revision", "Date", "Author", "Description"], rows: [["1.0", "", "", "Initial issue"]] },
+      evidence: { type, heading: "Evidence / Photo Log", columns: ["Photo / File Ref.", "Caption", "Date", "Location"], rows: [["", "", "", ""], ["", "", "", ""]] },
       signatory: { type, name: "Name", role: "Title" }, pagebreak: { type }
     };
     return BASE.clone(templates[type] || templates.prose);
   }
 
   function addBlock(type) {
-    def.blocks.push(newBlock(type)); renderAll();
+    def.blocks.push(newBlock(type));
+    const index = def.blocks.length - 1;
+    renderAll(); jumpToPreview("block", index);
   }
 
   function addFormBlock(type) {
-    def.sections.push(newBlock(type)); renderAll();
+    def.sections.push(newBlock(type));
+    const index = def.sections.length - 1;
+    renderAll(); jumpToPreview("section", index);
   }
 
   function move(array, index, delta) {
@@ -445,6 +494,7 @@
       activeId = saved.document.id;
       activeVersion = saved.document.version;
       activeFolderId = saved.document.folderId || null;
+      updateCommandState();
       status(`Saved to the shared library · version ${saved.document.version}.`, "success");
       return saved.document;
     } catch (error) {
@@ -504,6 +554,34 @@
   function importAI() {
     showModal("Import AI JSON", `<p class="micro">Paste a complete definition, or an object containing a <code>definition</code> property.</p><textarea id="aiJson" class="modal-text tall" placeholder="Paste JSON here"></textarea><button class="modal-primary" data-action="apply-ai">Apply JSON</button>`);
   }
+
+  async function deleteCurrentDocument() {
+    if (!activeId || !BASE_LIBRARY.editKey(activeId) || packageContext) return;
+    const title = def.title || def.no || "this document";
+    if (!window.confirm(`Delete “${title}” from the controlled library? This cannot be undone.`)) return;
+    try {
+      await BASE_LIBRARY.deleteDocument(activeId);
+      const kind = def.kind;
+      activeId = null; activeVersion = null; activeFolderId = null; packageContext = null;
+      def = normalize(kind === "form" ? BASE.blankForm() : kind === "package" ? BASE.blankPackage() : BASE.blankDoc());
+      history.replaceState({}, "", "builder.html");
+      renderAll();
+      status(`Deleted “${title}” from the controlled library.`, "success");
+    } catch (error) { status(`Could not delete document: ${error.message}`, "error"); }
+  }
+
+  $("#ed").addEventListener("toggle", event => {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement)) return;
+    if (details.matches(".editor-card")) {
+      const item = currentArray(details.dataset.editorNoun)[Number(details.dataset.index)];
+      if (item) {
+        if (details.open) collapsedItems.delete(item);
+        else collapsedItems.add(item);
+      }
+    }
+    if (details.dataset.panelKey) panelStates.set(details.dataset.panelKey, details.open);
+  }, true);
 
   $("#ed").addEventListener("input", event => {
     const el = event.target;
@@ -590,7 +668,7 @@
     }
     if (button.dataset.libraryDelete) {
       if (!window.confirm("Delete this shared document? This cannot be undone.")) return;
-      try { await BASE_LIBRARY.deleteDocument(button.dataset.libraryDelete); if (activeId === button.dataset.libraryDelete) { activeId = null; activeVersion = null; } await openLibrary($("#libraryFolderFilter") ? $("#libraryFolderFilter").value : ""); }
+      try { await BASE_LIBRARY.deleteDocument(button.dataset.libraryDelete); if (activeId === button.dataset.libraryDelete) { activeId = null; activeVersion = null; updateCommandState(); } await openLibrary($("#libraryFolderFilter") ? $("#libraryFolderFilter").value : ""); }
       catch (error) { status(`Could not delete document: ${error.message}`, "error"); }
       return;
     }
@@ -604,6 +682,7 @@
   $("#loadButton").addEventListener("click", loadJson);
   $("#downloadButton").addEventListener("click", saveJson);
   $("#saveButton").addEventListener("click", () => saveLibrary().catch(() => {}));
+  $("#deleteButton").addEventListener("click", deleteCurrentDocument);
   $("#libraryButton").addEventListener("click", openLibrary);
   $("#shareButton").addEventListener("click", copyShareLink);
   $("#aiButton").addEventListener("click", copyAIKit);

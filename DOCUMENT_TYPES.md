@@ -64,7 +64,9 @@ existing record. JSON exports remain portable disaster-recovery and interchange 
 
 Forms and documents share the same block catalog. Narrative, tables, choices,
 checklists, attachment references, review decisions, and signatures can be added to
-either kind. Package content remains made of controlled form and document snapshots.
+either kind. Budgets, schedules, project contacts, revision histories, and evidence
+logs are also reusable across both kinds. Package content remains made of controlled
+form and document snapshots.
 
 ## Reference sources
 

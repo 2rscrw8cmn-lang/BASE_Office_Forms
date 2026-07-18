@@ -29,6 +29,13 @@
 
   function editKey(id) { return keys()[id] || ""; }
 
+  function forgetEditKey(id) {
+    if (!id) return;
+    const stored = keys();
+    delete stored[id];
+    localStorage.setItem(EDIT_KEYS, JSON.stringify(stored));
+  }
+
   async function listDocuments(filters) {
     const params = new URLSearchParams();
     if (filters && filters.folderId) params.set("folder", filters.folderId);
@@ -54,10 +61,12 @@
   }
 
   async function deleteDocument(id, token) {
-    return request(`documents/${encodeURIComponent(id)}`, {
+    const result = await request(`documents/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { "X-Edit-Token": token || editKey(id) }
     });
+    forgetEditKey(id);
+    return result;
   }
 
   async function listFolders() { return (await request("folders")).folders || []; }
@@ -80,5 +89,5 @@
     return url.href;
   }
 
-  root.BASE_LIBRARY = { listDocuments, getDocument, saveDocument, deleteDocument, listFolders, createFolder, rememberEditKey, editKey, viewUrl, editUrl };
+  root.BASE_LIBRARY = { listDocuments, getDocument, saveDocument, deleteDocument, listFolders, createFolder, rememberEditKey, forgetEditKey, editKey, viewUrl, editUrl };
 })(window);

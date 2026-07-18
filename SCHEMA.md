@@ -94,6 +94,11 @@ Block types (`type` field):
 - `ack`: acknowledgment block with `fields` and `sign` (same shape as a form).
 - `attachments`: `heading`, optional `req`, and `fields` used to list files, drawings, or references.
 - `approval`: `heading`, `checks`, optional `single` and `cols`, plus optional `fields` and `sign` for disposition, comments, and reviewer sign-off.
+- `budget`: `heading`, optional `currency`, and `rows` shaped as `[cost code, description, quantity, unit cost, optional amount]`. A blank amount is calculated as quantity × unit cost and all rows are totaled.
+- `schedule`: `heading`, `columns`, and `rows` for milestones, owners, dates, and status.
+- `contacts`: `heading`, `columns`, and `rows` for project-team and stakeholder contacts.
+- `revisions`: `heading`, `columns`, and `rows` for revision history and issue descriptions.
+- `evidence`: `heading`, `columns`, and `rows` for photo, file, location, and caption references.
 - `pagebreak`: forces the following content onto a new printed page.
 
 `toc: true` auto-builds the contents page from numbered `prose`, `fields`, `checks`,
