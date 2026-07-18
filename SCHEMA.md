@@ -19,6 +19,7 @@ To generate one by describing it, paste this file plus a request like:
   "title": "Subcontractor Daily Sign-In",
   "sub": "One line per worker, per day.",
   "org": "Office Process & Compliance Division",
+  "headerNote": "Controlled Document — Do Not Reproduce",
   "control": { "Revision": "1.0", "Effective": "2026-07-17", "Classification": "Internal", "Doc. Control": "BASE-FIELD-SI-1" },
   "sections": [
     { "name": "Worker", "req": "REQUIRED",
@@ -39,7 +40,12 @@ Section types (one per section object):
 - `checks`: `["Option", …]` — add `"single": true` for pick-one (radio), `"cols": N` for a grid.
   End a label with `†` or `‡` to tie it to a footnote.
 - `sign`: `[[label, width], …]` — signature / authorization boxes.
+- `text`: instruction or explanatory copy displayed inside the section.
 - `row`: `[ {section}, {section} ]` — place two sections side by side.
+
+A form section may also be any document block listed below by including its `type`.
+This is how forms such as RFIs and submittals combine write-in sections with narrative,
+tables, attachment references, and formal review decisions.
 
 ---
 
@@ -54,6 +60,7 @@ Section types (one per section object):
   "subtitle": "BASE Construction, LLC",
   "standard": "Minimum safety standards for all company operations, written to meet or exceed OSHA 29 CFR 1926.",
   "org": "Health, Safety & Environmental Division",
+  "headerNote": "Controlled Document — Do Not Reproduce",
   "control": { "Revision": "001", "Effective": "2026-07-17", "Classification": "Controlled", "Doc. Control": "BASE-SAF-SM-1" },
   "authority": "Issued under authority of Travis Bonnett, President",
   "toc": true,
@@ -85,9 +92,17 @@ Block types (`type` field):
 - `checks`: a form-style choice block inside a document.
 - `signature`: a signature-field block.
 - `ack`: acknowledgment block with `fields` and `sign` (same shape as a form).
+- `attachments`: `heading`, optional `req`, and `fields` used to list files, drawings, or references.
+- `approval`: `heading`, `checks`, optional `single` and `cols`, plus optional `fields` and `sign` for disposition, comments, and reviewer sign-off.
+- `budget`: `heading`, optional `currency`, and `rows` shaped as `[cost code, description, quantity, unit cost, optional amount]`. A blank amount is calculated as quantity × unit cost and all rows are totaled.
+- `schedule`: `heading`, `columns`, and `rows` for milestones, owners, dates, and status.
+- `contacts`: `heading`, `columns`, and `rows` for project-team and stakeholder contacts.
+- `revisions`: `heading`, `columns`, and `rows` for revision history and issue descriptions.
+- `evidence`: `heading`, `columns`, and `rows` for photo, file, location, and caption references.
 - `pagebreak`: forces the following content onto a new printed page.
 
-`toc: true` auto-builds the contents page from every numbered `prose` block and `ack`.
+`toc: true` auto-builds the contents page from numbered `prose`, `fields`, `checks`,
+`signature`, `ack`, `attachments`, and `approval` blocks.
 
 ---
 
@@ -108,9 +123,11 @@ Block types (`type` field):
 }
 ```
 
-The studio normally adds package documents from its saved browser library. The package
-stores snapshots so downloaded JSON and shared links remain portable. Cover and index
-entries are regenerated from the current `documents` array whenever the package renders.
+The studio can add a blank document, blank form, built-in template, or shared-library
+record to a package. Library records are stored as snapshots so JSON backups and links
+remain portable. Each embedded document can be edited, duplicated, reordered, or removed
+directly inside the package. Cover and page ranges are regenerated from the current
+`documents` array after automatic Letter-page pagination.
 
 ---
 
@@ -129,9 +146,11 @@ Forms, documents, and packages may use:
     "Doc. Control": true
   },
   "showHeader": true,
+  "headerNote": "Controlled Document — Do Not Reproduce",
   "appearance": {
     "accent": "#7a1e22",
     "ink": "#232327",
+    "paper": "#ffffff",
     "orientation": "portrait",
     "marginX": 0.7,
     "marginY": 0.55,
@@ -139,6 +158,9 @@ Forms, documents, and packages may use:
   }
 }
 ```
+
+Set `headerNote` to different text for a custom distribution notice, or to an empty
+string to remove the notice while keeping the branded page header.
 
 ---
 

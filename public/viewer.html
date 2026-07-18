@@ -4,43 +4,70 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BASE — Shared Document</title>
-<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg?v=20260717">
+<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg?v=20260718">
 <link rel="stylesheet" href="base.css">
 <style>
-  .viewerbar { position:sticky; top:0; z-index:20; display:flex; gap:7px; align-items:center; padding:10px max(12px,calc((100% - 8.5in)/2)); background:#17171a; color:#fff; }
-  .viewerbar strong { margin-right:auto; font:700 10px/1 var(--code); letter-spacing:.8px; text-transform:uppercase; }
-  .viewerbar button,.viewerbar a { padding:8px 10px; border:1px solid #4a4a50; background:#29292e; color:#fff; text-decoration:none; cursor:pointer; font:600 9px/1 var(--code); text-transform:uppercase; }
+  .viewerbar { position:sticky; top:76px; z-index:20; display:flex; gap:7px; align-items:center; padding:9px max(12px,calc((100% - 8.5in)/2)); background:rgba(255,255,255,.96); color:#454247; border-bottom:1px solid #d9d6d2; backdrop-filter:blur(8px); }
+  .viewerbar strong { margin-right:auto; font:500 10px/1 var(--sans); }
+  .viewerbar button,.viewerbar a { padding:8px 10px; border:1px solid #d7d4d0; border-radius:3px; background:#fff; color:#49464b; text-decoration:none; cursor:pointer; font:500 9px/1 var(--sans); }
   .viewerbar .accent { background:var(--accent); border-color:var(--accent); }
   #root { padding-top:20px; }
   .error { width:min(620px,calc(100% - 32px)); margin:60px auto; padding:24px; background:#fff; box-shadow:0 2px 26px rgba(0,0,0,.13); }
-  @media print { .viewerbar { display:none; } #root { padding:0; } }
+  @media (max-width:620px) { .viewerbar { top:126px; overflow-x:auto; } }
+  @media print { .viewerbar,.app-topbar { display:none; } #root { padding:0; } }
 </style>
 </head>
 <body>
-<div class="viewerbar"><strong id="label">Shared BASE document</strong><a id="editLink" href="builder.html">Edit a copy</a><button id="download">Download JSON</button><button class="accent" onclick="window.print()">Export PDF</button></div>
+<header class="app-topbar">
+  <a class="app-brand" href="index.html" aria-label="BASE document workspace home"><img src="assets/base-logo.svg?v=20260718" alt="BASE"></a>
+  <span class="app-divider" aria-hidden="true"></span>
+  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="index.html">Documents</a><i>/</i><span>Controlled record</span></nav>
+  <form class="global-search" action="index.html" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><label class="sr-only" for="viewerSearch">Search the document workspace</label><input id="viewerSearch" name="q" type="search" placeholder="Search documents, templates, or records"></form>
+  <button class="user-placeholder" type="button" title="User sign in will be added later">User</button>
+</header>
+<div class="viewerbar"><strong id="label">Shared BASE document</strong><a id="editLink" href="builder.html">Edit a copy</a><button id="answers" hidden>Export answers</button><button id="download">Export backup</button><button class="accent" onclick="window.print()">Export PDF</button></div>
 <main id="root"></main>
 <script src="engine.js"></script>
+<script src="library-api.js"></script>
+<script src="global-search.js"></script>
 <script>
-(function () {
+(async function () {
   function decode(payload) {
     const padded = payload.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((payload.length + 3) % 4);
     const binary = atob(padded); const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
     return JSON.parse(new TextDecoder().decode(bytes));
   }
+  function download(name, value) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 500);
+  }
   try {
-    const match = location.hash.match(/^#d=(.+)$/); if (!match) throw new Error("No shared document was included in this link.");
-    const definition = decode(match[1]);
+    const id = new URLSearchParams(location.search).get("id");
+    const match = location.hash.match(/^#d=(.+)$/);
+    if (!id && !match) throw new Error("No shared document was included in this link.");
+    const record = id ? await BASE_LIBRARY.getDocument(id) : null;
+    const definition = record ? record.definition : decode(match[1]);
     document.getElementById("root").innerHTML = BASE.render(definition, { fill: definition.kind === "form" });
-    requestAnimationFrame(() => BASE.updatePackageIndex(document.getElementById("root")));
+    requestAnimationFrame(() => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
     document.getElementById("label").textContent = definition.title || "Shared BASE document";
     document.title = `BASE — ${definition.title || "Shared Document"}`;
-    document.getElementById("editLink").href = `builder.html#d=${match[1]}`;
-    document.getElementById("download").onclick = () => {
-      const blob = new Blob([JSON.stringify(definition, null, 2)], { type: "application/json" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${definition.no || "BASE-document"}.json`; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 500);
-    };
-    window.addEventListener("beforeprint", () => BASE.updatePackageIndex(document.getElementById("root")));
+    document.getElementById("editLink").href = id ? BASE_LIBRARY.editUrl(id, BASE_LIBRARY.editKey(id)) : `builder.html#d=${match[1]}`;
+    document.getElementById("editLink").textContent = id && BASE_LIBRARY.editKey(id) ? "Edit document" : "Edit a copy";
+    document.getElementById("download").onclick = () => download(`${definition.no || "BASE-document"}.json`, definition);
+    if (definition.kind === "form") {
+      const answers = document.getElementById("answers"); answers.hidden = false;
+      answers.onclick = () => {
+        const values = {};
+        BASE.prepareForm(definition)._schema.forEach(field => {
+          if (field.type === "text") values[field.id] = document.querySelector(`[name="${field.id}"]`)?.value || "";
+          else if (field.type === "choose_one") values[field.id] = document.querySelector(`[name="${field.id}"]:checked`)?.value || "";
+          else values[field.id] = [...document.querySelectorAll(`[name="${field.id}"]:checked`)].map(input => input.value);
+        });
+        download(`${definition.no || "form"}-answers.json`, { form: definition.no || "", answers: values });
+      };
+    }
+    window.addEventListener("beforeprint", () => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
   } catch (error) {
     document.getElementById("root").innerHTML = `<div class="error"><h1>Document unavailable</h1><p>${BASE.esc(error.message)}</p></div>`;
     document.getElementById("download").disabled = true;

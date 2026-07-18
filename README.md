@@ -19,13 +19,21 @@ public/assets/base-logo.svg  the logo, once
 ## Create — by clicking (public/builder.html)
 Open the studio and choose a template. Add sections or blocks, adjust write-in height,
 page setup, colors, and document-control visibility, then preview it live. Save to the
-browser library, download JSON, copy a view-only link, hand the definition to AI, or
-export through the browser's PDF print workflow.
+shared Cloudflare library, organize records in folders, copy public view/fill links or
+private edit links, hand the definition to AI, or export through the browser's PDF workflow.
 
 Forms provide adjustable write-in fields, checkboxes, signatures, and answer JSON.
 Documents provide prose, lists, checklists, tables, key/value rows, callouts, notes,
 signatures, acknowledgments, cover pages, and generated contents pages. Packages combine
-saved documents and regenerate their cover and index for export. See `DOCUMENT_TYPES.md`.
+shared documents and regenerate their cover and page-accurate index for export. Embedded
+package documents can be edited in place. See `DOCUMENT_TYPES.md`.
+
+Pages are always US Letter (portrait or landscape). Manual page breaks are supported,
+and overflowing sections are moved onto continuation pages before export.
+
+**Import backup / Export backup** use JSON as a portable copy of the complete document
+definition. They are intended for recovery, transfer, and AI workflows; normal team use
+should go through **Save shared** and **Shared library**.
 
 Try it now: New document isn't blank if you **Load** `public/safety-manual.json`.
 
@@ -45,19 +53,21 @@ An AI agent fills it the same way — **Copy AI fill-spec**, hand it to the agen
 load the `{field: value}` JSON it returns, and the form renders completed.
 
 ## Deploy on Cloudflare
-This repository is configured as a Cloudflare Pages project. The `public/` directory
-contains the landing page and all deployable assets, while `wrangler.jsonc` declares
-the Pages build output so local development and Cloudflare builds use the same layout.
+This repository is configured as a Cloudflare Pages project with Pages Functions and a
+D1 shared library. The `public/` directory contains the interface, `functions/` contains
+the library API, and `migrations/` contains the controlled database schema. A new D1
+database bootstraps its base schema on the first API request.
 
 ```bash
 npm install
 npm run build
+npm run db:migrate:local
 npm run dev
 npm run deploy:dry-run
 npm run deploy
 ```
 
-`npm run deploy` publishes the `public/` static site to the `base-office-forms` Pages project with Wrangler. It will ask you to log in if
+`npm run deploy` publishes the site and Pages Functions to the `base-office-forms` Pages project with Wrangler. It will ask you to log in if
 the current machine is not authenticated with Cloudflare. The site is also still
 usable by opening `public/index.html` directly, though a local web server is recommended for
 testing asset paths.
@@ -67,10 +77,10 @@ Ask Claude Code to "add a definition for X using SCHEMA.md" — it writes a smal
 object, not styling, so it stays on-brand and costs almost nothing. Change a color or
 font once in `public/base.css` and every form and document updates together.
 
-## Known v1 limits (say the word and I'll close these)
-- The builder doesn't yet expose side-by-side paired sections (`row`); hand/describe
-  definitions still support them. Loading a def that uses `row` shows its parts stacked.
-- The fill generator uses its own embedded form list; loading an arbitrary saved
-  definition into it to fill is a small next step, not wired yet.
-- Per-page running headers on long documents are approximated (header on the body page,
-  then browser page breaks) rather than repeated on every printed page.
+## Current access model
+
+- Anyone who can open the site can browse, fill, and create shared documents.
+- Existing documents can only be overwritten or deleted with their private edit link.
+- Public links contain no edit credential. Keep private edit links with document owners.
+- A future identity layer can add named users, approvals, and role-based permissions
+  without changing stored document definitions.

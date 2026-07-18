@@ -9,6 +9,8 @@ starting points: sections and blocks can be added, removed, reordered, and custo
 - Request / authorization form
 - Supplemental form or annex
 - Checklist / inspection sheet
+- Request for Information (RFI)
+- Submittal / transmittal
 - Log / register
 - Attendance or sign-in record
 - Acknowledgment, waiver, or certification
@@ -51,8 +53,20 @@ starting points: sections and blocks can be added, removed, reordered, and custo
 - Custom multi-document package
 
 Packages generate a cover and index from their current document list whenever they are
-rendered or exported. Documents are saved in the browser library and can be added to a
-package from there. JSON downloads remain the portable backup and interchange format.
+rendered or exported. Every embedded package document can be opened and edited directly
+inside the package. Users can add blank documents, blank forms, built-in templates, or
+shared-library snapshots, then duplicate, reorder, or remove them without leaving the
+package editor.
+
+The shared library is stored in Cloudflare D1 and is available across browsers and
+devices. Folders organize public templates; private edit links control who can update an
+existing record. JSON exports remain portable disaster-recovery and interchange backups.
+
+Forms and documents share the same block catalog. Narrative, tables, choices,
+checklists, attachment references, review decisions, and signatures can be added to
+either kind. Budgets, schedules, project contacts, revision histories, and evidence
+logs are also reusable across both kinds. Package content remains made of controlled
+form and document snapshots.
 
 ## Reference sources
 

@@ -3,10 +3,12 @@
   "use strict";
 
   const ORG_DEFAULT = "Office Process & Compliance Division";
+  const HEADER_NOTE_DEFAULT = "Controlled Document — Do Not Reproduce";
   const CONTROL_KEYS = ["Revision", "Effective", "Classification", "Doc. Control"];
   const esc = value => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+  const proseHtml = value => esc(value).replace(/\r\n?|\n/g, "<br>");
   const slug = value => String(value || "field").toLowerCase().replace(/[†‡]/g, "")
     .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field";
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -28,10 +30,13 @@
 
   function topBar(def) {
     if (def.showHeader === false) return "";
-    return `<div class="doc-top">
-      <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260717")}" alt="BASE">
-      <div class="doc-org">${esc(def.org || ORG_DEFAULT)}<br>${esc(def.headerNote || "Controlled Document — Do Not Reproduce")}</div>
-    </div><div class="rule"></div>`;
+    const organization = def.org === undefined ? ORG_DEFAULT : def.org;
+    const headerNote = def.headerNote === undefined ? HEADER_NOTE_DEFAULT : def.headerNote;
+    const headerText = [organization, headerNote].filter(Boolean).map(esc).join("<br>");
+    return `<div class="page-header"><div class="doc-top">
+      <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260718")}" alt="BASE">
+      <div class="doc-org">${headerText}</div>
+    </div><div class="rule"></div></div>`;
   }
 
   function ctrlGrid(def, numberLabel) {
@@ -86,9 +91,14 @@
       if (section.fields) section.fields = section.fields.map(field => normField(field, uid, schema, "text"));
       if (section.sign) section.sign = section.sign.map(field => normField(field, uid, schema, "text"));
       if (section.checks) {
-        section._gid = uid(slug(section.id || section.name || "choice"));
+        const sectionLabel = section.name || section.heading || "Choice";
+        section._gid = uid(slug(section.id || sectionLabel));
         section._opts = section.checks.map(option => String(option).replace(/[†‡]\s*$/, "").trim());
-        schema.push({ id: section._gid, type: section.single ? "choose_one" : "choose_any", label: section.name, options: section._opts });
+        schema.push({ id: section._gid, type: section.single ? "choose_one" : "choose_any", label: sectionLabel, options: section._opts });
+      }
+      if (section.type === "checklist" && section.items) {
+        section._gid = uid(slug(section.id || section.heading || "checklist"));
+        schema.push({ id: section._gid, type: "choose_any", label: section.heading || "Checklist", options: section.items.map(String) });
       }
     };
     (form.sections || []).forEach(walk);
@@ -97,21 +107,21 @@
     return form;
   }
 
-  function fieldsBlock(fields, fill, tall) {
+  function fieldsBlock(fields, fill, tall, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
     const template = normalized.map(field => `${field.w}fr`).join(" ");
     return `<div class="grid" style="--tpl:${template};">` + normalized.map(field => {
       const height = tall ? Math.max(76, field.height) : field.height;
       const input = fill
         ? ((field.multiline || height >= 70)
-          ? `<textarea class="ftx" name="${esc(field.id)}"></textarea>`
-          : `<input class="fin" name="${esc(field.id)}">`)
+          ? `<textarea class="ftx" name="${esc((namePrefix || "") + field.id)}"></textarea>`
+          : `<input class="fin" name="${esc((namePrefix || "") + field.id)}">`)
         : "";
       return `<div class="field${height >= 70 ? " field-tall" : ""}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
     }).join("") + `</div>`;
   }
 
-  function checksBlock(section, fill) {
+  function checksBlock(section, fill, namePrefix) {
     const columns = Math.max(1, Number(section.cols) || 1);
     const type = section.single ? "radio" : "checkbox";
     return `<div class="check-box${columns > 1 ? " cols" : ""}" style="--ccols:${columns}">` +
@@ -119,26 +129,31 @@
         const raw = String(option);
         const marker = raw.match(/([†‡])\s*$/);
         const text = raw.replace(/[†‡]\s*$/, "").trim();
-        const input = fill ? `<input type="${type}" name="${esc(section._gid || slug(section.name))}" value="${esc(text)}">` : "";
+        const input = fill ? `<input type="${type}" name="${esc((namePrefix || "") + (section._gid || slug(section.name)))}" value="${esc(text)}">` : "";
         return `<label class="check">${input}<span class="box"></span>${esc(text)}${marker ? `<sup class="dagger">${marker[1]}</sup>` : ""}</label>`;
       }).join("") + `</div>`;
   }
 
-  function signBlock(fields, fill) {
+  function signBlock(fields, fill, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
     return `<div class="sign-grid" style="--sign-tpl:${normalized.map(field => field.w + "fr").join(" ")};">` +
-      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc(field.id)}">` : ""}</div>`).join("") +
+      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
       `</div>`;
   }
 
-  function formSection(section, counter, fill) {
-    if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill)).join("")}</div>`;
+  function markPreview(html, collection, index) {
+    return String(html || "").replace(/^<([a-z][a-z0-9-]*)/i, `<$1 data-preview-${collection}="${index}"`);
+  }
+
+  function formSection(section, counter, fill, namePrefix) {
+    if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill, namePrefix)).join("")}</div>`;
+    if (section.type) return docBlock(section, counter, fill, namePrefix);
     const no = String(++counter.n).padStart(2, "0");
     let body = "";
-    if (section.fields) body = fieldsBlock(section.fields, fill, section.tall);
-    else if (section.checks) body = checksBlock(section, fill);
-    else if (section.sign) body = signBlock(section.sign, fill);
-    else if (section.text) body = `<p class="prose">${esc(section.text)}</p>`;
+    if (section.fields) body = fieldsBlock(section.fields, fill, section.tall, namePrefix);
+    else if (section.checks) body = checksBlock(section, fill, namePrefix);
+    else if (section.sign) body = signBlock(section.sign, fill, namePrefix);
+    else if (section.text) body = `<p class="prose">${proseHtml(section.text)}</p>`;
     return `<section class="section">${sectionBar(no, section.name, section.req)}${body}</section>`;
   }
 
@@ -147,26 +162,67 @@
     prepareForm(form);
     const counter = { n: 0 };
     const footnotes = (form.footnotes || []).length ? `<div class="footnote">${form.footnotes.map(esc).join("<br>")}</div>` : "";
-    return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}">${topBar(form)}
+    return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}" data-paginate="true">${topBar(form)}
       <div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>
       <h1 class="form-title">${esc(form.title)}</h1>
       ${form.sub ? `<p class="form-sub">${esc(form.sub)}</p>` : ""}
       ${ctrlGrid(form, "Form No.")}
-      ${(form.sections || []).map(section => formSection(section, counter, options.fill)).join("")}${footnotes}</div>`;
+      <div class="page-flow">${(form.sections || []).map((section, index) => markPreview(formSection(section, counter, options.fill, options.namePrefix), "section", index)).join("")}${footnotes}</div></div>`;
   }
 
-  function docFields(block) {
-    return fieldsBlock(block.fields || [], false, block.tall);
+  function docFields(block, fill, namePrefix) {
+    return fieldsBlock(block.fields || [], Boolean(fill), block.tall, namePrefix);
   }
 
-  function docBlock(block, counter) {
+  function structuredTable(block, className) {
+    const columns = block.columns || [];
+    const header = `<tr>${columns.map(column => `<th>${esc(column)}</th>`).join("")}</tr>`;
+    const rows = (block.rows || []).map(row => `<tr>${columns.map((_, index) => `<td>${esc(row[index] == null ? "" : row[index])}</td>`).join("")}</tr>`).join("");
+    return `<div class="structured-block ${className || ""} avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<table class="dtable"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function numericValue(value) {
+    const normalized = String(value == null ? "" : value).replace(/[^0-9.-]/g, "");
+    if (!normalized) return null;
+    const number = Number(normalized);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function money(value, currency) {
+    const fixed = Number(value).toFixed(2);
+    const parts = fixed.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return `${currency || "$"}${parts.join(".")}`;
+  }
+
+  function budgetBlock(block) {
+    const currency = block.currency || "$";
+    let total = 0;
+    const rows = (block.rows || []).map(row => {
+      const qty = numericValue(row[2]);
+      const unitCost = numericValue(row[3]);
+      const enteredAmount = numericValue(row[4]);
+      const amount = enteredAmount == null && qty != null && unitCost != null ? qty * unitCost : enteredAmount;
+      if (amount != null) total += amount;
+      return `<tr><td>${esc(row[0] || "")}</td><td>${esc(row[1] || "")}</td><td>${esc(row[2] || "")}</td><td class="money">${unitCost == null ? esc(row[3] || "") : money(unitCost, currency)}</td><td class="money">${amount == null ? "" : money(amount, currency)}</td></tr>`;
+    }).join("");
+    return `<div class="structured-block budget-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<table class="dtable budget-table"><thead><tr><th>Cost Code</th><th>Description</th><th>Qty</th><th>Unit Cost</th><th>Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th colspan="4">Budget Total</th><td class="money">${money(total, currency)}</td></tr></tfoot></table></div>`;
+  }
+
+  function docBlock(block, counter, fill, namePrefix) {
     switch (block.type) {
       case "prose": {
         const numbered = block.number === false ? null : String(++counter.n).padStart(2, "0");
         const heading = block.heading ? (numbered
           ? `<div class="section big">${sectionBar(numbered, block.heading)}</div>`
           : `<div class="doc-eyebrow-wrap">${block.eyebrow ? `<div class="eyebrow">${esc(block.eyebrow)}</div>` : ""}<h2 class="doc-h2">${esc(block.heading)}</h2></div>`) : "";
-        return `<div class="avoid">${heading}${(block.paras || []).map(text => `<p class="prose">${esc(text)}</p>`).join("")}</div>`;
+        const paras = block.paras || [];
+        const firstClass = paras.length === 1 ? " prose-last" : "";
+        const first = `<div class="avoid">${heading}${paras.length ? `<p class="prose${firstClass}">${proseHtml(paras[0])}</p>` : ""}</div>`;
+        return first + paras.slice(1).map((text, index) => {
+          const lastClass = index === paras.length - 2 ? " prose-last" : "";
+          return `<p class="prose flow-paragraph${lastClass}">${proseHtml(text)}</p>`;
+        }).join("");
       }
       case "callout": return `<div class="pull avoid"><div class="pull-q">${esc(block.text)}</div>${block.attribution ? `<div class="pull-a">${esc(block.attribution)}</div>` : ""}</div>`;
       case "note": return `<div class="note avoid">${block.title ? `<div class="note-t">${esc(block.title)}</div>` : ""}<div class="note-b">${esc(block.text)}</div></div>`;
@@ -177,12 +233,19 @@
         return `<table class="dtable avoid"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
       }
       case "list": return `<div class="list-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<${block.ordered ? "ol" : "ul"}>${(block.items || []).map(item => `<li>${esc(item)}</li>`).join("")}</${block.ordered ? "ol" : "ul"}></div>`;
-      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<div class="checkline"><span class="box"></span><span>${esc(item)}</span></div>`).join("")}</div>`;
+      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<label class="checkline">${fill ? `<input type="checkbox" name="${esc((namePrefix || "") + (block._gid || slug(block.heading || "checklist")))}" value="${esc(item)}">` : ""}<span class="box"></span><span>${esc(item)}</span></label>`).join("")}</div>`;
       case "keyvalue": return `<div class="keyvalue avoid">${(block.items || []).map(item => `<div class="key">${esc(item[0] || item.label)}</div><div class="value">${esc(item[1] || item.value)}</div>`).join("")}</div>`;
-      case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block)}</section>`;
-      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: slug(block.heading) }, false)}</section>`;
-      case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], false)}</section>`;
-      case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, false)}</div>` : ""}</section>`;
+      case "budget": return budgetBlock(block);
+      case "schedule": return structuredTable(block, "schedule-block");
+      case "contacts": return structuredTable(block, "contacts-block");
+      case "revisions": return structuredTable(block, "revisions-block");
+      case "evidence": return structuredTable(block, "evidence-block");
+      case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block, fill, namePrefix)}</section>`;
+      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}</section>`;
+      case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
+      case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block, fill, namePrefix)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
+      case "attachments": return `<section class="section big attachment-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Attachments / References", block.req)}${docFields(block, fill, namePrefix)}</section>`;
+      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "pagebreak": return `<div class="page-break" aria-hidden="true"></div>`;
       default: return "";
     }
@@ -192,18 +255,18 @@
     const entries = [];
     let number = 0;
     (doc.blocks || []).forEach(block => {
-      if ((block.type === "prose" && block.heading) || ["fields", "checks", "signature", "ack"].includes(block.type)) {
+      if ((block.type === "prose" && block.heading) || ["fields", "checks", "signature", "ack", "attachments", "approval"].includes(block.type)) {
         const label = block.type === "prose" && block.number === false ? "—" : String(++number).padStart(2, "0");
         entries.push([label, block.heading || "Acknowledgment"]);
       }
     });
-    return `<div class="${sheetClass(doc, "toc-sheet")}" style="${appearance(doc)}">${topBar(doc)}<h2 class="form-title page-title">Contents</h2><div class="toc">` +
+    return `<div class="${sheetClass(doc, "toc-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}<h2 class="form-title page-title">Contents</h2><div class="toc page-flow">` +
       entries.map(([no, title]) => `<div class="formrow static"><span class="no">${no}</span><span class="nm">${esc(title)}</span></div>`).join("") + `</div></div>`;
   }
 
   function renderDoc(doc) {
     const counter = { n: 0 };
-    const bodyContent = (doc.blocks || []).map(block => docBlock(block, counter)).join("");
+    const bodyContent = (doc.blocks || []).map((block, index) => markPreview(docBlock(block, counter, false, ""), "block", index)).join("");
     const hasCover = !(doc.layout && doc.layout.cover === false);
     let output = "";
     if (hasCover) {
@@ -214,18 +277,19 @@
         ${doc.standard ? `<p class="cover-standard">${esc(doc.standard)}</p>` : ""}</div>
         ${ctrlGrid(doc, "Document No.")}${doc.authority ? `<div class="cover-auth">${esc(doc.authority)}</div>` : ""}</div>`;
       if (doc.toc) output += tocSheet(doc);
-      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}">${topBar(doc)}<div class="doc-body">${bodyContent}</div></div>`;
+      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     } else {
-      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}">${topBar(doc)}
+      output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}
         <div class="form-tag">${esc(doc.tag || doc.documentType || "Document")}</div><h1 class="form-title">${esc(doc.title)}</h1>
-        ${doc.subtitle ? `<p class="form-sub">${esc(doc.subtitle)}</p>` : ""}${ctrlGrid(doc, "Document No.")}<div class="doc-body">${bodyContent}</div></div>`;
+        ${doc.subtitle ? `<p class="form-sub">${esc(doc.subtitle)}</p>` : ""}${ctrlGrid(doc, "Document No.")}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     }
     return output;
   }
 
-  function renderPackage(pkg) {
+  function renderPackage(pkg, options) {
+    options = options || {};
     const documents = (pkg.documents || []).map(item => item.def || item).filter(item => item && item.kind !== "package");
-    const rendered = documents.map(item => render(item, { fill: false }));
+    const rendered = documents.map((item, index) => render(item, { fill: Boolean(options.fill), namePrefix: `package_${index}_` }));
     let page = 3;
     const entries = rendered.map((html, index) => {
       const pages = Math.max(1, (html.match(/class="sheet/g) || []).length);
@@ -235,7 +299,7 @@
       return { no: documents[index].no || String(index + 1).padStart(2, "0"), title: documents[index].title || "Untitled", range: start === end ? String(start) : `${start}-${end}` };
     });
     const cover = `<div class="${sheetClass(pkg, "cover package-cover")}" style="${appearance(pkg)}">${topBar(pkg)}<div class="cover-mid"><div class="form-tag">${esc(pkg.tag || "Document Package")}</div><h1 class="cover-title">${esc(pkg.title)}</h1><div class="cover-bar"></div>${pkg.subtitle ? `<div class="cover-sub">${esc(pkg.subtitle)}</div>` : ""}<p class="cover-standard">${documents.length} controlled document${documents.length === 1 ? "" : "s"} · Index generated ${today()}</p></div>${ctrlGrid(pkg, "Package No.")}</div>`;
-    const index = `<div class="${sheetClass(pkg, "package-index")}" style="${appearance(pkg)}">${topBar(pkg)}<h2 class="form-title page-title">Package Index</h2><div class="package-index-list">${entries.map((entry, i) => `<div class="package-index-row" data-package-index="${i}"><span class="seq">${String(i + 1).padStart(2, "0")}</span><span><strong>${esc(entry.title)}</strong><small>${esc(entry.no)}</small></span><span class="leader"></span><span class="pages">${entry.range}</span></div>`).join("")}</div></div>`;
+    const index = `<div class="${sheetClass(pkg, "package-index")}" style="${appearance(pkg)}" data-paginate="true">${topBar(pkg)}<h2 class="form-title page-title">Package Index</h2><div class="package-index-list page-flow">${entries.map((entry, i) => `<div class="package-index-row" data-package-index="${i}"><span class="seq">${String(i + 1).padStart(2, "0")}</span><span><strong>${esc(entry.title)}</strong><small>${esc(entry.no)}</small></span><span class="leader"></span><span class="pages">${entry.range}</span></div>`).join("")}</div></div>`;
     return cover + index + rendered.map((html, index) => `<div class="package-document" data-package-item="${index + 1}">${html}</div>`).join("");
   }
 
@@ -243,12 +307,11 @@
     if (!container || !container.querySelectorAll) return;
     const documents = [...container.querySelectorAll(".package-document")];
     if (!documents.length) return;
-    let page = 3;
+    const allSheets = [...container.querySelectorAll(".sheet")];
+    const firstDocumentSheet = documents[0] && documents[0].querySelector(".sheet");
+    let page = Math.max(1, allSheets.indexOf(firstDocumentSheet) + 1);
     documents.forEach((documentElement, index) => {
-      const pages = [...documentElement.querySelectorAll(".sheet")].reduce((total, sheet) => {
-        const pageHeight = sheet.classList.contains("landscape") ? 816 : 1056;
-        return total + Math.max(1, Math.ceil(sheet.scrollHeight / pageHeight));
-      }, 0) || 1;
+      const pages = Math.max(1, documentElement.querySelectorAll(".sheet").length);
       const start = page, end = page + pages - 1;
       const target = container.querySelector(`.package-index-row[data-package-index="${index}"] .pages`);
       if (target) target.textContent = start === end ? String(start) : `${start}-${end}`;
@@ -256,9 +319,53 @@
     });
   }
 
+  function paginate(container) {
+    if (!container || !container.querySelectorAll) return;
+    [...container.querySelectorAll('.sheet[data-paginate="true"]')].forEach(source => {
+      if (source.dataset.paginationReady === "true") return;
+      const flow = source.querySelector(":scope > .page-flow");
+      if (!flow) return;
+      const items = [...flow.children];
+      flow.replaceChildren();
+      let page = source;
+      let pageFlow = flow;
+      let lastPage = source;
+      const pageHeight = source.classList.contains("landscape") ? 816 : 1056;
+      const continuation = () => {
+        const next = source.cloneNode(false);
+        next.removeAttribute("id");
+        next.removeAttribute("data-paginate");
+        next.dataset.autoPage = "true";
+        const header = source.querySelector(":scope > .page-header");
+        if (header) next.appendChild(header.cloneNode(true));
+        const nextFlow = flow.cloneNode(false);
+        nextFlow.replaceChildren();
+        next.appendChild(nextFlow);
+        lastPage.after(next);
+        lastPage = next;
+        page = next;
+        pageFlow = nextFlow;
+      };
+      items.forEach(item => {
+        if (item.classList.contains("page-break")) {
+          if (pageFlow.children.length) continuation();
+          return;
+        }
+        pageFlow.appendChild(item);
+        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length > 1) {
+          pageFlow.removeChild(item);
+          continuation();
+          pageFlow.appendChild(item);
+        }
+        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length === 1) page.classList.add("oversize");
+      });
+      source.dataset.paginationReady = "true";
+    });
+  }
+
   function render(definition, options) {
     const def = clone(definition || blankForm());
-    if (def.kind === "package") return renderPackage(def);
+    if (def.kind === "package") return renderPackage(def, options || {});
     if (def.kind === "document") return renderDoc(def);
     return renderForm(def, options || {});
   }
@@ -270,19 +377,19 @@
   }
 
   function blankForm() {
-    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "", org: ORG_DEFAULT,
+    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("NEW-1"), controlVisibility: {}, showControl: true, appearance: {},
       sections: [{ name: "Section One", req: "REQUIRED", fields: [{ label: "Field label", w: 1, height: 46 }] }], footnotes: [] };
   }
 
   function blankDoc() {
-    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "", org: ORG_DEFAULT,
+    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("DOC-1"), controlVisibility: {}, showControl: true, appearance: {}, authority: "", toc: true, layout: { cover: true },
       blocks: [{ type: "prose", heading: "First Section", paras: ["Write the first paragraph here."] }] };
   }
 
   function blankPackage() {
-    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "", org: ORG_DEFAULT,
+    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
       control: controls("PKG-1"), controlVisibility: {}, showControl: true, appearance: {}, documents: [] };
   }
 
@@ -295,6 +402,7 @@
 
   const templateCatalog = [
     ["controlled-form", "Controlled Form"], ["authorization", "Request / Authorization"], ["checklist", "Checklist / Inspection"],
+    ["rfi", "Request for Information (RFI)"], ["submittal", "Submittal / Transmittal"],
     ["log", "Log / Register"], ["memo", "Memorandum"], ["letter", "Business Letter"], ["cover-sheet", "Cover / Transmittal Sheet"],
     ["policy", "Policy"], ["procedure", "Procedure / SOP"], ["safety-manual", "Safety Manual"], ["scope", "Scope of Work"],
     ["proposal", "Proposal Package"], ["safety-package", "Safety Manual Package"], ["qualifications", "Qualification Statement"], ["project-sheet", "Project / Case Study"],
@@ -315,6 +423,30 @@
     if (id === "checklist") {
       const form = blankForm(); Object.assign(form, { documentType: "Checklist", no: "CHK-1", title: "Inspection Checklist" });
       form.sections = [{ name: "Inspection Details", fields: [{ label: "Project", w: 2 }, { label: "Date", w: 1 }, { label: "Inspector", w: 1.5 }] }, { name: "Checklist", req: "CHECK ALL", checks: ["Item one", "Item two", "Item three"], cols: 1 }, { name: "Certification", sign: [{ label: "Inspector Signature", w: 2 }, { label: "Date", w: 1 }] }]; return form;
+    }
+    if (id === "rfi") {
+      const form = blankForm();
+      Object.assign(form, { documentType: "Request for Information", typeLabel: "RFI", no: "RFI-001", title: "Request for Information", sub: "Project question, response, and disposition" });
+      form.control["Doc. Control"] = "BASE-RFI-001";
+      form.sections = [
+        { name: "Project & RFI Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Project No.", w: 1 }, { label: "RFI No.", w: 1 }, { label: "Date", w: 1 }, { label: "From", w: 1.5 }, { label: "To", w: 1.5 }, { label: "Subject", w: 3 }] },
+        { name: "Question / Clarification Requested", req: "REQUIRED", fields: [{ label: "Question and relevant drawing / specification reference", w: 1, height: 118, multiline: true }] },
+        { type: "attachments", heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Drawing, specification, sketch, or file reference 1", w: 1 }, { label: "Drawing, specification, sketch, or file reference 2", w: 1 }] },
+        { type: "approval", heading: "Response & Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Answered — No Cost / Schedule Impact", "Answered — Potential Cost Impact", "Answered — Potential Schedule Impact", "Revise and Resubmit"], fields: [{ label: "Response", w: 1, height: 118, multiline: true }, { label: "Cost Impact / Change Reference", w: 1, height: 54 }, { label: "Schedule Impact", w: 1, height: 54 }], sign: [{ label: "Responded By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] }
+      ];
+      return form;
+    }
+    if (id === "submittal") {
+      const form = blankForm();
+      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", sub: "Submitted item, document references, and review disposition" });
+      form.control["Doc. Control"] = "BASE-SUB-001";
+      form.sections = [
+        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Project No.", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Revision", w: 1 }, { label: "Date Submitted", w: 1 }, { label: "Specification Section", w: 1.5 }, { label: "Contractor", w: 1.5 }, { label: "Subcontractor / Supplier", w: 1.5 }] },
+        { name: "Submitted Item", req: "REQUIRED", fields: [{ label: "Description of product, equipment, shop drawing, sample, or data", w: 1, height: 92, multiline: true }, { label: "Manufacturer / Product", w: 1.5 }, { label: "Drawing / Data Identifier", w: 1.5 }] },
+        { type: "attachments", heading: "Included Documents", req: "LIST ALL", fields: [{ label: "File / drawing / data sheet 1", w: 1 }, { label: "File / drawing / data sheet 2", w: 1 }, { label: "File / drawing / data sheet 3", w: 1 }] },
+        { type: "approval", heading: "Review Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] }
+      ];
+      return form;
     }
     if (id === "package" || id === "proposal" || id === "safety-package") {
       const pkg = blankPackage();
@@ -351,5 +483,5 @@
     return blankDoc();
   }
 
-  root.BASE = { render, renderForm, renderDoc, renderPackage, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
+  root.BASE = { render, renderForm, renderDoc, renderPackage, paginate, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
 })(window);
