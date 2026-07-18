@@ -166,6 +166,10 @@
     return `<div class="card-head"><span class="tag">${esc(type)}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}">×</button></div>`;
   }
 
+  function pickerButton(attribute, type, label, description) {
+    return `<button ${attribute}="${type}"><strong>+ ${esc(label)}</strong><span>${esc(description)}</span></button>`;
+  }
+
   function formEditor() {
     return `<div class="editor-hint">Form sections — write-in fields support adjustable height and multiline input.</div>` +
       (def.sections || []).map((section, index) => {
@@ -175,7 +179,12 @@
         if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields");
         if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
         return `<article class="card">${cardHead(type, index, "section")}${body}</article>`;
-      }).join("") + `<div class="addmenu"><button data-add-section="fields">+ Fields</button><button data-add-section="checks">+ Choices</button><button data-add-section="sign">+ Signature</button><button data-add-section="text">+ Text</button></div>`;
+      }).join("") + `<div class="addmenu">
+        ${pickerButton("data-add-section", "fields", "Fields", "Collect names, dates, project details, or other written responses.")}
+        ${pickerButton("data-add-section", "checks", "Choices", "Let the recipient select one or more defined options.")}
+        ${pickerButton("data-add-section", "sign", "Signature", "Add authorization, approval, and date fields.")}
+        ${pickerButton("data-add-section", "text", "Instructions", "Place quiet guidance or explanatory text in the form.")}
+      </div>`;
   }
 
   function blockEditor(block, index) {
@@ -203,7 +212,21 @@
   function documentEditor() {
     return `<div class="editor-hint">Document blocks — combine narrative, forms, tables, checklists, signatures, and page breaks.</div>` +
       (def.blocks || []).map(blockEditor).join("") +
-      `<div class="addmenu"><button data-add-block="prose">+ Section</button><button data-add-block="fields">+ Fields</button><button data-add-block="checks">+ Choices</button><button data-add-block="checklist">+ Checklist</button><button data-add-block="list">+ List</button><button data-add-block="table">+ Table</button><button data-add-block="keyvalue">+ Key/Value</button><button data-add-block="callout">+ Callout</button><button data-add-block="note">+ Note</button><button data-add-block="signature">+ Signature</button><button data-add-block="ack">+ Acknowledgment</button><button data-add-block="signatory">+ Signatory</button><button data-add-block="pagebreak">+ Page break</button></div>`;
+      `<div class="addmenu">
+        ${pickerButton("data-add-block", "prose", "Text section", "Add a heading with one or more narrative paragraphs.")}
+        ${pickerButton("data-add-block", "fields", "Fields", "Collect structured written information in labeled areas.")}
+        ${pickerButton("data-add-block", "checks", "Choices", "Present selectable options for a reader or respondent.")}
+        ${pickerButton("data-add-block", "checklist", "Checklist", "Create a task or compliance list with check boxes.")}
+        ${pickerButton("data-add-block", "list", "List", "Add ordered steps or a simple bulleted list.")}
+        ${pickerButton("data-add-block", "table", "Table", "Organize repeated records into columns and rows.")}
+        ${pickerButton("data-add-block", "keyvalue", "Key / value", "Show compact label-and-value pairs for document facts.")}
+        ${pickerButton("data-add-block", "callout", "Callout", "Emphasize a quotation or important statement.")}
+        ${pickerButton("data-add-block", "note", "Note", "Set aside a short caution, reminder, or explanation.")}
+        ${pickerButton("data-add-block", "signature", "Signature", "Add signature, approval, and date fields.")}
+        ${pickerButton("data-add-block", "ack", "Acknowledgment", "Capture a statement of understanding and signature.")}
+        ${pickerButton("data-add-block", "signatory", "Signatory", "Identify the author or responsible person by name and role.")}
+        ${pickerButton("data-add-block", "pagebreak", "Page break", "Start the next block on a new printed page.")}
+      </div>`;
   }
 
   function packageEditor() {
@@ -490,7 +513,8 @@
   async function initialize() {
     try { folders = await BASE_LIBRARY.listFolders(); }
     catch (error) { status(`Shared library unavailable: ${error.message}`, "error"); }
-    const id = new URLSearchParams(location.search).get("id");
+    const params = new URLSearchParams(location.search);
+    const id = params.get("id");
     if (id) {
       try {
         const item = await BASE_LIBRARY.getDocument(id);
@@ -500,6 +524,17 @@
         def = normalize(BASE.clone(item.definition)); activeId = key ? id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null;
         status(key ? "Opened editable shared document." : "Opened shared document as a copy.", "success");
       } catch (error) { status(`Could not open shared document: ${error.message}`, "error"); }
+    } else if (params.get("template")) {
+      const template = params.get("template");
+      if (BASE.templateCatalog.some(item => item.id === template)) {
+        def = normalize(BASE.fromTemplate(template));
+        $("#templateSelect").value = template;
+        status("Template opened in a new local draft.", "success");
+      }
+    } else if (params.get("new")) {
+      const kind = params.get("new");
+      def = normalize(kind === "form" ? BASE.blankForm() : kind === "package" ? BASE.blankPackage() : BASE.blankDoc());
+      status(`New ${kind === "form" || kind === "package" ? kind : "document"} started.`, "success");
     }
     renderAll();
   }

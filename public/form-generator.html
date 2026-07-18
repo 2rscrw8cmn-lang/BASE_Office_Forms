@@ -4,20 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BASE — Fill & Export</title>
-<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg?v=20260717">
+<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg?v=20260718">
 <link rel="stylesheet" href="base.css">
 <style>
-  .usebar { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:8.5in; max-width:calc(100% - 24px); margin:0 auto 14px; padding:10px; background:#17171a; }
-  .usebar a,.usebar button,.usebar select { padding:8px 10px; border:1px solid #44444a; background:#29292e; color:#fff; text-decoration:none; font:600 9px/1 var(--code); text-transform:uppercase; cursor:pointer; }
+  .usebar { position:sticky; top:76px; z-index:20; display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:8.5in; max-width:calc(100% - 24px); margin:14px auto; padding:9px; background:rgba(255,255,255,.96); border:1px solid #d9d6d2; border-radius:5px; backdrop-filter:blur(8px); }
+  .usebar a,.usebar button,.usebar select { padding:8px 10px; border:1px solid #d7d4d0; border-radius:3px; background:#fff; color:#49464b; text-decoration:none; font:500 9px/1 var(--sans); cursor:pointer; }
   .usebar select { min-width:150px; text-transform:none; }
-  .usebar .spacer { flex:1; } .usebar .accent { background:var(--accent); border-color:var(--accent); }
+  .usebar .spacer { flex:1; } .usebar .accent { background:var(--accent); border-color:var(--accent); color:#fff; }
   #notice { width:8.5in; max-width:calc(100% - 24px); margin:0 auto 10px; color:#777; font:500 9px/1.4 var(--code); }
-  @media print { .usebar,#notice { display:none; } }
+  @media (max-width:620px) { .usebar { top:126px; } }
+  @media print { .usebar,#notice,.app-topbar { display:none; } }
 </style>
 </head>
 <body>
+<header class="app-topbar">
+  <a class="app-brand" href="index.html" aria-label="BASE document workspace home"><img src="assets/base-logo.svg?v=20260718" alt="BASE"></a>
+  <span class="app-divider" aria-hidden="true"></span>
+  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="index.html">Documents</a><i>/</i><span>Fill &amp; Export</span></nav>
+  <form class="global-search" action="index.html" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><label class="sr-only" for="fillSearch">Search the document workspace</label><input id="fillSearch" name="q" type="search" placeholder="Search documents, templates, or records"></form>
+  <button class="user-placeholder" type="button" title="User sign in will be added later">User</button>
+</header>
 <div class="usebar">
-  <a href="index.html">Home</a><a href="builder.html">Studio</a>
+  <a href="builder.html">Studio</a>
   <select id="librarySelect"><option value="">Shared form library</option></select><button id="openSaved">Open</button>
   <button id="loadDefinition">Import form backup</button><span class="spacer"></span>
   <button id="loadAnswers">Import answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Export answers</button><button class="accent" onclick="window.print()">Export PDF</button>
