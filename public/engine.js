@@ -91,9 +91,14 @@
       if (section.fields) section.fields = section.fields.map(field => normField(field, uid, schema, "text"));
       if (section.sign) section.sign = section.sign.map(field => normField(field, uid, schema, "text"));
       if (section.checks) {
-        section._gid = uid(slug(section.id || section.name || "choice"));
+        const sectionLabel = section.name || section.heading || "Choice";
+        section._gid = uid(slug(section.id || sectionLabel));
         section._opts = section.checks.map(option => String(option).replace(/[†‡]\s*$/, "").trim());
-        schema.push({ id: section._gid, type: section.single ? "choose_one" : "choose_any", label: section.name, options: section._opts });
+        schema.push({ id: section._gid, type: section.single ? "choose_one" : "choose_any", label: sectionLabel, options: section._opts });
+      }
+      if (section.type === "checklist" && section.items) {
+        section._gid = uid(slug(section.id || section.heading || "checklist"));
+        schema.push({ id: section._gid, type: "choose_any", label: section.heading || "Checklist", options: section.items.map(String) });
       }
     };
     (form.sections || []).forEach(walk);
@@ -138,6 +143,7 @@
 
   function formSection(section, counter, fill, namePrefix) {
     if (section.row) return `<div class="grid paired" style="--cols:${section.row.length};--gap:14px">${section.row.map(item => formSection(item, counter, fill, namePrefix)).join("")}</div>`;
+    if (section.type) return docBlock(section, counter, fill, namePrefix);
     const no = String(++counter.n).padStart(2, "0");
     let body = "";
     if (section.fields) body = fieldsBlock(section.fields, fill, section.tall, namePrefix);
@@ -160,11 +166,11 @@
       <div class="page-flow">${(form.sections || []).map(section => formSection(section, counter, options.fill, options.namePrefix)).join("")}${footnotes}</div></div>`;
   }
 
-  function docFields(block) {
-    return fieldsBlock(block.fields || [], false, block.tall);
+  function docFields(block, fill, namePrefix) {
+    return fieldsBlock(block.fields || [], Boolean(fill), block.tall, namePrefix);
   }
 
-  function docBlock(block, counter) {
+  function docBlock(block, counter, fill, namePrefix) {
     switch (block.type) {
       case "prose": {
         const numbered = block.number === false ? null : String(++counter.n).padStart(2, "0");
@@ -188,12 +194,14 @@
         return `<table class="dtable avoid"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
       }
       case "list": return `<div class="list-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<${block.ordered ? "ol" : "ul"}>${(block.items || []).map(item => `<li>${esc(item)}</li>`).join("")}</${block.ordered ? "ol" : "ul"}></div>`;
-      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<div class="checkline"><span class="box"></span><span>${esc(item)}</span></div>`).join("")}</div>`;
+      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<label class="checkline">${fill ? `<input type="checkbox" name="${esc((namePrefix || "") + (block._gid || slug(block.heading || "checklist")))}" value="${esc(item)}">` : ""}<span class="box"></span><span>${esc(item)}</span></label>`).join("")}</div>`;
       case "keyvalue": return `<div class="keyvalue avoid">${(block.items || []).map(item => `<div class="key">${esc(item[0] || item.label)}</div><div class="value">${esc(item[1] || item.value)}</div>`).join("")}</div>`;
-      case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block)}</section>`;
-      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: slug(block.heading) }, false)}</section>`;
-      case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], false)}</section>`;
-      case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, false)}</div>` : ""}</section>`;
+      case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block, fill, namePrefix)}</section>`;
+      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}</section>`;
+      case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
+      case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block, fill, namePrefix)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
+      case "attachments": return `<section class="section big attachment-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Attachments / References", block.req)}${docFields(block, fill, namePrefix)}</section>`;
+      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "pagebreak": return `<div class="page-break" aria-hidden="true"></div>`;
       default: return "";
     }
@@ -203,7 +211,7 @@
     const entries = [];
     let number = 0;
     (doc.blocks || []).forEach(block => {
-      if ((block.type === "prose" && block.heading) || ["fields", "checks", "signature", "ack"].includes(block.type)) {
+      if ((block.type === "prose" && block.heading) || ["fields", "checks", "signature", "ack", "attachments", "approval"].includes(block.type)) {
         const label = block.type === "prose" && block.number === false ? "—" : String(++number).padStart(2, "0");
         entries.push([label, block.heading || "Acknowledgment"]);
       }
@@ -214,7 +222,7 @@
 
   function renderDoc(doc) {
     const counter = { n: 0 };
-    const bodyContent = (doc.blocks || []).map(block => docBlock(block, counter)).join("");
+    const bodyContent = (doc.blocks || []).map(block => docBlock(block, counter, false, "")).join("");
     const hasCover = !(doc.layout && doc.layout.cover === false);
     let output = "";
     if (hasCover) {
@@ -350,6 +358,7 @@
 
   const templateCatalog = [
     ["controlled-form", "Controlled Form"], ["authorization", "Request / Authorization"], ["checklist", "Checklist / Inspection"],
+    ["rfi", "Request for Information (RFI)"], ["submittal", "Submittal / Transmittal"],
     ["log", "Log / Register"], ["memo", "Memorandum"], ["letter", "Business Letter"], ["cover-sheet", "Cover / Transmittal Sheet"],
     ["policy", "Policy"], ["procedure", "Procedure / SOP"], ["safety-manual", "Safety Manual"], ["scope", "Scope of Work"],
     ["proposal", "Proposal Package"], ["safety-package", "Safety Manual Package"], ["qualifications", "Qualification Statement"], ["project-sheet", "Project / Case Study"],
@@ -370,6 +379,30 @@
     if (id === "checklist") {
       const form = blankForm(); Object.assign(form, { documentType: "Checklist", no: "CHK-1", title: "Inspection Checklist" });
       form.sections = [{ name: "Inspection Details", fields: [{ label: "Project", w: 2 }, { label: "Date", w: 1 }, { label: "Inspector", w: 1.5 }] }, { name: "Checklist", req: "CHECK ALL", checks: ["Item one", "Item two", "Item three"], cols: 1 }, { name: "Certification", sign: [{ label: "Inspector Signature", w: 2 }, { label: "Date", w: 1 }] }]; return form;
+    }
+    if (id === "rfi") {
+      const form = blankForm();
+      Object.assign(form, { documentType: "Request for Information", typeLabel: "RFI", no: "RFI-001", title: "Request for Information", sub: "Project question, response, and disposition" });
+      form.control["Doc. Control"] = "BASE-RFI-001";
+      form.sections = [
+        { name: "Project & RFI Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Project No.", w: 1 }, { label: "RFI No.", w: 1 }, { label: "Date", w: 1 }, { label: "From", w: 1.5 }, { label: "To", w: 1.5 }, { label: "Subject", w: 3 }] },
+        { name: "Question / Clarification Requested", req: "REQUIRED", fields: [{ label: "Question and relevant drawing / specification reference", w: 1, height: 118, multiline: true }] },
+        { type: "attachments", heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Drawing, specification, sketch, or file reference 1", w: 1 }, { label: "Drawing, specification, sketch, or file reference 2", w: 1 }] },
+        { type: "approval", heading: "Response & Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Answered — No Cost / Schedule Impact", "Answered — Potential Cost Impact", "Answered — Potential Schedule Impact", "Revise and Resubmit"], fields: [{ label: "Response", w: 1, height: 118, multiline: true }, { label: "Cost Impact / Change Reference", w: 1, height: 54 }, { label: "Schedule Impact", w: 1, height: 54 }], sign: [{ label: "Responded By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] }
+      ];
+      return form;
+    }
+    if (id === "submittal") {
+      const form = blankForm();
+      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", sub: "Submitted item, document references, and review disposition" });
+      form.control["Doc. Control"] = "BASE-SUB-001";
+      form.sections = [
+        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Project No.", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Revision", w: 1 }, { label: "Date Submitted", w: 1 }, { label: "Specification Section", w: 1.5 }, { label: "Contractor", w: 1.5 }, { label: "Subcontractor / Supplier", w: 1.5 }] },
+        { name: "Submitted Item", req: "REQUIRED", fields: [{ label: "Description of product, equipment, shop drawing, sample, or data", w: 1, height: 92, multiline: true }, { label: "Manufacturer / Product", w: 1.5 }, { label: "Drawing / Data Identifier", w: 1.5 }] },
+        { type: "attachments", heading: "Included Documents", req: "LIST ALL", fields: [{ label: "File / drawing / data sheet 1", w: 1 }, { label: "File / drawing / data sheet 2", w: 1 }, { label: "File / drawing / data sheet 3", w: 1 }] },
+        { type: "approval", heading: "Review Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] }
+      ];
+      return form;
     }
     if (id === "package" || id === "proposal" || id === "safety-package") {
       const pkg = blankPackage();

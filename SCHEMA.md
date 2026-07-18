@@ -43,6 +43,10 @@ Section types (one per section object):
 - `text`: instruction or explanatory copy displayed inside the section.
 - `row`: `[ {section}, {section} ]` — place two sections side by side.
 
+A form section may also be any document block listed below by including its `type`.
+This is how forms such as RFIs and submittals combine write-in sections with narrative,
+tables, attachment references, and formal review decisions.
+
 ---
 
 ## Document
@@ -88,9 +92,12 @@ Block types (`type` field):
 - `checks`: a form-style choice block inside a document.
 - `signature`: a signature-field block.
 - `ack`: acknowledgment block with `fields` and `sign` (same shape as a form).
+- `attachments`: `heading`, optional `req`, and `fields` used to list files, drawings, or references.
+- `approval`: `heading`, `checks`, optional `single` and `cols`, plus optional `fields` and `sign` for disposition, comments, and reviewer sign-off.
 - `pagebreak`: forces the following content onto a new printed page.
 
-`toc: true` auto-builds the contents page from every numbered `prose` block and `ack`.
+`toc: true` auto-builds the contents page from numbered `prose`, `fields`, `checks`,
+`signature`, `ack`, `attachments`, and `approval` blocks.
 
 ---
 

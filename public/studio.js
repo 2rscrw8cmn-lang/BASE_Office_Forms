@@ -174,6 +174,10 @@
     return `<div class="card-head"><span class="tag">${esc(type)}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}">×</button></div>`;
   }
 
+  function editorCard(type, index, noun, title, body) {
+    return `<details class="card editor-card" open><summary class="editor-card-summary"><span class="tag">${esc(type)}</span><span class="editor-card-title">${esc(title || "Untitled block")}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}" title="Move up">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}" title="Move down">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button><span class="collapse-indicator" aria-hidden="true"></span></summary><div class="editor-card-body">${body}</div></details>`;
+  }
+
   function blockIcon(type) {
     const icons = {
       prose: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
@@ -187,6 +191,8 @@
       note: `<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/>`,
       signature: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`,
       ack: `<circle cx="9" cy="7" r="3"/><path d="M3.5 19c.5-4 2.5-6 5.5-6 2 0 3.5.8 4.5 2M15 18l2 2 4-5"/>`,
+      attachments: `<path d="M8 7v10a4 4 0 0 0 8 0V6a3 3 0 0 0-6 0v10a2 2 0 0 0 4 0V8"/>`,
+      approval: `<path d="M4 6h9M4 12h7M4 18h6M14 16l2.5 2.5L21 13"/>`,
       signatory: `<circle cx="12" cy="7" r="3"/><path d="M5 20c.5-5 3-7 7-7s6.5 2 7 7"/>`,
       pagebreak: `<path d="M4 7h16M4 17h16M8 12h8M12 9v6"/>`,
       text: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
@@ -203,28 +209,52 @@
     return `<h4 class="block-group-title">${esc(title)}</h4>${buttons.join("")}`;
   }
 
+  function blockPicker(attribute) {
+    return `<div class="addmenu">
+      ${pickerGroup("Write & organize", [
+        pickerButton(attribute, "prose", "Text section", "Narrative with an optional numbered heading."),
+        pickerButton(attribute, "list", "List", "Ordered steps or a simple bulleted list."),
+        pickerButton(attribute, "table", "Table", "Repeated records arranged in columns and rows."),
+        pickerButton(attribute, "keyvalue", "Key / value", "Compact label-and-value document facts.")
+      ])}
+      ${pickerGroup("Collect & verify", [
+        pickerButton(attribute, "fields", "Fields", "Labeled areas for written information."),
+        pickerButton(attribute, "checks", "Choices", "Single- or multiple-choice options."),
+        pickerButton(attribute, "checklist", "Checklist", "Tasks or compliance items with check boxes."),
+        pickerButton(attribute, "attachments", "Attachments", "Drawing, file, and reference tracking rows.")
+      ])}
+      ${pickerGroup("Approve & acknowledge", [
+        pickerButton(attribute, "signature", "Signature", "Signature, authorization, and date fields."),
+        pickerButton(attribute, "ack", "Acknowledgment", "A statement of understanding with signature."),
+        pickerButton(attribute, "approval", "Review decision", "Disposition, comments, and reviewer sign-off."),
+        pickerButton(attribute, "signatory", "Signatory", "The author or responsible person by name and role.")
+      ])}
+      ${pickerGroup("Emphasize & arrange", [
+        pickerButton(attribute, "note", "Note", "A short caution, reminder, or explanation."),
+        pickerButton(attribute, "callout", "Callout", "An important statement with emphasis."),
+        pickerButton(attribute, "pagebreak", "Page break", "Start the next block on a new printed page.")
+      ])}
+    </div>`;
+  }
+
   function formEditor() {
-    return `<div class="editor-hint">Form sections — write-in fields support adjustable height and multiline input.</div>` +
+    return `<div class="editor-hint">Form blocks — use any content block, then collapse finished sections to keep the builder easy to scan.</div>` +
       (def.sections || []).map((section, index) => {
+        if (section.type) return blockEditor(section, index, "sections", "section");
         const type = section.fields ? "fields" : section.checks ? "choices" : section.sign ? "signature" : "text";
         let body = `<div class="two">${textInput("Section name", `sections.${index}.name`, section.name)}${textInput("Requirement", `sections.${index}.req`, section.req)}</div>`;
         if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields");
         if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields");
         if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
         if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
-        return `<article class="card">${cardHead(type, index, "section")}${body}</article>`;
-      }).join("") + `<div class="addmenu">
-        ${pickerGroup("Collect information", [
-          pickerButton("data-add-section", "fields", "Fields", "Names, dates, project details, or written responses."),
-          pickerButton("data-add-section", "checks", "Choices", "One or more options selected by the recipient."),
-          pickerButton("data-add-section", "text", "Instructions", "Guidance or explanatory text within the form."),
-          pickerButton("data-add-section", "sign", "Signature", "Authorization, approval, and date fields.")
-        ])}
-      </div>`;
+        return editorCard(type, index, "section", section.name || "Untitled section", body);
+      }).join("") + blockPicker("data-add-form-block");
   }
 
-  function blockEditor(block, index) {
-    const base = `blocks.${index}`;
+  function blockEditor(block, index, collection, noun) {
+    collection = collection || "blocks";
+    noun = noun || "block";
+    const base = `${collection}.${index}`;
     let body = "";
     if (block.type === "prose") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Number section", `${base}.number`, block.number !== false)}</div>` + textArea("Paragraphs", `${base}.paras`, (block.paras || []).join("\n\n"), "paras", "Enter = line break. Blank line = new paragraph.");
     if (block.type === "callout") body = textArea("Callout", `${base}.text`, block.text) + textInput("Attribution", `${base}.attribution`, block.attribution);
@@ -234,43 +264,23 @@
     if (block.type === "list") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Numbered list", `${base}.ordered`, Boolean(block.ordered))}</div>` + textArea("Items — one per line", `${base}.items`, (block.items || []).join("\n"), "lines");
     if (block.type === "checklist") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Checklist items", `${base}.items`, (block.items || []).join("\n"), "lines");
     if (block.type === "keyvalue") body = textArea("Rows — Label | Value", `${base}.items`, (block.items || []).map(row => row.join(" | ")).join("\n"), "rows");
-    if (["fields", "signature", "ack"].includes(block.type)) {
+    if (["fields", "signature", "ack", "attachments"].includes(block.type)) {
       body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>`;
       if (block.type === "ack") body += textArea("Acknowledgment text", `${base}.intro`, block.intro);
-      body += fieldRows(`${base}.fields`, block.fields || [], block.type === "signature" ? "Signature fields" : "Fields");
+      body += fieldRows(`${base}.fields`, block.fields || [], block.type === "signature" ? "Signature fields" : block.type === "attachments" ? "Attachment / reference rows" : "Fields");
       if (block.type === "ack") body += fieldRows(`${base}.sign`, block.sign || [], "Signature fields");
     }
     if (block.type === "checks") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, Boolean(block.single))}${textInput("Columns", `${base}.cols`, block.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
+    if (block.type === "approval") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>` + textArea("Decision options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, block.single !== false)}${textInput("Columns", `${base}.cols`, block.cols || 2, { type: "number", valueType: "number", min: 1 })}</div>` + fieldRows(`${base}.fields`, block.fields || [], "Review / response fields") + fieldRows(`${base}.sign`, block.sign || [], "Reviewer sign-off");
     if (block.type === "pagebreak") body = `<p class="micro">Forces the following content onto a new printed page.</p>`;
-    return `<article class="card">${cardHead(block.type, index, "block")}${body}</article>`;
+    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, pagebreak: "Page break" };
+    return editorCard(block.type, index, noun, titles[block.type] || "Untitled block", body);
   }
 
   function documentEditor() {
-    return `<div class="editor-hint">Document blocks — combine narrative, forms, tables, checklists, signatures, and page breaks.</div>` +
-      (def.blocks || []).map(blockEditor).join("") +
-      `<div class="addmenu">
-        ${pickerGroup("Write & organize", [
-          pickerButton("data-add-block", "prose", "Text section", "Heading with one or more narrative paragraphs."),
-          pickerButton("data-add-block", "list", "List", "Ordered steps or a simple bulleted list."),
-          pickerButton("data-add-block", "table", "Table", "Repeated records organized into columns and rows."),
-          pickerButton("data-add-block", "keyvalue", "Key / value", "Compact label-and-value pairs for document facts.")
-        ])}
-        ${pickerGroup("Collect & verify", [
-          pickerButton("data-add-block", "fields", "Fields", "Structured written information in labeled areas."),
-          pickerButton("data-add-block", "checks", "Choices", "Selectable options for a reader or respondent."),
-          pickerButton("data-add-block", "checklist", "Checklist", "A task or compliance list with check boxes.")
-        ])}
-        ${pickerGroup("Approve & acknowledge", [
-          pickerButton("data-add-block", "signature", "Signature", "Signature, approval, and date fields."),
-          pickerButton("data-add-block", "ack", "Acknowledgment", "A statement of understanding with signature."),
-          pickerButton("data-add-block", "signatory", "Signatory", "The author or responsible person by name and role.")
-        ])}
-        ${pickerGroup("Emphasize & arrange", [
-          pickerButton("data-add-block", "note", "Note", "A short caution, reminder, or explanation."),
-          pickerButton("data-add-block", "callout", "Callout", "A quotation or important statement with emphasis."),
-          pickerButton("data-add-block", "pagebreak", "Page break", "Start the next block on a new printed page.")
-        ])}
-      </div>`;
+    return `<div class="editor-hint">Document blocks — collapse finished sections to keep long documents easy to scan.</div>` +
+      (def.blocks || []).map((block, index) => blockEditor(block, index)).join("") +
+      blockPicker("data-add-block");
   }
 
   function packageEditor() {
@@ -329,7 +339,7 @@
     def.sections.push(templates[type]); renderAll();
   }
 
-  function addBlock(type) {
+  function newBlock(type) {
     const templates = {
       prose: { type, heading: "New Section", paras: ["Write here."] }, fields: { type, heading: "Information", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46 }] },
       checks: { type, heading: "Options", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"] }, checklist: { type, heading: "Checklist", items: ["Item one", "Item two"] },
@@ -337,9 +347,19 @@
       keyvalue: { type, items: [["Label", "Value"], ["Label", "Value"]] }, callout: { type, text: "Important callout." }, note: { type, title: "Note", text: "Important note." },
       signature: { type, heading: "Authorization", req: "REQUIRED", fields: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
       ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46 }], sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
+      attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46 }, { label: "Attachment / drawing / reference 2", w: 1, height: 46 }] },
+      approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments", w: 1, height: 78, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
       signatory: { type, name: "Name", role: "Title" }, pagebreak: { type }
     };
-    def.blocks.push(templates[type]); renderAll();
+    return BASE.clone(templates[type] || templates.prose);
+  }
+
+  function addBlock(type) {
+    def.blocks.push(newBlock(type)); renderAll();
+  }
+
+  function addFormBlock(type) {
+    def.sections.push(newBlock(type)); renderAll();
   }
 
   function move(array, index, delta) {
@@ -498,7 +518,9 @@
   });
   $("#ed").addEventListener("click", event => {
     const button = event.target.closest("button"); if (!button) return;
+    if (button.closest("summary")) event.preventDefault();
     if (button.dataset.addSection) return addSection(button.dataset.addSection);
+    if (button.dataset.addFormBlock) return addFormBlock(button.dataset.addFormBlock);
     if (button.dataset.addBlock) return addBlock(button.dataset.addBlock);
     const action = button.dataset.action;
     if (action === "add-field") { getPath(def, button.dataset.base).push({ label: "New field", w: 1, height: 46 }); return renderAll(); }

@@ -571,6 +571,10 @@ p { margin: 0; text-wrap: pretty; }
 .list-block li { font: 400 12px/1.55 var(--sans); margin: 4px 0; }
 .checklist-block { margin: 18px 0; border: 1px solid var(--field); padding: 12px 14px; }
 .checkline { display: flex; align-items: flex-start; gap: 9px; font: 400 12px/1.45 var(--sans); padding: 5px 0; }
+.checkline input { position: absolute; opacity: 0; width: 0; height: 0; }
+.checkline input:checked + .box { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 2px #fff; }
+.checkline input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.checkline:has(input) { cursor: pointer; }
 .checkline .box { width: 13px; height: 13px; border: 1.5px solid var(--ink); flex: none; margin-top: 2px; }
 .keyvalue {
   display: grid; grid-template-columns: minmax(85px, auto) 1fr; gap: 0;
