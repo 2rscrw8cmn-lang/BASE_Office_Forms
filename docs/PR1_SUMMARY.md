@@ -29,7 +29,8 @@ Not implemented:
 | File | Purpose |
 |---|---|
 | `.dev.vars.example` | Records that PR 1 has no required local environment variables or secrets. |
-| `.github/workflows/ci.yml` | Runs install, formatting, type check, lint, tests, build, dependency audit, and secret scan. |
+| `.github/workflows/ci.yml` | Runs install, formatting, type check, lint, tests, static and Pages Functions builds, dependency audit, and secret scan. |
+| `.node-version` | Pins Node.js 22.16.0 for Cloudflare Pages and compatible local version managers. |
 | `README.md` | Links the architecture package and the one-command local validation guide. |
 | `SCHEMA.md` | Points human-readable renderer documentation to the versioned JSON Schema and error paths. |
 | `docs/API_CONTRACTS.md` | Makes `/api/v2` authoritative for new platform routes while preserving legacy paths. |
@@ -42,7 +43,7 @@ Not implemented:
 | `eslint.config.mjs` | Adds strict type-aware TypeScript linting and floating-Promise enforcement without reformatting legacy browser JavaScript. |
 | `functions/api/[[path]].ts` | Validates renderer definitions before legacy shared-library create/update operations and returns structured validation issues. |
 | `functions/api/v2/[[path]].ts` | Adds the Pages Function entrypoint for new `/api/v2` routes. |
-| `package.json` | Adds the unified validation, test, lint, format, build, and security commands and their dependencies. |
+| `package.json` | Adds the unified validation, test, lint, format, build, Functions build, and security commands and their dependencies. |
 | `package-lock.json` | Locks the new development and JSON Schema validation dependencies. |
 | `schemas/renderer-definition.v1.schema.json` | Defines the machine-readable form, document, package, section, block, field, and appearance contract. |
 | `scripts/scan-secrets.mjs` | Performs a high-signal committed-secret scan for local and CI gates. |

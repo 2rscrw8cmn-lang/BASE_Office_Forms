@@ -61,7 +61,8 @@ load the `{field: value}` JSON it returns, and the form renders completed.
 This repository is configured as a Cloudflare Pages project with Pages Functions and a
 D1 shared library. The `public/` directory contains the interface, `functions/` contains
 the library API, and `migrations/` contains the controlled database schema. A new D1
-database bootstraps its base schema on the first API request.
+database bootstraps its base schema on the first API request. The root `.node-version`
+pins Node.js 22 for Cloudflare Pages and local version managers.
 
 ```bash
 npm install

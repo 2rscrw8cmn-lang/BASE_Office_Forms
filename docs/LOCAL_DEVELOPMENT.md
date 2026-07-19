@@ -6,6 +6,9 @@
 - npm
 - Git
 
+The root `.node-version` pins the Cloudflare Pages build and compatible local version
+managers to Node.js 22.16.0.
+
 Cloudflare login is not required for local development or validation. It is required
 only for remote migrations and deployment.
 
@@ -57,7 +60,12 @@ npm test
 npm run test:unit
 npm run test:integration
 npm run build
+npm run functions:build
 ```
+
+`npm run build` validates the static Pages output. Cloudflare compiles the root
+`functions/` directory during Git deployments; `npm run functions:build` performs the
+same contract check explicitly for local development and CI.
 
 Tests never use the configured remote D1 database. The Workers test pool supplies a
 local isolated D1 binding and applies `migrations/` through the helpers in

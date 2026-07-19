@@ -7,11 +7,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build:assets && npm run functions:build",
+    "build": "npm run build:assets",
     "build:assets": "node scripts/verify-build.mjs",
     "dev": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public --project-name base-office-forms",
-    "deploy:dry-run": "npm run build",
+    "deploy:dry-run": "npm run build && npm run functions:build",
     "types": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit",
     "lint": "eslint 'functions/**/*.ts' 'src/**/*.ts' 'tests/**/*.ts' '*.config.ts' '*.config.mts'",
@@ -25,7 +25,7 @@
     "functions:build": "wrangler pages functions build functions --outdir .wrangler/functions-build",
     "db:migrate:local": "wrangler d1 migrations apply base-office-forms-library --local",
     "db:migrate:remote": "wrangler d1 migrations apply base-office-forms-library --remote",
-    "check": "npm run format:check && npm run typecheck && npm run lint && npm test && npm run build && npm run security:dependencies && npm run security:secrets"
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm test && npm run build && npm run functions:build && npm run security:dependencies && npm run security:secrets"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.6",
