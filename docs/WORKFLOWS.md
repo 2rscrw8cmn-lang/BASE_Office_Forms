@@ -1,0 +1,429 @@
+# Workflow Specifications
+
+## 1. General workflow rules
+
+- Transitions are server actions, not arbitrary status edits.
+- Every transition validates permission and current state.
+- Every transition writes an activity event.
+- Issue transitions are idempotent.
+- Official numbers are assigned only during issue/submit transitions.
+- Issued revisions are immutable.
+- Overdue is a calculated condition, not a manually selected status.
+- Workflow status and review disposition are separate.
+
+## 2. Project lifecycle
+
+```text
+planning → active → closeout → archived
+```
+
+Additional state:
+
+- suspended
+
+Rules:
+
+- Archived projects are read-only except for authorized restoration.
+- Projects with active records cannot be hard deleted.
+- Project routing and identifiers are versioned through activity events.
+
+## 3. Template lifecycle
+
+```text
+draft → published → retired
+```
+
+Rules:
+
+- Draft template versions are editable.
+- Publishing freezes the version.
+- Editing a published template creates a new draft version.
+- Retiring prevents new records from using the template.
+- Existing records continue using their original template version.
+
+## 4. Controlled-document lifecycle
+
+```text
+draft → in_review → approved → published → superseded
+                                      ↘ retired
+```
+
+### Publish transition
+
+Guard:
+
+- required approver recorded
+- revision number unique
+- effective date present
+- render succeeds
+- artifact checksum created
+
+Effects:
+
+- freeze revision
+- generate artifact
+- mark prior active revision superseded
+- set current revision
+- create activity event
+- optionally create acknowledgment assignments
+
+## 5. RFI workflow
+
+### 5.1 States
+
+```text
+draft
+→ ready_to_issue
+→ open
+→ response_received
+→ closed
+```
+
+Additional states:
+
+- returned_for_clarification
+- void
+
+Calculated flags:
+
+- response_overdue
+- due_soon
+
+### 5.2 Create draft
+
+Required:
+
+- project
+- title
+- question
+
+Optional:
+
+- contractor suggestion
+- references
+- attachments
+- requested response date
+- draft assignee
+
+No official number is assigned.
+
+### 5.3 Ready to issue
+
+Guard:
+
+- project active
+- title and question complete
+- recipients resolved or explicitly overridden
+- attachments finalized
+- user has issue permission
+
+### 5.4 Issue
+
+Guard:
+
+- current state is `ready_to_issue` or authorized `draft`
+- idempotency key supplied
+- recipient routing valid
+- render succeeds
+
+Atomic effects:
+
+1. Assign next project RFI sequence if unnumbered.
+2. Set display number.
+3. Compile render payload.
+4. Create issued revision.
+5. Generate or queue issued PDF artifact.
+6. Record recipient snapshot.
+7. Set `issued_at`.
+8. Set state `open`.
+9. Write activity event.
+10. Optionally create delivery/share.
+
+Failure before completion must not consume a number unless the number and issue record were durably committed. If a number is consumed and later delivery fails, retain the number and show delivery failure.
+
+### 5.5 Record response
+
+Guard:
+
+- state is `open` or `returned_for_clarification`
+- response text or response file present
+- responder identity recorded
+
+Effects:
+
+- store response
+- attach returned files with role
+- set response timestamp
+- set state `response_received`
+- calculate cost/schedule impact prompt
+- activity event
+
+### 5.6 Return for clarification
+
+Moves:
+
+```text
+response_received → returned_for_clarification
+```
+
+Requires clarification note and responsible party.
+
+### 5.7 Close
+
+Guard:
+
+- response exists
+- cost and schedule impact have explicit values: none, unknown, or quantified
+- user has close permission
+
+Effects:
+
+- set closed timestamp
+- state `closed`
+- generate final closed artifact if configured
+- activity event
+
+### 5.8 Reopen
+
+Only project manager or document control admin.
+
+Moves:
+
+```text
+closed → open
+```
+
+Requires reason. Prior closure remains in activity history.
+
+### 5.9 Void
+
+Allowed from draft, ready, open, or response received.
+
+- Unissued draft: no number consumed.
+- Issued RFI: number remains and record displays Void.
+- Reason required.
+
+## 6. Submittal workflow
+
+## 6.1 Stable item lifecycle
+
+```text
+expected
+→ draft
+→ ready_to_submit
+→ under_review
+→ returned
+→ closed
+```
+
+Additional states:
+
+- void
+
+The submittal record remains stable across revisions.
+
+## 6.2 Review disposition
+
+Values:
+
+- approved
+- approved_as_noted
+- revise_and_resubmit
+- rejected
+- no_action_required
+
+`under_review` is not a disposition.
+
+## 6.3 Expected
+
+An expected submittal may be created from:
+
+- project specification planning
+- buyout item
+- vendor requirement
+- manual entry
+- AI extraction reviewed by a user
+
+It may exist without files or submission dates.
+
+## 6.4 Create first revision
+
+Creates revision `00`.
+
+Required before submit:
+
+- specification section
+- description
+- vendor/submitter
+- source files
+- reviewer/routing
+- stable item number
+
+## 6.5 Submit revision
+
+Guard:
+
+- current revision is draft or ready
+- source files finalized
+- cover data complete
+- recipients resolved
+- no other revision under review
+
+Effects:
+
+1. Freeze revision input files.
+2. Compile cover sheet.
+3. Generate combined issued package.
+4. Record delivery recipients.
+5. Set submitted timestamp.
+6. Set record state `under_review`.
+7. Write activity event.
+
+## 6.6 Return review
+
+Guard:
+
+- state is `under_review`
+- disposition selected
+- returned file or documented response present
+
+Effects:
+
+- attach returned review
+- set returned timestamp
+- set disposition
+- state `returned`
+- write activity event
+
+## 6.7 Disposition outcomes
+
+### Approved / Approved as noted / No action required
+
+User distributes the returned package to the responsible vendor/team.
+
+Then:
+
+```text
+returned → closed
+```
+
+### Revise and resubmit / Rejected
+
+Create the next revision:
+
+```text
+revision 00 returned
+→ revision 01 draft
+→ ready_to_submit
+```
+
+The prior revision remains immutable.
+
+The stable record remains open.
+
+## 6.8 Resubmission
+
+- Increment revision.
+- Copy stable metadata.
+- Do not automatically copy prior source files.
+- Allow selected files to be carried forward explicitly.
+- Show prior review comments beside the draft.
+- Record revision relationship.
+
+## 6.9 Delivery to vendor
+
+Replacing the current “Sent” checkbox:
+
+- delivery event
+- recipients
+- timestamp
+- artifact
+- status
+- sender
+
+Closing an approved submittal may require a successful or manually recorded distribution event based on organization policy.
+
+## 7. Share-link workflow
+
+```text
+create → active → expired
+                ↘ revoked
+```
+
+Create guard:
+
+- user has share permission
+- object is shareable
+- scope is explicit
+- expiration within policy
+
+Effects:
+
+- generate random token
+- store only token hash
+- return plaintext token once
+- activity event
+
+Access:
+
+- validate hash
+- validate scope
+- validate expiration/revocation/use limit
+- log access
+- serve only authorized object
+
+## 8. Log workflow
+
+Working log:
+
+- query current records
+- apply filters
+- sort
+- paginate
+- save optional named view
+
+Export:
+
+1. Freeze query definition.
+2. Query records.
+3. Generate PDF/CSV/XLSX.
+4. Store artifact.
+5. Record generated-by and timestamp.
+6. Return download/share action.
+
+## 9. Delivery workflow
+
+A delivery may use:
+
+- secure link
+- email
+- manual external delivery record
+
+The system records a delivery even when the actual channel is external.
+
+Status:
+
+- draft
+- queued
+- sent
+- delivered
+- failed
+- manually_recorded
+
+Retries create delivery attempts, not duplicate business events.
+
+## 10. Activity timeline display
+
+Every record page displays a chronological timeline with:
+
+- state changes
+- revisions
+- files
+- responses
+- deliveries
+- shares
+- downloads where policy allows
+- exports
+- assignments
+
+Internal technical events are hidden from normal users but retained for support.
