@@ -54,6 +54,30 @@ describe("renderer definition schema", () => {
     );
   });
 
+  it("rejects legacy field tuples with more than five items", () => {
+    const result = validateRendererDefinition({
+      kind: "form",
+      title: "Invalid form",
+      sections: [
+        {
+          name: "Details",
+          fields: [["Project", 2, "project", 1, "text", "unexpected"]],
+        },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "/sections/0/fields/0",
+          keyword: "additionalItems",
+        }),
+      ]),
+    );
+  });
+
   it("rejects unsupported blocks instead of silently dropping them", () => {
     const result = validateRendererDefinition({
       kind: "document",

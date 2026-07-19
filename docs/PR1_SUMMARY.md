@@ -45,13 +45,13 @@ Not implemented:
 | `functions/api/v2/[[path]].ts` | Adds the Pages Function entrypoint for new `/api/v2` routes. |
 | `package.json` | Adds the unified validation, test, lint, format, build, Functions build, and security commands and their dependencies. |
 | `package-lock.json` | Locks the new development and JSON Schema validation dependencies. |
-| `schemas/renderer-definition.v1.schema.json` | Defines the machine-readable form, document, package, section, block, field, and appearance contract. |
+| `schemas/renderer-definition.v1.schema.json` | Defines the Draft-07 machine-readable form, document, package, section, block, field, and appearance contract. |
 | `scripts/scan-secrets.mjs` | Performs a high-signal committed-secret scan for local and CI gates. |
 | `scripts/verify-build.mjs` | Verifies required assets and parses the renderer schema before the Functions build. |
 | `src/auth/authentication-adapter.ts` | Defines provider-neutral authentication, session, role, and project-permission contracts only. |
 | `src/http/api-response.ts` | Adds standard v2 success/error envelopes and generated request IDs. |
 | `src/http/v2/router.ts` | Routes v2 health requests and returns stable 404/405 errors for unimplemented routes. |
-| `src/rendering/renderer-definition.ts` | Compiles the JSON Schema with Ajv and maps failures to clear JSON-pointer issues. |
+| `src/rendering/renderer-definition.ts` | Compiles the JSON Schema from Ajv's Cloudflare-bundle-safe package entrypoint and maps failures to clear JSON-pointer issues. |
 | `tests/helpers/api.ts` | Provides reusable request and Pages Function invocation helpers. |
 | `tests/helpers/d1.ts` | Provides isolated D1 access, repeatable migrations, cleanup, and fixture seeding. |
 | `tests/helpers/setup-d1.ts` | Applies repository migrations to each Workers test database. |
@@ -73,7 +73,7 @@ Not implemented:
 - Prettier check;
 - generated Worker types and `tsc --noEmit`;
 - ESLint;
-- 8 unit tests;
+- 9 unit tests;
 - 7 Workers/D1 integration tests;
 - Pages Functions build;
 - npm dependency audit;

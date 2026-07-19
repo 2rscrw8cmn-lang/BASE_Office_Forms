@@ -1,4 +1,4 @@
-import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
+import Ajv, { type ErrorObject } from "ajv";
 
 import rendererDefinitionSchema from "../../schemas/renderer-definition.v1.schema.json";
 
@@ -20,7 +20,7 @@ export type RendererDefinitionValidationResult =
   | { valid: true; definition: RendererDefinition; errors: [] }
   | { valid: false; errors: RendererDefinitionValidationIssue[] };
 
-const ajv = new Ajv2020({
+const ajv = new Ajv({
   allErrors: true,
   strict: true,
   // Required keys are intentionally composed through allOf/if/then branches.
