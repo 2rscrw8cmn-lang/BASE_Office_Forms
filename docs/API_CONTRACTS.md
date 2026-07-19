@@ -1,8 +1,11 @@
 # API Contracts
 
 **Status:** Architecture v1.0 — binding contract  
-**Base path:** `/api/v1`  
+**Base path:** `/api/v2` for all new document-control platform routes
 **Format:** JSON unless an endpoint explicitly returns or accepts binary content
+
+Existing legacy routes retain their current paths and behavior. They are not moved
+under `/api/v2` by this contract.
 
 ## 1. Contract principles
 

@@ -1,0 +1,5 @@
+# PR 1 requires no runtime environment variables.
+#
+# The local D1 binding is declared in wrangler.jsonc and is emulated by Wrangler.
+# Copy this file to .dev.vars only when a future adapter introduces a documented
+# local secret. Never commit .dev.vars.

@@ -1,3 +1,8 @@
+import {
+  RendererDefinitionValidationError,
+  requireValidRendererDefinition,
+} from "../../src/rendering/renderer-definition";
+
 type FolderRow = {
   id: string;
   name: string;
@@ -95,13 +100,11 @@ function optionalText(value: unknown, max = 180): string {
 }
 
 function definitionFrom(body: Record<string, unknown>): { definition: Record<string, unknown>; encoded: string } {
-  const definition = body.definition;
-  if (!definition || typeof definition !== "object" || Array.isArray(definition)) throw new Error("A document definition is required.");
-  const kind = (definition as Record<string, unknown>).kind;
-  if (!new Set(["form", "document", "package"]).has(String(kind))) throw new Error("Document kind is invalid.");
+  if (body.definition === undefined) throw new Error("A document definition is required.");
+  const definition = requireValidRendererDefinition(body.definition);
   const encoded = JSON.stringify(definition);
   if (new TextEncoder().encode(encoded).byteLength > 800_000) throw new Error("Document is too large for the shared library.");
-  return { definition: definition as Record<string, unknown>, encoded };
+  return { definition, encoded };
 }
 
 function token(): string {
@@ -254,6 +257,9 @@ export const onRequest: PagesFunction<Env, "path"> = async context => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     console.error(JSON.stringify({ message: "library request failed", error: message, path: new URL(context.request.url).pathname }));
+    if (error instanceof RendererDefinitionValidationError) {
+      return json({ error: "Renderer definition is invalid.", validationErrors: error.issues }, 400);
+    }
     const status = /required|invalid|too large|too long/i.test(message) ? 400 : 500;
     return json({ error: status === 500 ? "The shared library could not complete this request." : message }, status);
   }

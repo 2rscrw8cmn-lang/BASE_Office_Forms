@@ -43,7 +43,7 @@ Do not deploy code that requires a schema migration before the migration is avai
 
 ## 4. Smoke tests
 
-- `/api/v1/health` reports healthy dependencies.
+- `/api/v2/health` reports healthy dependencies.
 - authenticated `/me` works.
 - project directory loads.
 - OHPA Conway opens.

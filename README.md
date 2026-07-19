@@ -35,6 +35,11 @@ and overflowing sections are moved onto continuation pages before export.
 definition. They are intended for recovery, transfer, and AI workflows; normal team use
 should go through **Save shared** and **Shared library**.
 
+## Product architecture and roadmap
+
+The implementation source of truth for projects, RFIs, submittals, controlled documents,
+files, sharing, security, AI, and rollout is [`docs/README.md`](docs/README.md).
+
 Try it now: New document isn't blank if you **Load** `public/safety-manual.json`.
 
 ## Create — by describing it (Claude / Claude Code)
@@ -66,6 +71,9 @@ npm run dev
 npm run deploy:dry-run
 npm run deploy
 ```
+
+See [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) for the environment
+contract and run `npm run check` for the complete local and CI validation gate.
 
 `npm run deploy` publishes the site and Pages Functions to the `base-office-forms` Pages project with Wrangler. It will ask you to log in if
 the current machine is not authenticated with Cloudflare. The site is also still
