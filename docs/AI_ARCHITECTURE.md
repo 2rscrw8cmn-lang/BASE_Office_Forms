@@ -1,5 +1,9 @@
 # AI Architecture
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Purpose
 
 AI is a core product capability, but it is not the record authority.

@@ -1,5 +1,9 @@
 # Workflow Specifications
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. General workflow rules
 
 - Transitions are server actions, not arbitrary status edits.

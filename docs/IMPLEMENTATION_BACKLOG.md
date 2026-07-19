@@ -1,5 +1,9 @@
 # Implementation Backlog
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 This backlog is organized as issue-ready epics. IDs are stable planning references, not GitHub issue numbers.
 
 ## Definition of done

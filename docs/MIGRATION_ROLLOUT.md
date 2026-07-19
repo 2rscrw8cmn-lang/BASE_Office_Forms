@@ -1,5 +1,9 @@
 # Migration and Rollout
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Goals
 
 - Preserve the current shared library.

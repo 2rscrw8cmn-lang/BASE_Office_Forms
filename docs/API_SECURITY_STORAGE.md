@@ -1,5 +1,9 @@
 # API, Security, and Storage
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. API versioning
 
 Keep the existing shared-library API operational.

@@ -1,5 +1,9 @@
 # Architecture Decisions
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 These decisions are binding unless replaced by a later recorded decision.
 
 ## ADR-001 — Preserve the renderer

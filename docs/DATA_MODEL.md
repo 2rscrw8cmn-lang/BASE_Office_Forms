@@ -1,5 +1,9 @@
 # Data Model
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Strategy
 
 Use Cloudflare D1 for relational data and metadata. Use R2 for files and generated artifacts.

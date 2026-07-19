@@ -1,5 +1,9 @@
 # Coder Handoff
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Mission
 
 Implement the architecture in this directory without rewriting the current renderer or breaking the shared library.

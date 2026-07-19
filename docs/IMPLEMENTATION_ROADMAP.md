@@ -1,5 +1,9 @@
 # Implementation Roadmap
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Delivery strategy
 
 Build vertical slices that can replace a real workflow.

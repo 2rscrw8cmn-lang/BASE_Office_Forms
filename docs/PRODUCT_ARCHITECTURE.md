@@ -1,5 +1,9 @@
 # Product Architecture
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Executive direction
 
 BASE Forms & Documents Kit will become a project-centered document management and control platform.

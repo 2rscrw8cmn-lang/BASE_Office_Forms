@@ -1,5 +1,9 @@
 # Domain Model
 
+**Status:** Architecture v1.0 — implementation source of truth  
+**Version date:** 2026-07-19
+
+
 ## 1. Purpose
 
 This document defines the nouns used by the product. Code, database names, API resources, and interface labels should use these meanings consistently.
