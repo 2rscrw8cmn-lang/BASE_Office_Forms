@@ -18,7 +18,18 @@ export interface AppSession {
 }
 
 export type AuthenticationResult =
-  { authenticated: true; session: AppSession } | { authenticated: false };
+  | { authenticated: true; session: AppSession }
+  | {
+      authenticated: false;
+      reason:
+        | "MISSING_CREDENTIALS"
+        | "INVALID_CREDENTIALS"
+        | "AUTH_PROVIDER_UNAVAILABLE"
+        | "USER_DISABLED"
+        | "MEMBERSHIP_REQUIRED"
+        | "MEMBERSHIP_INACTIVE"
+        | "ORGANIZATION_SELECTION_REQUIRED";
+    };
 
 /**
  * Provider-neutral authentication boundary for platform routes.
