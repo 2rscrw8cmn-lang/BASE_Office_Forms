@@ -41,19 +41,22 @@ export class D1RfiResponsesRepository {
     return result.results.map(mapResponse);
   }
 
-  async createForIssuedRfi(
+  createResponse(
     organizationId: string,
     rfiId: string,
     input: RfiResponseWriteInput,
-  ): Promise<RfiResponse | null> {
-    const response: RfiResponse = {
+  ): RfiResponse {
+    return {
       id: crypto.randomUUID(),
       organizationId,
       rfiId,
       ...input,
       createdAt: new Date().toISOString(),
     };
-    const result = await this.database
+  }
+
+  createForIssuedRfiStatement(response: RfiResponse): D1PreparedStatement {
+    return this.database
       .prepare(
         `INSERT INTO rfi_responses
           (id, organization_id, rfi_id, response, responded_by, created_at)
@@ -65,15 +68,13 @@ export class D1RfiResponsesRepository {
       )
       .bind(
         response.id,
-        organizationId,
-        rfiId,
+        response.organizationId,
+        response.rfiId,
         response.response,
         response.respondedBy,
         response.createdAt,
-        rfiId,
-        organizationId,
-      )
-      .run();
-    return result.meta.changes === 1 ? response : null;
+        response.rfiId,
+        response.organizationId,
+      );
   }
 }

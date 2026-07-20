@@ -42,6 +42,7 @@ export function createV2RouteDependencies(
     new D1ProjectMembershipsRepository(environment.DB),
   );
   const rfiSequences = new D1RfiNumberSequencesRepository(environment.DB);
+  const rfiResponses = new D1RfiResponsesRepository(environment.DB);
   const sessions = new SessionResolutionService(users, memberships);
   const accessConfiguration = {
     teamDomain: environment.CF_ACCESS_TEAM_DOMAIN,
@@ -65,8 +66,8 @@ export function createV2RouteDependencies(
     ),
     rfis: new RfiService(
       projects,
-      new D1RfiRecordsRepository(environment.DB, rfiSequences),
-      new D1RfiResponsesRepository(environment.DB),
+      new D1RfiRecordsRepository(environment.DB, rfiSequences, rfiResponses),
+      rfiResponses,
     ),
   };
 }

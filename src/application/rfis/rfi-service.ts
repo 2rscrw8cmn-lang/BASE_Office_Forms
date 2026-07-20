@@ -1,8 +1,5 @@
 import type { AppSession } from "../../auth/authentication-adapter";
-import {
-  RfiIllegalTransitionError,
-  RfiNotFoundError,
-} from "../../domain/rfis/errors";
+import { RfiNotFoundError } from "../../domain/rfis/errors";
 import {
   assertCanUpdateDraft,
   closeStatus,
@@ -126,30 +123,21 @@ export class RfiService {
     await this.projects.requireRfiManagement(actor, projectId, "rfis:respond");
     const rfi = await this.find(actor, projectId, rfiId);
     respondStatus(rfi.status);
-    const response = await this.responses.createForIssuedRfi(
-      actor.organizationId,
-      rfi.id,
+    return this.records.respondWithActivity(
+      rfi,
       {
         response: input.response,
         respondedBy: input.respondedBy ?? actor.userId,
       },
-    );
-    if (!response) {
-      throw new RfiIllegalTransitionError(rfi.status, "be responded to");
-    }
-    const answered = await this.records.transitionWithActivity(
-      rfi,
-      "answered",
       {
         actorUserId: actor.userId,
         actorType: "user",
         objectType: "rfi",
         action: "rfi.responded",
-        metadata: { responseId: response.id },
+        metadata: {},
         correlationId: input.correlationId,
       },
     );
-    return { rfi: answered, response };
   }
 
   async close(

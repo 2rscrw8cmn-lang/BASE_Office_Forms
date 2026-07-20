@@ -69,6 +69,7 @@ function dependencies(): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
+  const responses = new D1RfiResponsesRepository(database);
   return {
     authenticationAdapter: new FixtureAuthenticationAdapter(),
     organizations: new OrganizationService(
@@ -81,8 +82,9 @@ function dependencies(): V2RouteDependencies {
       new D1RfiRecordsRepository(
         database,
         new D1RfiNumberSequencesRepository(database),
+        responses,
       ),
-      new D1RfiResponsesRepository(database),
+      responses,
     ),
   };
 }
@@ -327,6 +329,53 @@ describe("RFI foundation API", () => {
         "rfi.reopened",
       ]),
     );
+  });
+
+  it("rolls back a response and lifecycle transition when its activity event fails", async () => {
+    const project = await createProject("P-RFI-AUDIT");
+    const draft = await createDraft(project.id);
+    await issue(project.id, draft.id);
+    const database = testDatabase();
+    await database
+      .prepare(
+        `CREATE TRIGGER fail_rfi_responded_activity
+         BEFORE INSERT ON activity_events
+         WHEN NEW.action = 'rfi.responded'
+         BEGIN SELECT RAISE(ABORT, 'forced RFI audit failure'); END`,
+      )
+      .run();
+
+    try {
+      await expect(
+        invokeV2Api(
+          `/api/v2/projects/${project.id}/rfis/${draft.id}/respond`,
+          request("admin", "POST", { response: "This must roll back." }),
+          dependencies(),
+        ),
+      ).rejects.toThrow(/forced RFI audit failure/);
+
+      const rfi = await database
+        .prepare("SELECT status, answered_at FROM rfi_records WHERE id = ?")
+        .bind(draft.id)
+        .first<{ status: string; answered_at: string | null }>();
+      expect(rfi).toEqual({ status: "issued", answered_at: null });
+      const responses = await database
+        .prepare("SELECT COUNT(*) AS count FROM rfi_responses WHERE rfi_id = ?")
+        .bind(draft.id)
+        .first<{ count: number }>();
+      expect(responses?.count).toBe(0);
+      const auditEvents = await database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM activity_events WHERE object_id = ? AND action = 'rfi.responded'",
+        )
+        .bind(draft.id)
+        .first<{ count: number }>();
+      expect(auditEvents?.count).toBe(0);
+    } finally {
+      await database
+        .prepare("DROP TRIGGER IF EXISTS fail_rfi_responded_activity")
+        .run();
+    }
   });
 
   it("rejects responses and closure before their required prior transitions", async () => {
