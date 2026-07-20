@@ -263,6 +263,24 @@
     return renderForm(def, options || {});
   }
 
+  function bindTitle(container, definition) {
+    if (!container || !definition || definition.kind !== "form") return;
+    const ids = Array.isArray(definition.titleFrom) ? definition.titleFrom.filter(Boolean) : [];
+    if (!ids.length) return;
+    const heading = container.querySelector(".form-title");
+    if (!heading) return;
+    const fallback = definition.title || "";
+    const update = () => {
+      const parts = ids.map(id => {
+        const field = container.querySelector(`[name="${id}"]`);
+        return field ? field.value.trim() : "";
+      }).filter(Boolean);
+      heading.textContent = parts.length ? parts.join(" — ") : fallback;
+    };
+    ids.forEach(id => container.querySelectorAll(`[name="${id}"]`).forEach(field => field.addEventListener("input", update)));
+    update();
+  }
+
   function controls(prefix) {
     return {
       Revision: "1.0", Effective: today(), Classification: "Internal", "Doc. Control": `BASE-${prefix}`
@@ -351,5 +369,5 @@
     return blankDoc();
   }
 
-  root.BASE = { render, renderForm, renderDoc, renderPackage, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
+  root.BASE = { render, renderForm, renderDoc, renderPackage, updatePackageIndex, bindTitle, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
 })(window);

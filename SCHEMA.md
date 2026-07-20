@@ -41,6 +41,12 @@ Section types (one per section object):
 - `sign`: `[[label, width], …]` — signature / authorization boxes.
 - `row`: `[ {section}, {section} ]` — place two sections side by side.
 
+Top-level `"titleFrom": ["field_id", …]` makes the big title heading live: while the form
+is being filled (`public/form-generator.html`), it fills in from those write-in fields'
+values, joined with " — ", and falls back to `title` when they're empty. Field ids come
+from the field's `label`, lowercased and slugified (e.g. "Submittal Title" → `submittal_title`),
+unless you set one explicitly.
+
 ---
 
 ## Document

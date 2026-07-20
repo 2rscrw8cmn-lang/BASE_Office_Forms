@@ -39,6 +39,7 @@
       return;
     }
     document.getElementById("root").innerHTML = BASE.render(definition, { fill: true });
+    BASE.bindTitle(document.getElementById("root"), definition);
     document.getElementById("notice").textContent = `${definition.no || "Form"} — fields can be typed here or populated from an AI answer JSON file.`;
   }
   function prepared() { return BASE.prepareForm(definition); }
@@ -56,7 +57,7 @@
     const data = input.answers || input;
     prepared()._schema.forEach(field => {
       const value = data[field.id]; if (value == null) return;
-      if (field.type === "text") { const element = document.querySelector(`[name="${field.id}"]`); if (element) element.value = value; }
+      if (field.type === "text") { const element = document.querySelector(`[name="${field.id}"]`); if (element) { element.value = value; element.dispatchEvent(new Event("input", { bubbles: true })); } }
       else { const wanted = Array.isArray(value) ? value : [value]; document.querySelectorAll(`[name="${field.id}"]`).forEach(element => element.checked = wanted.includes(element.value)); }
     });
   }
