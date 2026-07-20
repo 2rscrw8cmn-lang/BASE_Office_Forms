@@ -445,7 +445,7 @@
     }
     if (id === "submittal") {
       const form = blankForm();
-      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", showHeader: false, showControl: false, showTag: false });
+      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", org: "", headerNote: "", showControl: false, showTag: false });
       form.control["Doc. Control"] = "BASE-SUB-001";
       form.sections = [
         { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Specification Section", w: 1.5 }, { label: "Revision", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Date Submitted", w: 1 }] },
