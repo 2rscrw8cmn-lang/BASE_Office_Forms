@@ -1,6 +1,6 @@
 # Current Application Structure
 
-**Status:** Issuance Foundation implementation inventory
+**Status:** Application Shell implementation inventory
 **Updated:** 2026-07-20
 
 ## Runtime shape
@@ -11,7 +11,10 @@ use a client framework or a server framework.
 
 ```text
 Browser
-├── public/index.html and public/home.js       shared-library home
+├── public/index.html and public/app-shell.js  authenticated workspace shell
+├── public/app-routing.js                      browser route definitions
+├── public/app-shell.css                       responsive shell styles
+├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
 ├── public/viewer.html                        public definition viewer
@@ -39,6 +42,143 @@ Storage
 
 The D1 binding also contains immutable `issuances` and `issuance_files`
 snapshots plus `project_issuance_sequences` for project-wide issue numbering.
+
+## Frontend architecture and design inventory
+
+The browser application remains framework-free static HTML, CSS, and JavaScript.
+`public/index.html` is the single entry point for new application routes and loads
+two browser-native ES modules: `app-routing.js` owns route matching and selected
+navigation state, while `app-shell.js` owns composition, history navigation,
+session/project requests, focus management, and mobile drawer behavior. No
+frontend runtime framework or build pipeline was added.
+
+The shell extends rather than replaces the existing `base.css` visual system:
+
+- **CSS and tokens:** `base.css` remains the source of `--ink`, `--accent`,
+  `--accent-dk`, `--mono`, `--field`, `--divider`, `--row`, `--page-bg`,
+  `--hover`, and `--paper`. `app-shell.css` adds semantic shell aliases and an
+  8/12/18/24/30 px spacing scale derived from existing usage.
+- **Typography:** Archivo remains the application and control face, JetBrains
+  Mono remains the metadata/code face, and Georgia is reserved for page and
+  section headings.
+- **Color:** the shell uses BASE maroon, ink, paper, and the existing warm-gray
+  direction. It does not add a separate application palette or gradients.
+- **Controls:** quiet white bordered controls, the existing maroon primary
+  treatment, 3-5 px radii, and the established subtle maroon focus ring continue.
+- **Cards and panels:** shell placeholders and Tools adapters are white panels
+  with thin warm-gray borders and minimal shadow/color decoration.
+- **Icons:** navigation uses one small inline SVG line-icon family with
+  `currentColor`, rounded lines, and decorative icons hidden from assistive
+  technology.
+- **Responsive behavior:** the existing shared 950 px and 620 px thresholds are
+  retained. Desktop has a 244 px persistent sidebar, tablet uses a 204 px compact
+  sidebar without removing labels, and phones replace it with a 64 px header and
+  off-canvas navigation. Studio's separate 1050 px and 760 px rules are unchanged.
+- **Previous navigation:** the legacy library used a sticky white top bar with a
+  logo, breadcrumbs, search, and account placeholder. The shell translates that
+  quiet hierarchy into the global sidebar and project header without changing
+  the Studio navigation.
+
+## Application shell and routes
+
+The shell provides one semantic main content region, a skip link, active global
+navigation, shared loading/error/not-found surfaces, and page-change focus plus
+announcement behavior. Browser history uses `pushState`, `replaceState`, and
+`popstate`; query strings and hashes are preserved when the root or project-root
+routes are normalized.
+
+New route handling covers:
+
+```text
+/ → /dashboard
+/dashboard
+/projects
+/tools
+/tools/forms
+/tools/library
+/tools/document-library                   compatibility alias
+/admin                                    organization administrators only
+/projects/:projectId → .../overview
+/projects/:projectId/overview
+/projects/:projectId/records
+/projects/:projectId/records/:recordId
+/projects/:projectId/records/:recordId/revisions/:revisionId
+/projects/:projectId/records/:recordId/revisions/:revisionId/issue
+/projects/:projectId/issuances
+/projects/:projectId/issuances/:issuanceId
+/projects/:projectId/issuances/:issuanceId/created
+/projects/:projectId/rfis
+/projects/:projectId/rfis/:rfiId
+/projects/:projectId/team
+```
+
+Unknown application routes render the shared not-found surface. API and static
+asset paths are never claimed by the client router. The obsolete top-level static
+`404.html` was removed so Cloudflare Pages applies its documented SPA fallback to
+`index.html` for direct navigation and refresh. File-based Pages Functions still
+take precedence for `/api/*`, so the legacy API and `/api/v2` remain independent.
+
+## Global and mobile navigation
+
+Desktop and tablet show persistent global navigation with Dashboard, Projects,
+Tools, Forms, and Document Library. The selected destination has text weight,
+border/edge treatment, and `aria-current`, so selection does not depend on color.
+
+At 620 px and below a compact BASE header opens an off-canvas drawer. Opening the
+drawer moves focus inside it, makes the main/sidebar inert, and prevents document
+scrolling. Tab and Shift+Tab cycle within the drawer. Escape, the close button,
+or the backdrop closes it and restores trigger focus; selecting an application
+link closes it and moves focus to the new page heading. Drawer animation respects
+`prefers-reduced-motion`.
+
+## Project shell and project tabs
+
+Every project route attempts the existing authenticated
+`GET /api/v2/projects/:projectId` request. While it is pending, the header shows
+only a factual project-ID loading context. A successful response supplies the
+real project number, name, and status. A 403 or 404 becomes the same generic
+**Project not found** surface; other failures use the shared retryable error state
+and include the API request ID when available. No project values are invented.
+
+Overview, Records, Issuances, RFIs, and Team are link-based project tabs.
+Record/revision/issue descendants keep Records selected; issuance detail and
+success descendants keep Issuances selected. Tabs remain sticky beneath the
+project header on desktop and become a horizontally scrollable navigation row on
+mobile, with the selected link scrolled into view after route changes.
+
+## Authentication and authorization-aware navigation
+
+Cloudflare Access and `GET /api/v2/session` remain authoritative. The shell uses
+the returned organization and membership role for account context. Administration
+is shown only for `org_admin`, the existing role with `members:manage`; document
+control administrators, project managers, contributors, viewers, unknown sessions,
+and unavailable sessions do not see it. Direct unauthorized `/admin` navigation
+uses the generic not-found surface. This is navigation behavior only and does not
+replace backend authorization.
+
+## Legacy Tools integration
+
+Forms remains at `builder.html`, with `form-generator.html` and `viewer.html`
+still available at their direct URLs. `/tools/forms` is a shell adapter that links
+to the unchanged Document Studio.
+
+The former root shared-library markup is preserved at `library.html`, continuing
+to load `engine.js`, `library-api.js`, `global-search.js`, and `home.js` unchanged.
+`/tools/library` is the stable shell adapter; `/tools/document-library` is also
+accepted for compatibility with the product-spec route name. The unavoidable
+legacy limitation is that `/` now resolves to the required application Dashboard,
+so bookmarks that previously relied on the root for the library must use
+`/library` (`library.html` remains accepted and redirects to the extensionless
+canonical URL). Document records are not merged with project Records.
+
+## Frontend test structure
+
+`tests/unit/app-routing.test.ts` covers route resolution, nested-tab selection,
+Administration role policy, unknown paths, tool adapters, and API/static bypass.
+`tests/unit/app-shell.test.ts` mounts the real browser modules in Happy DOM and
+covers navigation content/active state, authenticated project tabs, role-aware
+Administration visibility, the mobile drawer and Escape behavior, close-on-route
+selection, not found, direct nested routes, and legacy Forms/Library links.
 
 ## Existing shared library
 
