@@ -20,11 +20,18 @@ export async function resetIdentityFoundation(): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DROP TRIGGER IF EXISTS activity_events_no_update"),
     env.DB.prepare("DROP TRIGGER IF EXISTS activity_events_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issuances_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issuances_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issuance_files_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issuance_files_no_delete"),
   ]);
   await env.DB.batch([
     env.DB.prepare(
       "UPDATE records SET current_revision_id = NULL WHERE current_revision_id IS NOT NULL",
     ),
+    env.DB.prepare("DELETE FROM issuance_files"),
+    env.DB.prepare("DELETE FROM issuances"),
+    env.DB.prepare("DELETE FROM project_issuance_sequences"),
     env.DB.prepare("DELETE FROM revision_files"),
     env.DB.prepare("DELETE FROM record_revisions"),
     env.DB.prepare("DELETE FROM record_revision_sequences"),
@@ -50,6 +57,26 @@ export async function resetIdentityFoundation(): Promise<void> {
       `CREATE TRIGGER activity_events_no_delete
        BEFORE DELETE ON activity_events
        BEGIN SELECT RAISE(ABORT, 'activity_events are append-only'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issuances_no_update
+       BEFORE UPDATE ON issuances
+       BEGIN SELECT RAISE(ABORT, 'issuances are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issuances_no_delete
+       BEFORE DELETE ON issuances
+       BEGIN SELECT RAISE(ABORT, 'issuances are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issuance_files_no_update
+       BEFORE UPDATE ON issuance_files
+       BEGIN SELECT RAISE(ABORT, 'issuance files are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issuance_files_no_delete
+       BEFORE DELETE ON issuance_files
+       BEGIN SELECT RAISE(ABORT, 'issuance files are immutable'); END`,
     ),
   ]);
 }
