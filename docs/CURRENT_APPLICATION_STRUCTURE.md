@@ -1,6 +1,6 @@
 # Current Application Structure
 
-**Status:** PR 1 implementation inventory  
+**Status:** PR 3 implementation inventory
 **Updated:** 2026-07-19
 
 ## Runtime shape
@@ -38,8 +38,8 @@ legacy health behavior. It creates or verifies the legacy schema, stores complet
 definition JSON in `documents.definition_json`, protects edits with hashed edit
 tokens, and uses `documents.version` as an optimistic save counter.
 
-The legacy route and tables remain in place. No organization, membership, project,
-record, RFI, submittal, file, delivery, share, or AI table is introduced by PR 1.
+The legacy route and tables remain in place. The platform's additive identity and
+project-directory tables do not change the legacy API or renderer behavior.
 
 ## Renderer definition flow
 
@@ -57,16 +57,20 @@ modify or normalize a definition, and `public/engine.js` remains unchanged.
 
 All new document-control routes use `/api/v2`. The v2 Pages Function delegates to a
 small router and does not fall through to the legacy API. Alongside
-`GET|HEAD /api/v2/health`, PR 2 implements authenticated `GET /api/v2/session`,
-`GET /api/v2/organizations/current`, and `GET /api/v2/members`; unknown platform
-routes return a structured 404.
+`GET|HEAD /api/v2/health` and PR 2's authenticated identity routes, PR 3 implements
+project list, create, detail, update, and project-contact routes. Project IDs are
+resolved only within the authenticated organization; cross-organization and
+unauthorized project access return the same not-found response.
 
 `src/auth/authentication-adapter.ts` defines the provider-neutral `AppSession` and
 authentication adapter contracts. `src/auth/cloudflare-access-adapter.ts` validates
 Cloudflare Access JWT assertions before resolving application users and memberships.
 Identity persistence, membership lookup, tenant-scoped repositories, and organization
 authorization live in the new `src/application/identity`, `src/domain/identity`, and
-`src/infrastructure/db/d1` modules. Project permissions remain empty until PR 3.
+`src/infrastructure/db/d1` modules. PR 3 adds `src/domain/projects`,
+`src/application/projects`, D1 project repositories, and explicit role plus
+project-membership authorization. Project and contact mutations append durable
+activity events.
 
 ## Build and test layout
 

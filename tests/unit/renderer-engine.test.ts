@@ -45,7 +45,10 @@ function loadRenderer(): BaseRuntime {
 
 describe("legacy renderer regression", () => {
   it("keeps the renderer source unchanged in the foundation PR", () => {
-    const source = readFileSync("public/engine.js");
+    const source = readFileSync("public/engine.js", "utf8").replace(
+      /\r\n/g,
+      "\n",
+    );
     expect(createHash("sha256").update(source).digest("hex")).toBe(
       "29ca21a256eb6f799905028d121d648b1179cb7c8aae368860c6414dfb3ad3d9",
     );

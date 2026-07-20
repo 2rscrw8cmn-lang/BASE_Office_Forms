@@ -12,7 +12,7 @@ describe("D1 repository test helpers", () => {
     const db = testDatabase();
     const tables = await db
       .prepare(
-        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('documents', 'folders', 'app_meta') ORDER BY name",
+        "SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('documents', 'folders', 'app_meta', 'projects', 'project_memberships', 'project_contacts') ORDER BY name",
       )
       .all<{ name: string }>();
 
@@ -20,12 +20,15 @@ describe("D1 repository test helpers", () => {
       "app_meta",
       "documents",
       "folders",
+      "project_contacts",
+      "project_memberships",
+      "projects",
     ]);
 
     const schemaVersion = await db
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(schemaVersion?.schema_version).toBe(3);
+    expect(schemaVersion?.schema_version).toBe(4);
   });
 
   it("seeds definitions for future D1-backed repository tests", async () => {

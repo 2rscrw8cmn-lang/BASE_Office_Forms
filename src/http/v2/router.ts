@@ -1,5 +1,9 @@
 import type { AuthenticationResult } from "../../auth/authentication-adapter";
+import { ProjectContactNotFoundError } from "../../application/projects/project-contact-service";
+import { ProjectNotFoundError } from "../../application/projects/project-service";
 import { AuthorizationError } from "../../domain/identity/authorization";
+import { ProjectAuthorizationError } from "../../domain/projects/authorization";
+import type { Project, ProjectContact } from "../../domain/projects/project";
 import {
   apiError,
   apiSuccess,
@@ -7,6 +11,14 @@ import {
   type ApiRequestContext,
 } from "../api-response";
 import type { V2RouteDependencies } from "./dependencies";
+import {
+  parseJsonRequest,
+  parseProjectContactCreate,
+  parseProjectContactUpdate,
+  parseProjectCreate,
+  parseProjectUpdate,
+  RequestValidationError,
+} from "./project-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -30,27 +42,37 @@ export async function routeV2Request(
         "This route only supports GET and HEAD.",
       );
     }
-
     const response = apiSuccess(context, { status: "ok", apiVersion: "v2" });
-    if (request.method === "HEAD") {
-      return new Response(null, {
-        status: response.status,
-        headers: response.headers,
-      });
-    }
-    return response;
+    return request.method === "HEAD"
+      ? new Response(null, {
+          status: response.status,
+          headers: response.headers,
+        })
+      : response;
   }
 
-  if (pathname === `${V2_BASE_PATH}/session`) {
+  if (pathname === `${V2_BASE_PATH}/session`)
     return handleSession(request, context, dependencies);
-  }
-
-  if (pathname === `${V2_BASE_PATH}/organizations/current`) {
+  if (pathname === `${V2_BASE_PATH}/organizations/current`)
     return handleCurrentOrganization(request, context, dependencies);
-  }
-
-  if (pathname === `${V2_BASE_PATH}/members`) {
+  if (pathname === `${V2_BASE_PATH}/members`)
     return handleMembers(request, context, dependencies);
+
+  if (pathname === `${V2_BASE_PATH}/projects` && dependencies) {
+    return handleProjects(request, context, dependencies);
+  }
+  const projectRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)(?:\/contacts(?:\/([^/]+))?)?$/,
+  );
+  if (projectRoute && dependencies) {
+    return handleProjectRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(projectRoute[1]),
+      projectRoute[2] ? decodeURIComponent(projectRoute[2]) : undefined,
+      pathname.includes("/contacts"),
+    );
   }
 
   return apiError(
@@ -61,34 +83,159 @@ export async function routeV2Request(
   );
 }
 
-async function handleSession(
+async function handleProjects(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies?: V2RouteDependencies,
+): Promise<Response> {
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    ["GET", "POST"],
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const projects = dependencies?.projects;
+  if (!projects) return unavailable(context);
+  try {
+    if (request.method === "GET")
+      return apiSuccess(
+        context,
+        (await projects.list(authenticated.session)).map(serializeProject),
+      );
+    const input = parseProjectCreate(await parseJsonRequest(request));
+    const project = await projects.create(authenticated.session, {
+      ...input,
+      correlationId: context.requestId,
+    });
+    return apiSuccess(context, serializeProject(project), 201);
+  } catch (error) {
+    if (error instanceof ProjectAuthorizationError) {
+      return apiError(
+        context,
+        403,
+        "AUTHORIZATION_DENIED",
+        "You are not allowed to access this resource.",
+      );
+    }
+    return projectError(context, error);
+  }
+}
+
+async function handleProjectRoute(
   request: Request,
   context: ApiRequestContext,
   dependencies: V2RouteDependencies | undefined,
+  projectId: string,
+  contactId: string | undefined,
+  isContactsRoute: boolean,
 ): Promise<Response> {
-  const session = await authenticateGetRequest(request, context, dependencies);
-  if (session instanceof Response) {
-    return session;
-  }
-  if (!dependencies) {
-    return apiError(
-      context,
-      503,
-      "AUTHENTICATION_UNAVAILABLE",
-      "Authentication is not configured.",
+  const allowedMethods = isContactsRoute
+    ? contactId
+      ? ["PATCH"]
+      : ["GET", "POST"]
+    : ["GET", "PATCH"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const projects = dependencies?.projects;
+  const contacts = dependencies?.projectContacts;
+  if (!projects) return unavailable(context);
+  if (isContactsRoute && !contacts) return unavailable(context);
+  try {
+    if (!isContactsRoute) {
+      if (request.method === "GET")
+        return apiSuccess(
+          context,
+          serializeProject(
+            await projects.get(authenticated.session, projectId),
+          ),
+        );
+      const current = await projects.get(authenticated.session, projectId);
+      const project = await projects.update(authenticated.session, projectId, {
+        ...parseProjectUpdate(
+          await parseJsonRequest(request),
+          toProjectWriteInput(current),
+        ),
+        correlationId: context.requestId,
+      });
+      return apiSuccess(context, serializeProject(project));
+    }
+    const projectContacts = contacts;
+    if (!projectContacts) return unavailable(context);
+    if (request.method === "GET")
+      return apiSuccess(
+        context,
+        (await projectContacts.list(authenticated.session, projectId)).map(
+          serializeContact,
+        ),
+      );
+    if (request.method === "POST") {
+      const contact = await projectContacts.create(
+        authenticated.session,
+        projectId,
+        {
+          ...parseProjectContactCreate(await parseJsonRequest(request)),
+          correlationId: context.requestId,
+        },
+      );
+      return apiSuccess(context, serializeContact(contact), 201);
+    }
+    if (!contactId)
+      return apiError(
+        context,
+        404,
+        "API_ROUTE_NOT_FOUND",
+        "The requested API route was not found.",
+      );
+    const current = await projectContacts.list(
+      authenticated.session,
+      projectId,
     );
+    const existing = current.find((contact) => contact.id === contactId);
+    if (!existing) throw new ProjectContactNotFoundError();
+    const contact = await projectContacts.update(
+      authenticated.session,
+      projectId,
+      contactId,
+      {
+        ...parseProjectContactUpdate(
+          await parseJsonRequest(request),
+          toContactWriteInput(existing),
+        ),
+        correlationId: context.requestId,
+      },
+    );
+    return apiSuccess(context, serializeContact(contact));
+  } catch (error) {
+    return projectError(context, error);
   }
+}
+
+async function handleSession(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies?: V2RouteDependencies,
+): Promise<Response> {
+  const session = await authenticateRequest(request, context, dependencies, [
+    "GET",
+  ]);
+  if (session instanceof Response) return session;
+  if (!dependencies) return unavailable(context);
   const organization = await dependencies.organizations.getCurrentOrganization(
     session.session,
   );
-  if (!organization) {
+  if (!organization)
     return apiError(
       context,
       404,
       "ORGANIZATION_NOT_FOUND",
       "The current organization was not found.",
     );
-  }
   return apiSuccess(context, {
     user: { id: session.session.userId },
     organization: serializeOrganization(organization),
@@ -100,51 +247,36 @@ async function handleSession(
 async function handleCurrentOrganization(
   request: Request,
   context: ApiRequestContext,
-  dependencies: V2RouteDependencies | undefined,
+  dependencies?: V2RouteDependencies,
 ): Promise<Response> {
-  const session = await authenticateGetRequest(request, context, dependencies);
-  if (session instanceof Response) {
-    return session;
-  }
-  if (!dependencies) {
-    return apiError(
-      context,
-      503,
-      "AUTHENTICATION_UNAVAILABLE",
-      "Authentication is not configured.",
-    );
-  }
+  const session = await authenticateRequest(request, context, dependencies, [
+    "GET",
+  ]);
+  if (session instanceof Response) return session;
+  if (!dependencies) return unavailable(context);
   const organization = await dependencies.organizations.getCurrentOrganization(
     session.session,
   );
-  if (!organization) {
+  if (!organization)
     return apiError(
       context,
       404,
       "ORGANIZATION_NOT_FOUND",
       "The current organization was not found.",
     );
-  }
   return apiSuccess(context, serializeOrganization(organization));
 }
 
 async function handleMembers(
   request: Request,
   context: ApiRequestContext,
-  dependencies: V2RouteDependencies | undefined,
+  dependencies?: V2RouteDependencies,
 ): Promise<Response> {
-  const session = await authenticateGetRequest(request, context, dependencies);
-  if (session instanceof Response) {
-    return session;
-  }
-  if (!dependencies) {
-    return apiError(
-      context,
-      503,
-      "AUTHENTICATION_UNAVAILABLE",
-      "Authentication is not configured.",
-    );
-  }
+  const session = await authenticateRequest(request, context, dependencies, [
+    "GET",
+  ]);
+  if (session instanceof Response) return session;
+  if (!dependencies) return unavailable(context);
   try {
     const members =
       await dependencies.organizations.listCurrentOrganizationMembers(
@@ -163,46 +295,45 @@ async function handleMembers(
       })),
     );
   } catch (error) {
-    if (error instanceof AuthorizationError) {
+    if (error instanceof AuthorizationError)
       return apiError(
         context,
         403,
         "AUTHORIZATION_DENIED",
         "You are not allowed to access this resource.",
       );
-    }
     throw error;
   }
 }
 
-async function authenticateGetRequest(
+async function authenticateRequest(
   request: Request,
   context: ApiRequestContext,
   dependencies: V2RouteDependencies | undefined,
+  methods: readonly string[],
 ): Promise<OrganizationRequestContext | Response> {
-  if (request.method !== "GET") {
+  if (!methods.includes(request.method))
     return apiError(
       context,
       405,
       "METHOD_NOT_ALLOWED",
-      "This route only supports GET.",
+      `This route only supports ${methods.join(" and ")}.`,
     );
-  }
-  if (!dependencies) {
-    return apiError(
-      context,
-      503,
-      "AUTHENTICATION_UNAVAILABLE",
-      "Authentication is not configured.",
-    );
-  }
-
+  if (!dependencies) return unavailable(context);
   const authentication =
     await dependencies.authenticationAdapter.authenticate(request);
-  if (!authentication.authenticated) {
+  if (!authentication.authenticated)
     return authenticationFailure(context, authentication);
-  }
   return createOrganizationRequestContext(context, authentication.session);
+}
+
+function unavailable(context: ApiRequestContext): Response {
+  return apiError(
+    context,
+    503,
+    "AUTHENTICATION_UNAVAILABLE",
+    "Authentication is not configured.",
+  );
 }
 
 function authenticationFailure(
@@ -211,12 +342,7 @@ function authenticationFailure(
 ): Response {
   switch (authentication.reason) {
     case "AUTH_PROVIDER_UNAVAILABLE":
-      return apiError(
-        context,
-        503,
-        "AUTHENTICATION_UNAVAILABLE",
-        "Authentication is not configured.",
-      );
+      return unavailable(context);
     case "USER_DISABLED":
       return apiError(
         context,
@@ -256,6 +382,94 @@ function authenticationFailure(
   }
 }
 
+function projectError(context: ApiRequestContext, error: unknown): Response {
+  if (error instanceof RequestValidationError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
+  if (
+    error instanceof ProjectNotFoundError ||
+    error instanceof ProjectAuthorizationError
+  )
+    return apiError(
+      context,
+      404,
+      "PROJECT_NOT_FOUND",
+      "The requested project was not found.",
+    );
+  if (error instanceof ProjectContactNotFoundError)
+    return apiError(
+      context,
+      404,
+      "PROJECT_CONTACT_NOT_FOUND",
+      "The requested project contact was not found.",
+    );
+  if (
+    error instanceof Error &&
+    error.message.includes("projects.organization_id, projects.project_number")
+  )
+    return apiError(
+      context,
+      409,
+      "PROJECT_NUMBER_CONFLICT",
+      "A project with this number already exists.",
+    );
+  throw error;
+}
+
+function serializeProject(project: Project) {
+  return {
+    id: project.id,
+    projectNumber: project.projectNumber,
+    name: project.name,
+    status: project.status,
+    description: project.description,
+    address: project.address,
+    timezone: project.timezone,
+    startDate: project.startDate,
+    targetCompletionDate: project.targetCompletionDate,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    archivedAt: project.archivedAt,
+  };
+}
+function serializeContact(contact: ProjectContact) {
+  return {
+    id: contact.id,
+    projectId: contact.projectId,
+    companyName: contact.companyName,
+    contactName: contact.contactName,
+    contactType: contact.contactType,
+    email: contact.email,
+    phone: contact.phone,
+    address: contact.address,
+    notes: contact.notes,
+    createdAt: contact.createdAt,
+    updatedAt: contact.updatedAt,
+    archivedAt: contact.archivedAt,
+  };
+}
+function toProjectWriteInput(project: Project) {
+  return {
+    projectNumber: project.projectNumber,
+    name: project.name,
+    status: project.status,
+    description: project.description,
+    address: project.address,
+    timezone: project.timezone,
+    startDate: project.startDate,
+    targetCompletionDate: project.targetCompletionDate,
+  };
+}
+function toContactWriteInput(contact: ProjectContact) {
+  return {
+    companyName: contact.companyName,
+    contactName: contact.contactName,
+    contactType: contact.contactType,
+    email: contact.email,
+    phone: contact.phone,
+    address: contact.address,
+    notes: contact.notes,
+  };
+}
 function serializeOrganization(organization: {
   id: string;
   name: string;
