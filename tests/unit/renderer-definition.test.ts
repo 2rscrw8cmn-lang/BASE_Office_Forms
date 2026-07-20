@@ -99,4 +99,55 @@ describe("renderer definition schema", () => {
       RendererDefinitionValidationError,
     );
   });
+
+  it("accepts boolean header, control, and tag visibility flags on a form", () => {
+    const definition = {
+      kind: "form",
+      title: "Visibility form",
+      showHeader: false,
+      showControl: false,
+      showTag: false,
+      sections: [{ name: "Details", fields: [["Project", 2]] }],
+    };
+
+    expect(validateRendererDefinition(definition)).toMatchObject({
+      valid: true,
+    });
+  });
+
+  it("rejects a non-boolean showTag on a form", () => {
+    const result = validateRendererDefinition({
+      kind: "form",
+      title: "Invalid tag form",
+      showTag: "yes",
+      sections: [{ name: "Details", fields: [["Project", 2]] }],
+    });
+
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "/showTag", keyword: "type" }),
+      ]),
+    );
+  });
+
+  it("rejects non-boolean showHeader and showControl flags", () => {
+    for (const flag of ["showHeader", "showControl"]) {
+      const result = validateRendererDefinition({
+        kind: "form",
+        title: "Invalid visibility form",
+        [flag]: "no",
+        sections: [{ name: "Details", fields: [["Project", 2]] }],
+      });
+
+      expect(result.valid).toBe(false);
+      if (result.valid) continue;
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: `/${flag}`, keyword: "type" }),
+        ]),
+      );
+    }
+  });
 });
