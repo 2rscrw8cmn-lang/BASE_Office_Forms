@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS project_memberships (
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')) DEFAULT 'active',
   created_at TEXT NOT NULL,
   FOREIGN KEY (project_id, organization_id) REFERENCES projects(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (organization_id, user_id) REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   UNIQUE (project_id, user_id)
 );
 

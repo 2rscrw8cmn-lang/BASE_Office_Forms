@@ -112,6 +112,18 @@ async function seed(): Promise<void> {
           )
           .bind(id, `identity|${id}`, `${id}@example.test`, id, now, now),
     ),
+    ...[
+      ["membership-admin", "user-admin", "org_admin"],
+      ["membership-doc", "user-doc", "document_control_admin"],
+      ["membership-manager-org", "user-manager", "project_manager"],
+      ["membership-contributor", "user-contributor", "contributor"],
+    ].map(([id, userId, role]) =>
+      database
+        .prepare(
+          "INSERT INTO organization_memberships (id, organization_id, user_id, role, status, created_at) VALUES (?, 'org-a', ?, ?, 'active', ?)",
+        )
+        .bind(id, userId, role, now),
+    ),
   ]);
 }
 
@@ -269,6 +281,27 @@ describe("project directory API", () => {
       dependencies(),
     );
     await expect(list.json()).resolves.toMatchObject({ data: [] });
+  });
+
+  it("requires project members to belong to the project's organization", async () => {
+    const project = await createProject("admin", "P-102A");
+    const database = testDatabase();
+    const now = new Date().toISOString();
+    await database
+      .prepare(
+        "INSERT INTO users (id, identity_subject, email, display_name, status, created_at, updated_at) VALUES ('user-external', 'identity|external', 'external@example.test', 'External', 'active', ?, ?)",
+      )
+      .bind(now, now)
+      .run();
+
+    await expect(
+      database
+        .prepare(
+          "INSERT INTO project_memberships (id, organization_id, project_id, user_id, role, status, created_at) VALUES ('membership-external', 'org-a', ?, 'user-external', 'viewer', 'active', ?)",
+        )
+        .bind(project.id, now)
+        .run(),
+    ).rejects.toThrow(/FOREIGN KEY/);
   });
 
   it("strictly scopes contacts to their parent project and appends project and contact activity", async () => {

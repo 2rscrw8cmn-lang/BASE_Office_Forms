@@ -24,7 +24,6 @@ This directory is the implementation source of truth for evolving the existing B
 18. `CODER_HANDOFF.md` — first PR sequence and stop conditions.
 19. `CURRENT_APPLICATION_STRUCTURE.md` — implemented repository and runtime inventory.
 20. `LOCAL_DEVELOPMENT.md` — prerequisites, environment contract, commands, and test setup.
-21. `PR1_SUMMARY.md` — foundation PR scope, exclusions, file inventory, and validation evidence.
 
 ## Product direction
 
