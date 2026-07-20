@@ -163,7 +163,7 @@
     const counter = { n: 0 };
     const footnotes = (form.footnotes || []).length ? `<div class="footnote">${form.footnotes.map(esc).join("<br>")}</div>` : "";
     return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}" data-paginate="true">${topBar(form)}
-      <div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>
+      ${form.showTag === false ? "" : `<div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>`}
       <h1 class="form-title">${esc(form.title)}</h1>
       ${form.sub ? `<p class="form-sub">${esc(form.sub)}</p>` : ""}
       ${ctrlGrid(form, "Form No.")}
@@ -438,13 +438,17 @@
     }
     if (id === "submittal") {
       const form = blankForm();
-      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", sub: "Submitted item, document references, and review disposition" });
+      Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", showHeader: false, showControl: false, showTag: false });
       form.control["Doc. Control"] = "BASE-SUB-001";
       form.sections = [
-        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Project No.", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Revision", w: 1 }, { label: "Date Submitted", w: 1 }, { label: "Specification Section", w: 1.5 }, { label: "Contractor", w: 1.5 }, { label: "Subcontractor / Supplier", w: 1.5 }] },
+        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Revision", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Date Submitted", w: 1 }, { label: "Specification Section", w: 1.5 }] },
         { name: "Submitted Item", req: "REQUIRED", fields: [{ label: "Description of product, equipment, shop drawing, sample, or data", w: 1, height: 92, multiline: true }, { label: "Manufacturer / Product", w: 1.5 }, { label: "Drawing / Data Identifier", w: 1.5 }] },
         { type: "attachments", heading: "Included Documents", req: "LIST ALL", fields: [{ label: "File / drawing / data sheet 1", w: 1 }, { label: "File / drawing / data sheet 2", w: 1 }, { label: "File / drawing / data sheet 3", w: 1 }] },
-        { type: "approval", heading: "Review Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] }
+        { type: "approval", heading: "Review Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [
+          { label: "Contractor", w: 0.8, height: 90 }, { label: "Contractor's Stamp", w: 1.2, height: 90 },
+          { label: "Architect", w: 0.8, height: 90 }, { label: "Architect's Stamp", w: 1.2, height: 90 },
+          { label: "Engineer", w: 0.8, height: 90 }, { label: "Engineer's Stamp", w: 1.2, height: 90 }
+        ] }
       ];
       return form;
     }
