@@ -207,6 +207,7 @@ p { margin: 0; text-wrap: pretty; }
   grid-template-columns: var(--sign-tpl, 2fr 1fr 1fr);
   gap: 6px;
 }
+.sign-grid + .sign-grid { margin-top: 6px; }
 .sign {
   border: 1px solid var(--field);
   min-height: 54px;

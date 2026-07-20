@@ -75,7 +75,8 @@
       id,
       type,
       height: Math.max(36, Number(source.height || source.h) || 46),
-      multiline: Boolean(source.multiline)
+      multiline: Boolean(source.multiline),
+      break: Boolean(source.break)
     };
   }
 
@@ -134,11 +135,17 @@
       }).join("") + `</div>`;
   }
 
+  // A field with `break: true` starts a new stacked row; otherwise all fields render in one row.
   function signBlock(fields, fill, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
-    return `<div class="sign-grid" style="--sign-tpl:${normalized.map(field => field.w + "fr").join(" ")};">` +
-      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
-      `</div>`;
+    const rows = [];
+    normalized.forEach(field => {
+      if (field.break || !rows.length) rows.push([]);
+      rows[rows.length - 1].push(field);
+    });
+    return rows.map(row => `<div class="sign-grid" style="--sign-tpl:${row.map(field => field.w + "fr").join(" ")};">` +
+      row.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
+      `</div>`).join("");
   }
 
   function markPreview(html, collection, index) {
@@ -245,7 +252,7 @@
       case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
       case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block, fill, namePrefix)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "attachments": return `<section class="section big attachment-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Attachments / References", block.req)}${docFields(block, fill, namePrefix)}</section>`;
-      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
+      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${block.checks && block.checks.length ? checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix) : ""}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "pagebreak": return `<div class="page-break" aria-hidden="true"></div>`;
       default: return "";
     }
@@ -441,13 +448,11 @@
       Object.assign(form, { documentType: "Submittal / Transmittal", typeLabel: "Submittal", no: "SUB-001", title: "Submittal / Transmittal", showHeader: false, showControl: false, showTag: false });
       form.control["Doc. Control"] = "BASE-SUB-001";
       form.sections = [
-        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Revision", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Date Submitted", w: 1 }, { label: "Specification Section", w: 1.5 }] },
-        { name: "Submitted Item", req: "REQUIRED", fields: [{ label: "Description of product, equipment, shop drawing, sample, or data", w: 1, height: 92, multiline: true }, { label: "Manufacturer / Product", w: 1.5 }, { label: "Drawing / Data Identifier", w: 1.5 }] },
-        { type: "attachments", heading: "Included Documents", req: "LIST ALL", fields: [{ label: "File / drawing / data sheet 1", w: 1 }, { label: "File / drawing / data sheet 2", w: 1 }, { label: "File / drawing / data sheet 3", w: 1 }] },
-        { type: "approval", heading: "Review Disposition", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [
-          { label: "Contractor", w: 0.8, height: 90 }, { label: "Contractor's Stamp", w: 1.2, height: 90 },
-          { label: "Architect", w: 0.8, height: 90 }, { label: "Architect's Stamp", w: 1.2, height: 90 },
-          { label: "Engineer", w: 0.8, height: 90 }, { label: "Engineer's Stamp", w: 1.2, height: 90 }
+        { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Specification Section", w: 1.5 }, { label: "Revision", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Date Submitted", w: 1 }] },
+        { type: "approval", heading: "Review Disposition", req: "REQUIRED", checks: [], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [
+          { label: "Contractor", w: 1 }, { label: "Contractor's Stamp", w: 2, height: 90 },
+          { label: "Architect", w: 1, break: true }, { label: "Architect's Stamp", w: 2, height: 90 },
+          { label: "Engineer", w: 1, break: true }, { label: "Engineer's Stamp", w: 2, height: 90 }
         ] }
       ];
       return form;

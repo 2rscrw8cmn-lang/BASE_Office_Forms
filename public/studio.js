@@ -30,7 +30,7 @@
   }
 
   function fieldObject(value) {
-    if (!Array.isArray(value)) return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: Boolean(value.multiline), id: value.id || "" };
+    if (!Array.isArray(value)) return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: Boolean(value.multiline), id: value.id || "", break: Boolean(value.break) };
     return { label: value[0] || "Field", w: Number(value[1]) || 1, id: value[2] || "", height: Number(value[3]) || 46, multiline: Boolean(value[4]) };
   }
 
