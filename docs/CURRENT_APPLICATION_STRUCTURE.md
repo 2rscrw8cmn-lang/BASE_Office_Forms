@@ -56,12 +56,17 @@ modify or normalize a definition, and `public/engine.js` remains unchanged.
 ## New platform boundary
 
 All new document-control routes use `/api/v2`. The v2 Pages Function delegates to a
-small router and does not fall through to the legacy API. PR 1 implements only
-`GET|HEAD /api/v2/health`; unknown platform routes return a structured 404.
+small router and does not fall through to the legacy API. Alongside
+`GET|HEAD /api/v2/health`, PR 2 implements authenticated `GET /api/v2/session`,
+`GET /api/v2/organizations/current`, and `GET /api/v2/members`; unknown platform
+routes return a structured 404.
 
 `src/auth/authentication-adapter.ts` defines the provider-neutral `AppSession` and
-authentication adapter contracts. It does not implement Cloudflare Access, identity
-storage, memberships, authorization, or project permissions.
+authentication adapter contracts. `src/auth/cloudflare-access-adapter.ts` validates
+Cloudflare Access JWT assertions before resolving application users and memberships.
+Identity persistence, membership lookup, tenant-scoped repositories, and organization
+authorization live in the new `src/application/identity`, `src/domain/identity`, and
+`src/infrastructure/db/d1` modules. Project permissions remain empty until PR 3.
 
 ## Build and test layout
 

@@ -2,6 +2,7 @@ import { createPagesEventContext } from "cloudflare:test";
 
 import { onRequest as legacyApi } from "../../functions/api/[[path]]";
 import { routeV2Request } from "../../src/http/v2/router";
+import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 
 export function apiRequest(
   path: string,
@@ -13,8 +14,12 @@ export function apiRequest(
   >;
 }
 
-export function invokeV2Api(path: string, init: RequestInit = {}): Response {
-  return routeV2Request(apiRequest(path, init));
+export async function invokeV2Api(
+  path: string,
+  init: RequestInit = {},
+  dependencies?: V2RouteDependencies,
+): Promise<Response> {
+  return routeV2Request(apiRequest(path, init), dependencies);
 }
 
 export async function invokeLegacyApi(

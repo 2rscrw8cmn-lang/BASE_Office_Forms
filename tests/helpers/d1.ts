@@ -16,6 +16,15 @@ export async function resetLegacyLibrary(): Promise<void> {
   ]);
 }
 
+export async function resetIdentityFoundation(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM activity_events"),
+    env.DB.prepare("DELETE FROM organization_memberships"),
+    env.DB.prepare("DELETE FROM users"),
+    env.DB.prepare("DELETE FROM organizations"),
+  ]);
+}
+
 export async function seedLegacyDocument(
   definition: Record<string, unknown>,
   options: { id?: string; editTokenHash?: string } = {},

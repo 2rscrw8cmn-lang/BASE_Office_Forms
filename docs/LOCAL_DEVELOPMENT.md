@@ -14,7 +14,18 @@ only for remote migrations and deployment.
 
 ## Environment and bindings
 
-PR 1 requires no application environment variables or local secrets.
+The identity endpoints require Cloudflare Access configuration in deployed
+environments:
+
+```text
+CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+CF_ACCESS_AUD=your-access-application-audience-tag
+```
+
+These are non-secret environment variables, but the application fails closed for
+authenticated `/api/v2` endpoints until both are configured. Local integration tests
+inject a verified-identity fixture and do not require Access credentials. PR 1's
+health and legacy shared-library behavior still require no application secrets.
 
 The `DB` D1 binding and migrations directory are declared in `wrangler.jsonc`.
 Wrangler creates isolated local D1 state under its ignored local state directory.

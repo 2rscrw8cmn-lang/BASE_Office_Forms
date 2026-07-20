@@ -25,6 +25,7 @@ This directory is the implementation source of truth for evolving the existing B
 19. `CURRENT_APPLICATION_STRUCTURE.md` — implemented repository and runtime inventory.
 20. `LOCAL_DEVELOPMENT.md` — prerequisites, environment contract, commands, and test setup.
 21. `PR1_SUMMARY.md` — foundation PR scope, exclusions, file inventory, and validation evidence.
+22. `PR2_SUMMARY.md` — identity and tenant-foundation scope, configuration, and migration notes.
 
 ## Product direction
 
