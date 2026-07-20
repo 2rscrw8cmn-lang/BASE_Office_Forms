@@ -428,9 +428,65 @@ describe("revisions foundation API", () => {
       "revision.created",
       "revision.published",
       "revision.created",
-      "revision.published",
       "revision.superseded",
+      "revision.published",
     ]);
+  });
+
+  it("allows only one of two concurrent publishes for the same record to succeed", async () => {
+    const project = await createProject("P-REV-CONCURRENT");
+    const record = await createRecord(project.id);
+    const draftA = await jsonData<ApiRevision>(
+      await createDraft(project.id, record.id, { changeSummary: "A" }),
+    );
+    const draftB = await jsonData<ApiRevision>(
+      await createDraft(project.id, record.id, { changeSummary: "B" }),
+    );
+
+    const [responseA, responseB] = await Promise.all([
+      publish(project.id, record.id, draftA.id),
+      publish(project.id, record.id, draftB.id),
+    ]);
+
+    const statuses = [responseA.status, responseB.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const database = testDatabase();
+    const rows = await database
+      .prepare(
+        "SELECT id, status FROM record_revisions WHERE record_id = ? ORDER BY revision_number ASC",
+      )
+      .bind(record.id)
+      .all<{ id: string; status: string }>();
+    const published = rows.results.filter((row) => row.status === "published");
+    const stillDraft = rows.results.filter((row) => row.status === "draft");
+    expect(published.length).toBe(1);
+    expect(stillDraft.length).toBe(1);
+    expect([draftA.id, draftB.id]).toContain(published[0].id);
+    expect([draftA.id, draftB.id]).toContain(stillDraft[0].id);
+    expect(published[0].id).not.toBe(stillDraft[0].id);
+
+    const recordRow = await database
+      .prepare("SELECT current_revision_id FROM records WHERE id = ?")
+      .bind(record.id)
+      .first<{ current_revision_id: string | null }>();
+    expect(recordRow?.current_revision_id).toBe(published[0].id);
+
+    const publishedEventCount = await database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM activity_events WHERE object_id IN (?, ?) AND action = 'revision.published'",
+      )
+      .bind(draftA.id, draftB.id)
+      .first<{ count: number }>();
+    expect(publishedEventCount?.count).toBe(1);
+
+    const createdEventCount = await database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM activity_events WHERE object_id IN (?, ?) AND action = 'revision.created'",
+      )
+      .bind(draftA.id, draftB.id)
+      .first<{ count: number }>();
+    expect(createdEventCount?.count).toBe(2);
   });
 
   it("rejects revision creation and publication for archived records", async () => {

@@ -27,6 +27,12 @@ CREATE INDEX IF NOT EXISTS idx_record_revisions_record_number
 CREATE INDEX IF NOT EXISTS idx_record_revisions_organization_project_created
   ON record_revisions(organization_id, project_id, created_at DESC);
 
+-- Enforces at most one published revision per record at the database level,
+-- independent of any application-level read-then-write race.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_record_revisions_one_published_per_record
+  ON record_revisions(record_id)
+  WHERE status = 'published';
+
 CREATE TABLE IF NOT EXISTS record_revision_sequences (
   record_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -37,8 +43,12 @@ CREATE TABLE IF NOT EXISTS record_revision_sequences (
 -- SQLite cannot add a table-level foreign key with ALTER TABLE, so the records
 -- table is rebuilt to add the current_revision_id -> record_revisions constraint
 -- now that record_revisions exists. Existing rows are preserved by copying them
--- into the rebuilt table before the original is dropped.
-PRAGMA foreign_keys = OFF;
+-- into the rebuilt table before the original is dropped. D1 always runs a
+-- migration inside an implicit transaction, and `PRAGMA foreign_keys` cannot be
+-- toggled mid-transaction, so enforcement is deferred to the transaction's
+-- commit instead (`defer_foreign_keys` resets itself automatically at that
+-- point) rather than disabled and re-enabled.
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE records_new (
   id TEXT PRIMARY KEY,
@@ -82,7 +92,5 @@ CREATE INDEX IF NOT EXISTS idx_records_project_status_created
   ON records(project_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_records_organization_project_number
   ON records(organization_id, project_id, record_number);
-
-PRAGMA foreign_keys = ON;
 
 UPDATE app_meta SET schema_version = 7 WHERE id = 1;

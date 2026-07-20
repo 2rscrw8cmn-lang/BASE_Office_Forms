@@ -251,40 +251,16 @@ export class D1RecordRevisionsRepository {
     const now = new Date().toISOString();
     const statements: D1PreparedStatement[] = [];
 
-    const publishIndex = statements.length;
-    statements.push(
-      this.database
-        .prepare(
-          `UPDATE record_revisions SET status = 'published'
-           WHERE id = ? AND organization_id = ? AND record_id = ? AND status = 'draft'`,
-        )
-        .bind(draft.id, record.organizationId, record.id),
-    );
-    const publishEventIndex = statements.length;
-    statements.push(
-      eventStatement(
-        this.database,
-        {
-          organizationId: record.organizationId,
-          actorUserId: actor.actorUserId,
-          actorType: actor.actorType,
-          objectType: "revision",
-          objectId: draft.id,
-          action: "revision.published",
-          priorState: state(draft),
-          newState: null,
-          metadata: {},
-          correlationId: actor.correlationId,
-        },
-        {
-          id: draft.id,
-          organizationId: record.organizationId,
-          recordId: record.id,
-          status: "published",
-        },
-      ),
-    );
-
+    // The prior-published lookup above is a plain read outside the atomic
+    // batch, so it can be stale under concurrent publishes. The supersede
+    // statement below re-checks `status = 'published'` at execution time
+    // (inside the same transaction as the publish that follows), so a stale
+    // read only ever causes this statement to affect zero rows -- it can
+    // never incorrectly supersede a revision that something else already
+    // superseded. The partial unique index on `record_revisions(record_id)
+    // WHERE status = 'published'` is the final backstop: it guarantees at
+    // most one published revision per record even if two requests race with
+    // neither having read a prior published revision at all.
     let supersedeIndex = -1;
     let supersedeEventIndex = -1;
     if (priorPublished) {
@@ -322,6 +298,40 @@ export class D1RecordRevisionsRepository {
       );
       supersedeEventIndex = statements.length - 1;
     }
+
+    const publishIndex = statements.length;
+    statements.push(
+      this.database
+        .prepare(
+          `UPDATE record_revisions SET status = 'published'
+           WHERE id = ? AND organization_id = ? AND record_id = ? AND status = 'draft'`,
+        )
+        .bind(draft.id, record.organizationId, record.id),
+    );
+    const publishEventIndex = statements.length;
+    statements.push(
+      eventStatement(
+        this.database,
+        {
+          organizationId: record.organizationId,
+          actorUserId: actor.actorUserId,
+          actorType: actor.actorType,
+          objectType: "revision",
+          objectId: draft.id,
+          action: "revision.published",
+          priorState: state(draft),
+          newState: null,
+          metadata: {},
+          correlationId: actor.correlationId,
+        },
+        {
+          id: draft.id,
+          organizationId: record.organizationId,
+          recordId: record.id,
+          status: "published",
+        },
+      ),
+    );
 
     const recordUpdateIndex = statements.length;
     statements.push(

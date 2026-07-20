@@ -797,6 +797,18 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RevisionIllegalTransitionError)
     return apiError(context, 409, "REVISION_ILLEGAL_TRANSITION", error.message);
+  if (
+    error instanceof Error &&
+    error.message.includes(
+      "UNIQUE constraint failed: record_revisions.record_id",
+    )
+  )
+    return apiError(
+      context,
+      409,
+      "REVISION_ALREADY_PUBLISHED",
+      "Another revision was published for this record concurrently.",
+    );
   if (error instanceof RecordArchivedError)
     return apiError(context, 409, "RECORD_ARCHIVED", error.message);
   if (
