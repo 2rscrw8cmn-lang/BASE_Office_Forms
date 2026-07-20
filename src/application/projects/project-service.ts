@@ -4,6 +4,8 @@ import {
   hasOrganizationWideProjectRead,
   requireProjectCreation,
 } from "../../domain/projects/authorization";
+import { requireRfiManagement } from "../../domain/rfis/authorization";
+import type { RfiCapability } from "../../domain/rfis/errors";
 import type { Project, ProjectStatus } from "../../domain/projects/project";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import {
@@ -107,6 +109,30 @@ export class ProjectService {
     ) {
       throw new ProjectNotFoundError();
     }
+    return project;
+  }
+
+  async requireRfiAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<Project> {
+    return this.get(actor, projectId);
+  }
+
+  async requireRfiManagement(
+    actor: AppSession,
+    projectId: string,
+    capability: RfiCapability,
+  ): Promise<Project> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    requireRfiManagement(actor, capability, isAssignedProjectManager);
     return project;
   }
 

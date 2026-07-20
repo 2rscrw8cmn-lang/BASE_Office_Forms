@@ -1,7 +1,7 @@
 # Current Application Structure
 
-**Status:** PR 3 implementation inventory
-**Updated:** 2026-07-19
+**Status:** PR 4 implementation inventory
+**Updated:** 2026-07-20
 
 ## Runtime shape
 
@@ -58,8 +58,9 @@ modify or normalize a definition, and `public/engine.js` remains unchanged.
 All new document-control routes use `/api/v2`. The v2 Pages Function delegates to a
 small router and does not fall through to the legacy API. Alongside
 `GET|HEAD /api/v2/health` and PR 2's authenticated identity routes, PR 3 implements
-project list, create, detail, update, and project-contact routes. Project IDs are
-resolved only within the authenticated organization; cross-organization and
+project list, create, detail, update, and project-contact routes. PR 4 adds the
+project RFI list/detail/draft/update and issue/respond/close/reopen routes. Project
+IDs are resolved only within the authenticated organization; cross-organization and
 unauthorized project access return the same not-found response.
 
 `src/auth/authentication-adapter.ts` defines the provider-neutral `AppSession` and
@@ -69,8 +70,11 @@ Identity persistence, membership lookup, tenant-scoped repositories, and organiz
 authorization live in the new `src/application/identity`, `src/domain/identity`, and
 `src/infrastructure/db/d1` modules. PR 3 adds `src/domain/projects`,
 `src/application/projects`, D1 project repositories, and explicit role plus
-project-membership authorization. Project and contact mutations append durable
-activity events.
+project-membership authorization. PR 4 adds `src/domain/rfis`,
+`src/application/rfis`, and D1 RFI record, response, and number-sequence
+repositories. RFI numbers are assigned only by the atomic draft-to-issued database
+transition, are scoped to a project, and are never changed. Project, contact, and
+RFI lifecycle mutations append durable activity events.
 
 ## Build and test layout
 
