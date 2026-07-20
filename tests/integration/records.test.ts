@@ -140,6 +140,16 @@ async function seed(): Promise<void> {
           now,
         ),
     ]),
+    database
+      .prepare(
+        "INSERT INTO users (id, identity_subject, email, display_name, status, created_at, updated_at) VALUES ('user-org-b', 'identity|org-b', 'org-b@example.test', 'Organization B User', 'active', ?, ?)",
+      )
+      .bind(now, now),
+    database
+      .prepare(
+        "INSERT INTO organization_memberships (id, organization_id, user_id, role, status, created_at) VALUES ('membership-user-org-b', 'org-b', 'user-org-b', 'contributor', 'active', ?)",
+      )
+      .bind(now),
   ]);
 }
 
@@ -322,7 +332,7 @@ describe("records foundation API", () => {
         .bind(now, now),
       testDatabase()
         .prepare(
-          "INSERT INTO records (id, organization_id, project_id, record_type, record_number, title, status, created_by, created_at, updated_at) VALUES ('record-org-b', 'org-b', 'project-record-org-b', 'document', 'C-001', 'Other', 'active', 'external-user', ?, ?)",
+          "INSERT INTO records (id, organization_id, project_id, record_type, record_number, title, status, created_by, created_at, updated_at) VALUES ('record-org-b', 'org-b', 'project-record-org-b', 'document', 'C-001', 'Other', 'active', 'user-org-b', ?, ?)",
         )
         .bind(now, now),
     ]);
@@ -338,6 +348,44 @@ describe("records foundation API", () => {
     expect(protectedFields.status).toBe(400);
   });
 
+  it("requires a record creator to be a member of the record organization", async () => {
+    const database = testDatabase();
+    const now = new Date().toISOString();
+    await database
+      .prepare(
+        "INSERT INTO projects (id, organization_id, project_number, name, status, timezone, created_at, updated_at) VALUES ('project-record-integrity', 'org-b', 'P-REC-INTEGRITY', 'Integrity', 'planning', 'America/New_York', ?, ?)",
+      )
+      .bind(now, now)
+      .run();
+
+    await expect(
+      database
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-valid-creator', 'org-b', 'project-record-integrity', 'document', 'Valid creator', 'active', 'user-org-b', ?, ?)",
+        )
+        .bind(now, now)
+        .run(),
+    ).resolves.toBeDefined();
+
+    await expect(
+      database
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-missing-creator', 'org-b', 'project-record-integrity', 'document', 'Missing creator', 'active', 'missing-user', ?, ?)",
+        )
+        .bind(now, now)
+        .run(),
+    ).rejects.toThrow();
+
+    await expect(
+      database
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-cross-tenant-creator', 'org-b', 'project-record-integrity', 'document', 'Cross-tenant creator', 'active', 'user-admin', ?, ?)",
+        )
+        .bind(now, now)
+        .run(),
+    ).rejects.toThrow();
+  });
+
   it("keeps tenants and project URLs isolated and makes contributors and viewers read-only", async () => {
     const project = await createProject("P-REC-3");
     const record = await createRecord(project.id);
@@ -350,7 +398,7 @@ describe("records foundation API", () => {
         .bind(now, now),
       testDatabase()
         .prepare(
-          "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-b', 'org-b', 'project-b', 'document', 'Other', 'active', 'external-user', ?, ?)",
+          "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-b', 'org-b', 'project-b', 'document', 'Other', 'active', 'user-org-b', ?, ?)",
         )
         .bind(now, now),
       testDatabase()

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS records (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (project_id, organization_id) REFERENCES projects(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (organization_id, created_by) REFERENCES organization_memberships(organization_id, user_id) ON DELETE RESTRICT,
   UNIQUE (id, organization_id),
   UNIQUE (organization_id, project_id, record_number)
 );
