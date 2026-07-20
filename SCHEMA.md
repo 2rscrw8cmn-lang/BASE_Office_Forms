@@ -169,3 +169,9 @@ string to remove the notice while keeping the branded page header.
 - Widths, heights, margins, scale, and `cols` are numbers; visibility and layout toggles are booleans.
 - Prefer the documented keys. If something does not fit a block type above, use `prose` or `note`.
 - Keep `no` unique; it's the id used for the file name and links.
+
+The versioned machine-readable contract is
+`schemas/renderer-definition.v1.schema.json`. Shared-library create and update
+requests validate the complete definition against that schema. Validation errors
+include a JSON-pointer `path` so invalid nested fields or blocks can be corrected
+without changing renderer behavior.

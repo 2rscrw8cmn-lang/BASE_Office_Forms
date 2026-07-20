@@ -1,0 +1,363 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://baseconstruction.com/schemas/renderer-definition.v1.schema.json",
+  "title": "BASE renderer definition v1",
+  "description": "The existing JSON definition contract consumed by public/engine.js.",
+  "oneOf": [
+    { "$ref": "#/$defs/formDefinition" },
+    { "$ref": "#/$defs/documentDefinition" },
+    { "$ref": "#/$defs/packageDefinition" }
+  ],
+  "$defs": {
+    "scalar": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "row": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scalar" }
+    },
+    "rows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/row" }
+    },
+    "fieldTuple": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": [
+        { "type": "string" },
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "string" },
+        { "type": "number", "minimum": 0 },
+        { "type": "string" }
+      ],
+      "additionalItems": false
+    },
+    "fieldObject": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string" },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "id": { "type": "string" },
+        "height": { "type": "number", "minimum": 0 },
+        "h": { "type": "number", "minimum": 0 },
+        "type": { "type": "string" },
+        "multiline": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "field": {
+      "oneOf": [
+        { "$ref": "#/$defs/fieldTuple" },
+        { "$ref": "#/$defs/fieldObject" }
+      ]
+    },
+    "fields": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/field" }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/scalar" }
+    },
+    "controlVisibility": {
+      "type": "object",
+      "properties": {
+        "no": { "type": "boolean" },
+        "Revision": { "type": "boolean" },
+        "Effective": { "type": "boolean" },
+        "Classification": { "type": "boolean" },
+        "Doc. Control": { "type": "boolean" }
+      },
+      "additionalProperties": { "type": "boolean" }
+    },
+    "appearance": {
+      "type": "object",
+      "properties": {
+        "accent": { "type": "string" },
+        "ink": { "type": "string" },
+        "paper": { "type": "string" },
+        "orientation": { "enum": ["portrait", "landscape"] },
+        "marginX": { "type": "number" },
+        "marginY": { "type": "number" },
+        "bodyScale": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "sharedProperties": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["form", "document", "package"] },
+        "no": { "type": "string" },
+        "title": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string" },
+        "documentType": { "type": "string" },
+        "typeLabel": { "type": "string" },
+        "tag": { "type": "string" },
+        "org": { "type": "string" },
+        "logo": { "type": "string" },
+        "headerNote": { "type": "string" },
+        "showHeader": { "type": "boolean" },
+        "showControl": { "type": "boolean" },
+        "control": { "$ref": "#/$defs/control" },
+        "controlVisibility": { "$ref": "#/$defs/controlVisibility" },
+        "appearance": { "$ref": "#/$defs/appearance" }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "prose",
+            "callout",
+            "note",
+            "signatory",
+            "table",
+            "list",
+            "checklist",
+            "keyvalue",
+            "fields",
+            "checks",
+            "signature",
+            "ack",
+            "attachments",
+            "approval",
+            "budget",
+            "schedule",
+            "contacts",
+            "revisions",
+            "evidence",
+            "pagebreak"
+          ]
+        },
+        "heading": { "type": "string" },
+        "eyebrow": { "type": "string" },
+        "number": { "type": "boolean" },
+        "paras": { "$ref": "#/$defs/stringArray" },
+        "text": { "type": "string" },
+        "title": { "type": "string" },
+        "attribution": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "columns": { "$ref": "#/$defs/stringArray" },
+        "rows": { "$ref": "#/$defs/rows" },
+        "items": { "type": "array" },
+        "ordered": { "type": "boolean" },
+        "fields": { "$ref": "#/$defs/fields" },
+        "checks": { "$ref": "#/$defs/stringArray" },
+        "sign": { "$ref": "#/$defs/fields" },
+        "intro": { "type": "string" },
+        "req": { "type": "string" },
+        "single": { "type": "boolean" },
+        "cols": { "type": "number", "minimum": 1 },
+        "tall": { "type": "boolean" },
+        "currency": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "prose" } } },
+          "then": { "required": ["paras"] }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["callout", "note"] } } },
+          "then": { "required": ["text"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "signatory" } } },
+          "then": { "required": ["name", "role"] }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "table",
+                  "schedule",
+                  "contacts",
+                  "revisions",
+                  "evidence"
+                ]
+              }
+            }
+          },
+          "then": { "required": ["columns", "rows"] }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["list", "checklist"] } } },
+          "then": {
+            "required": ["items"],
+            "properties": { "items": { "$ref": "#/$defs/stringArray" } }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "keyvalue" } } },
+          "then": {
+            "required": ["items"],
+            "properties": { "items": { "$ref": "#/$defs/rows" } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "enum": ["fields", "signature", "attachments"] }
+            }
+          },
+          "then": { "required": ["fields"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "checks" } } },
+          "then": { "required": ["checks"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "ack" } } },
+          "then": { "required": ["fields", "sign"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "approval" } } },
+          "then": { "required": ["checks"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "budget" } } },
+          "then": { "required": ["rows"] }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "basicFormSection": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "req": { "type": "string" },
+        "fields": { "$ref": "#/$defs/fields" },
+        "checks": { "$ref": "#/$defs/stringArray" },
+        "sign": { "$ref": "#/$defs/fields" },
+        "text": { "type": "string" },
+        "single": { "type": "boolean" },
+        "cols": { "type": "number", "minimum": 1 },
+        "tall": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["fields"] },
+        { "required": ["checks"] },
+        { "required": ["sign"] },
+        { "required": ["text"] }
+      ],
+      "additionalProperties": true
+    },
+    "formSection": {
+      "oneOf": [
+        { "$ref": "#/$defs/block" },
+        { "$ref": "#/$defs/basicFormSection" },
+        {
+          "type": "object",
+          "required": ["row"],
+          "properties": {
+            "row": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/formSection" }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "formDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/sharedProperties" },
+        {
+          "type": "object",
+          "required": ["kind", "title", "sections"],
+          "properties": {
+            "kind": { "const": "form" },
+            "title": { "type": "string", "minLength": 1 },
+            "sub": { "type": "string" },
+            "sections": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/formSection" }
+            },
+            "footnotes": { "$ref": "#/$defs/stringArray" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "documentDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/sharedProperties" },
+        {
+          "type": "object",
+          "required": ["kind", "title", "blocks"],
+          "properties": {
+            "kind": { "const": "document" },
+            "title": { "type": "string", "minLength": 1 },
+            "standard": { "type": "string" },
+            "authority": { "type": "string" },
+            "toc": { "type": "boolean" },
+            "layout": {
+              "type": "object",
+              "properties": { "cover": { "type": "boolean" } },
+              "additionalProperties": true
+            },
+            "blocks": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/block" }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "childDefinition": {
+      "oneOf": [
+        { "$ref": "#/$defs/formDefinition" },
+        { "$ref": "#/$defs/documentDefinition" }
+      ]
+    },
+    "packageItem": {
+      "oneOf": [
+        { "$ref": "#/$defs/childDefinition" },
+        {
+          "type": "object",
+          "required": ["def"],
+          "properties": {
+            "sourceId": { "type": "string" },
+            "def": { "$ref": "#/$defs/childDefinition" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "packageDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/sharedProperties" },
+        {
+          "type": "object",
+          "required": ["kind", "title", "documents"],
+          "properties": {
+            "kind": { "const": "package" },
+            "title": { "type": "string", "minLength": 1 },
+            "documents": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/packageItem" }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

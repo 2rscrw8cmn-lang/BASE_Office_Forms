@@ -35,6 +35,11 @@ and overflowing sections are moved onto continuation pages before export.
 definition. They are intended for recovery, transfer, and AI workflows; normal team use
 should go through **Save shared** and **Shared library**.
 
+## Product architecture and roadmap
+
+The implementation source of truth for projects, RFIs, submittals, controlled documents,
+files, sharing, security, AI, and rollout is [`docs/README.md`](docs/README.md).
+
 Try it now: New document isn't blank if you **Load** `public/safety-manual.json`.
 
 ## Create — by describing it (Claude / Claude Code)
@@ -56,7 +61,8 @@ load the `{field: value}` JSON it returns, and the form renders completed.
 This repository is configured as a Cloudflare Pages project with Pages Functions and a
 D1 shared library. The `public/` directory contains the interface, `functions/` contains
 the library API, and `migrations/` contains the controlled database schema. A new D1
-database bootstraps its base schema on the first API request.
+database bootstraps its base schema on the first API request. The root `.node-version`
+pins Node.js 22 for Cloudflare Pages and local version managers.
 
 ```bash
 npm install
@@ -66,6 +72,9 @@ npm run dev
 npm run deploy:dry-run
 npm run deploy
 ```
+
+See [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) for the environment
+contract and run `npm run check` for the complete local and CI validation gate.
 
 `npm run deploy` publishes the site and Pages Functions to the `base-office-forms` Pages project with Wrangler. It will ask you to log in if
 the current machine is not authenticated with Cloudflare. The site is also still
