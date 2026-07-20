@@ -678,6 +678,16 @@
     }
   });
 
+  $("#templateSelect").addEventListener("change", () => {
+    def = normalize(BASE.fromTemplate($("#templateSelect").value));
+    activeId = null;
+    activeVersion = null;
+    activeFolderId = null;
+    packageContext = null;
+    renderAll();
+    status("Template opened in a new local draft.", "success");
+  });
+
   $("#newButton").addEventListener("click", () => { def = normalize(BASE.fromTemplate($("#templateSelect").value)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; renderAll(); status("New template created.", "success"); });
   $("#loadButton").addEventListener("click", loadJson);
   $("#downloadButton").addEventListener("click", saveJson);
