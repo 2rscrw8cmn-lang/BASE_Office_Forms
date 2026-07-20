@@ -1,6 +1,6 @@
 # Current Application Structure
 
-**Status:** PR 4 implementation inventory
+**Status:** PR 5 implementation inventory
 **Updated:** 2026-07-20
 
 ## Runtime shape
@@ -59,7 +59,8 @@ All new document-control routes use `/api/v2`. The v2 Pages Function delegates t
 small router and does not fall through to the legacy API. Alongside
 `GET|HEAD /api/v2/health` and PR 2's authenticated identity routes, PR 3 implements
 project list, create, detail, update, and project-contact routes. PR 4 adds the
-project RFI list/detail/draft/update and issue/respond/close/reopen routes. Project
+project RFI list/detail/draft/update and issue/respond/close/reopen routes. PR 5 adds
+project record list/create/detail/update/archive routes. Project
 IDs are resolved only within the authenticated organization; cross-organization and
 unauthorized project access return the same not-found response.
 
@@ -74,7 +75,10 @@ project-membership authorization. PR 4 adds `src/domain/rfis`,
 `src/application/rfis`, and D1 RFI record, response, and number-sequence
 repositories. RFI numbers are assigned only by the atomic draft-to-issued database
 transition, are scoped to a project, and are never changed. Project, contact, and
-RFI lifecycle mutations append durable activity events.
+RFI lifecycle mutations append durable activity events. PR 5 adds `src/domain/records`,
+`src/application/records`, and a D1 records repository. Records are project-scoped,
+use controlled types and active/archived statuses, and atomically append create,
+metadata-update, and archive activity events. Revisions and files remain out of scope.
 
 ## Build and test layout
 

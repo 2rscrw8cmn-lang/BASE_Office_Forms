@@ -3,6 +3,7 @@ import { SessionResolutionService } from "../../application/identity/session-res
 import { ProjectContactService } from "../../application/projects/project-contact-service";
 import { ProjectService } from "../../application/projects/project-service";
 import { RfiService } from "../../application/rfis/rfi-service";
+import { RecordService } from "../../application/records/record-service";
 import {
   CloudflareAccessAuthenticationAdapter,
   CloudflareAccessJwtVerifier,
@@ -16,6 +17,7 @@ import { D1ProjectsRepository } from "../../infrastructure/db/d1/projects-reposi
 import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
+import { D1RecordsRepository } from "../../infrastructure/db/d1/records-repository";
 import { D1UsersRepository } from "../../infrastructure/db/d1/users-repository";
 
 export interface V2Environment {
@@ -30,6 +32,7 @@ export interface V2RouteDependencies {
   projects?: ProjectService;
   projectContacts?: ProjectContactService;
   rfis?: RfiService;
+  records?: RecordService;
 }
 
 export function createV2RouteDependencies(
@@ -68,6 +71,10 @@ export function createV2RouteDependencies(
       projects,
       new D1RfiRecordsRepository(environment.DB, rfiSequences, rfiResponses),
       rfiResponses,
+    ),
+    records: new RecordService(
+      projects,
+      new D1RecordsRepository(environment.DB),
     ),
   };
 }
