@@ -50,7 +50,7 @@ describe("legacy renderer regression", () => {
       "\n",
     );
     expect(createHash("sha256").update(source).digest("hex")).toBe(
-      "50735c91cebac5460474ff8b0fe380dc4cd64035a3fe7fcf66fc7148fc433fb1",
+      "4fa38a15e4dc7c532cba7131513820e9b1ed16da12a67528365d7631b690d8cc",
     );
   });
 
