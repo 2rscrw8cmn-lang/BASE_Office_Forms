@@ -1,9 +1,15 @@
 import type { AuthenticationResult } from "../../auth/authentication-adapter";
 import { ProjectContactNotFoundError } from "../../application/projects/project-contact-service";
 import { ProjectNotFoundError } from "../../application/projects/project-service";
+import {
+  RfiNotFoundError,
+  RfiIllegalTransitionError,
+  RfiAuthorizationError,
+} from "../../domain/rfis/errors";
 import { AuthorizationError } from "../../domain/identity/authorization";
 import { ProjectAuthorizationError } from "../../domain/projects/authorization";
 import type { Project, ProjectContact } from "../../domain/projects/project";
+import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
 import {
   apiError,
   apiSuccess,
@@ -19,6 +25,11 @@ import {
   parseProjectUpdate,
   RequestValidationError,
 } from "./project-schemas";
+import {
+  parseRfiCreate,
+  parseRfiResponse,
+  parseRfiUpdate,
+} from "./rfi-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -61,6 +72,19 @@ export async function routeV2Request(
   if (pathname === `${V2_BASE_PATH}/projects` && dependencies) {
     return handleProjects(request, context, dependencies);
   }
+  const rfiRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(issue|respond|close|reopen))?)?$/,
+  );
+  if (rfiRoute && dependencies) {
+    return handleRfiRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(rfiRoute[1]),
+      rfiRoute[2] ? decodeURIComponent(rfiRoute[2]) : undefined,
+      rfiRoute[3],
+    );
+  }
   const projectRoute = pathname.match(
     /^\/api\/v2\/projects\/([^/]+)(?:\/contacts(?:\/([^/]+))?)?$/,
   );
@@ -81,6 +105,114 @@ export async function routeV2Request(
     "API_ROUTE_NOT_FOUND",
     "The requested API route was not found.",
   );
+}
+
+async function handleRfiRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  rfiId: string | undefined,
+  action: string | undefined,
+): Promise<Response> {
+  const allowedMethods = action
+    ? ["POST"]
+    : rfiId
+      ? ["GET", "PATCH"]
+      : ["GET", "POST"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const rfis = dependencies.rfis;
+  if (!rfis) return unavailable(context);
+  try {
+    if (!rfiId) {
+      if (request.method === "GET") {
+        return apiSuccess(
+          context,
+          (await rfis.list(authenticated.session, projectId)).map(serializeRfi),
+        );
+      }
+      const rfi = await rfis.createDraft(authenticated.session, projectId, {
+        ...parseRfiCreate(await parseJsonRequest(request)),
+        correlationId: context.requestId,
+      });
+      return apiSuccess(context, serializeRfi(rfi), 201);
+    }
+    if (!action) {
+      if (request.method === "GET") {
+        return apiSuccess(
+          context,
+          serializeRfiDetail(
+            await rfis.get(authenticated.session, projectId, rfiId),
+          ),
+        );
+      }
+      const current = await rfis.get(authenticated.session, projectId, rfiId);
+      const rfi = await rfis.updateDraft(
+        authenticated.session,
+        projectId,
+        rfiId,
+        {
+          ...parseRfiUpdate(
+            await parseJsonRequest(request),
+            toRfiWriteInput(current),
+          ),
+          correlationId: context.requestId,
+        },
+      );
+      return apiSuccess(context, serializeRfi(rfi));
+    }
+    if (action === "issue") {
+      return apiSuccess(
+        context,
+        serializeRfi(
+          await rfis.issue(
+            authenticated.session,
+            projectId,
+            rfiId,
+            context.requestId,
+          ),
+        ),
+      );
+    }
+    if (action === "respond") {
+      const result = await rfis.respond(
+        authenticated.session,
+        projectId,
+        rfiId,
+        {
+          ...parseRfiResponse(await parseJsonRequest(request)),
+          correlationId: context.requestId,
+        },
+      );
+      return apiSuccess(context, {
+        ...serializeRfi(result.rfi),
+        response: serializeRfiResponse(result.response),
+      });
+    }
+    const rfi =
+      action === "close"
+        ? await rfis.close(
+            authenticated.session,
+            projectId,
+            rfiId,
+            context.requestId,
+          )
+        : await rfis.reopen(
+            authenticated.session,
+            projectId,
+            rfiId,
+            context.requestId,
+          );
+    return apiSuccess(context, serializeRfi(rfi));
+  } catch (error) {
+    return projectError(context, error);
+  }
 }
 
 async function handleProjects(
@@ -402,6 +534,22 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       "PROJECT_CONTACT_NOT_FOUND",
       "The requested project contact was not found.",
     );
+  if (error instanceof RfiNotFoundError)
+    return apiError(
+      context,
+      404,
+      "RFI_NOT_FOUND",
+      "The requested RFI was not found.",
+    );
+  if (error instanceof RfiAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
+  if (error instanceof RfiIllegalTransitionError)
+    return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
   if (
     error instanceof Error &&
     error.message.includes("projects.organization_id, projects.project_number")
@@ -447,6 +595,42 @@ function serializeContact(contact: ProjectContact) {
     archivedAt: contact.archivedAt,
   };
 }
+function serializeRfi(rfi: Rfi) {
+  return {
+    id: rfi.id,
+    projectId: rfi.projectId,
+    rfiNumber: rfi.rfiNumber,
+    status: rfi.status,
+    title: rfi.title,
+    question: rfi.question,
+    suggestedResolution: rfi.suggestedResolution,
+    submittedBy: rfi.submittedBy,
+    assignedTo: rfi.assignedTo,
+    dueDate: rfi.dueDate,
+    costImpact: rfi.costImpact,
+    scheduleImpact: rfi.scheduleImpact,
+    issuedAt: rfi.issuedAt,
+    answeredAt: rfi.answeredAt,
+    closedAt: rfi.closedAt,
+    createdAt: rfi.createdAt,
+    updatedAt: rfi.updatedAt,
+  };
+}
+function serializeRfiResponse(response: RfiResponse) {
+  return {
+    id: response.id,
+    rfiId: response.rfiId,
+    response: response.response,
+    respondedBy: response.respondedBy,
+    createdAt: response.createdAt,
+  };
+}
+function serializeRfiDetail(rfi: Rfi & { responses: RfiResponse[] }) {
+  return {
+    ...serializeRfi(rfi),
+    responses: rfi.responses.map(serializeRfiResponse),
+  };
+}
 function toProjectWriteInput(project: Project) {
   return {
     projectNumber: project.projectNumber,
@@ -468,6 +652,18 @@ function toContactWriteInput(contact: ProjectContact) {
     phone: contact.phone,
     address: contact.address,
     notes: contact.notes,
+  };
+}
+function toRfiWriteInput(rfi: Rfi) {
+  return {
+    title: rfi.title,
+    question: rfi.question,
+    suggestedResolution: rfi.suggestedResolution,
+    submittedBy: rfi.submittedBy,
+    assignedTo: rfi.assignedTo,
+    dueDate: rfi.dueDate,
+    costImpact: rfi.costImpact,
+    scheduleImpact: rfi.scheduleImpact,
   };
 }
 function serializeOrganization(organization: {
