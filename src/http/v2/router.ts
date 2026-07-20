@@ -36,6 +36,18 @@ import type { Record } from "../../domain/records/record";
 import type { Revision } from "../../domain/revisions/revision";
 import type { RevisionFile } from "../../domain/files/file";
 import type { FileDownload } from "../../application/files/file-service";
+import type { Issuance } from "../../domain/issuances/issuance";
+import type { IssuanceSummary } from "../../domain/issuances/issuance";
+import {
+  IssuanceAuthorizationError,
+  IssuanceEligibilityError,
+  IssuanceFileObjectIntegrityError,
+  IssuanceFileObjectMissingError,
+  IssuanceNotFoundError,
+  IssuancePersistenceError,
+  IssuanceStorageVerificationError,
+} from "../../domain/issuances/errors";
+import { IssuanceValidationError } from "../../domain/issuances/validation";
 import {
   apiError,
   apiSuccess,
@@ -63,6 +75,7 @@ import {
 } from "./record-schemas";
 import { parseRevisionCreate } from "./revision-schemas";
 import { parseFileUpload } from "./file-schemas";
+import { parseIssuanceCreate } from "./issuance-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -104,6 +117,33 @@ export async function routeV2Request(
 
   if (pathname === `${V2_BASE_PATH}/projects` && dependencies) {
     return handleProjects(request, context, dependencies);
+  }
+  const projectIssuanceRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/issuances(?:\/([^/]+))?$/,
+  );
+  if (projectIssuanceRoute && dependencies) {
+    return handleProjectIssuanceRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(projectIssuanceRoute[1]),
+      projectIssuanceRoute[2]
+        ? decodeURIComponent(projectIssuanceRoute[2])
+        : undefined,
+    );
+  }
+  const revisionIssuanceRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions\/([^/]+)\/issuances$/,
+  );
+  if (revisionIssuanceRoute && dependencies) {
+    return handleRevisionIssuanceRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(revisionIssuanceRoute[1]),
+      decodeURIComponent(revisionIssuanceRoute[2]),
+      decodeURIComponent(revisionIssuanceRoute[3]),
+    );
   }
   const recordRoute = pathname.match(
     /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive))?)?$/,
@@ -266,6 +306,74 @@ async function handleRecordRoute(
       },
     );
     return apiSuccess(context, serializeRecord(record));
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleProjectIssuanceRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  issuanceId: string | undefined,
+): Promise<Response> {
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    ["GET"],
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const issuances = dependencies.issuances;
+  if (!issuances) return unavailable(context);
+  try {
+    if (!issuanceId) {
+      return apiSuccess(
+        context,
+        (await issuances.list(authenticated.session, projectId)).map(
+          serializeIssuanceSummary,
+        ),
+      );
+    }
+    return apiSuccess(
+      context,
+      serializeIssuance(
+        await issuances.get(authenticated.session, projectId, issuanceId),
+      ),
+    );
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleRevisionIssuanceRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  recordId: string,
+  revisionId: string,
+): Promise<Response> {
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    ["POST"],
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const issuances = dependencies.issuances;
+  if (!issuances) return unavailable(context);
+  try {
+    const input = parseIssuanceCreate(await parseJsonRequest(request));
+    const issuance = await issuances.issue(
+      authenticated.session,
+      projectId,
+      recordId,
+      revisionId,
+      { ...input, correlationId: context.requestId },
+    );
+    return apiSuccess(context, serializeIssuance(issuance), 201);
   } catch (error) {
     return projectError(context, error);
   }
@@ -930,6 +1038,47 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 500, "FILE_OBJECT_MISSING", error.message);
   if (error instanceof FileObjectIntegrityError)
     return apiError(context, 500, "FILE_OBJECT_INTEGRITY", error.message);
+  if (error instanceof IssuanceNotFoundError)
+    return apiError(
+      context,
+      404,
+      "ISSUANCE_NOT_FOUND",
+      "The requested issuance was not found.",
+    );
+  if (error instanceof IssuanceAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
+  if (error instanceof IssuanceValidationError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
+  if (error instanceof IssuanceEligibilityError)
+    return apiError(context, 409, "ISSUANCE_INELIGIBLE", error.message);
+  if (error instanceof IssuanceFileObjectMissingError)
+    return apiError(
+      context,
+      500,
+      "ISSUANCE_FILE_OBJECT_MISSING",
+      error.message,
+    );
+  if (error instanceof IssuanceFileObjectIntegrityError)
+    return apiError(
+      context,
+      500,
+      "ISSUANCE_FILE_OBJECT_INTEGRITY",
+      error.message,
+    );
+  if (error instanceof IssuanceStorageVerificationError)
+    return apiError(
+      context,
+      502,
+      "ISSUANCE_STORAGE_UNAVAILABLE",
+      error.message,
+    );
+  if (error instanceof IssuancePersistenceError)
+    return apiError(context, 500, "ISSUANCE_PERSISTENCE_FAILED", error.message);
   if (
     error instanceof Error &&
     error.message.includes(
@@ -1070,6 +1219,41 @@ function serializeFile(file: RevisionFile) {
     sha256: file.sha256,
     uploadedBy: file.uploadedBy,
     uploadedAt: file.uploadedAt,
+  };
+}
+function serializeIssuanceSummary(issuance: IssuanceSummary) {
+  return {
+    id: issuance.id,
+    issueNumber: issuance.issueNumber,
+    recordId: issuance.recordId,
+    revisionId: issuance.revisionId,
+    purpose: issuance.purpose,
+    issuedBy: issuance.issuedBy,
+    issuedAt: issuance.issuedAt,
+    fileCount: issuance.fileCount,
+  };
+}
+function serializeIssuance(issuance: Issuance) {
+  return {
+    id: issuance.id,
+    organizationId: issuance.organizationId,
+    projectId: issuance.projectId,
+    recordId: issuance.recordId,
+    revisionId: issuance.revisionId,
+    issueNumber: issuance.issueNumber,
+    issueSequence: issuance.issueSequence,
+    purpose: issuance.purpose,
+    notes: issuance.notes,
+    issuedBy: issuance.issuedBy,
+    issuedAt: issuance.issuedAt,
+    files: issuance.files.map((file) => ({
+      fileId: file.fileId,
+      originalFilename: file.originalFilename,
+      mediaType: file.mediaType,
+      byteSize: file.byteSize,
+      sha256: file.sha256,
+      displayOrder: file.displayOrder,
+    })),
   };
 }
 function fileContentResponse(

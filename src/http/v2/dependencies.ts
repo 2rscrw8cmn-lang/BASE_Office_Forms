@@ -6,6 +6,7 @@ import { RfiService } from "../../application/rfis/rfi-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
 import { FileService } from "../../application/files/file-service";
+import { IssuanceService } from "../../application/issuances/issuance-service";
 import {
   CloudflareAccessAuthenticationAdapter,
   CloudflareAccessJwtVerifier,
@@ -23,6 +24,8 @@ import { D1RecordsRepository } from "../../infrastructure/db/d1/records-reposito
 import { D1RecordRevisionsRepository } from "../../infrastructure/db/d1/record-revisions-repository";
 import { D1RecordRevisionSequencesRepository } from "../../infrastructure/db/d1/record-revision-sequences-repository";
 import { D1RevisionFilesRepository } from "../../infrastructure/db/d1/revision-files-repository";
+import { D1IssuancesRepository } from "../../infrastructure/db/d1/issuances-repository";
+import { D1ProjectIssuanceSequencesRepository } from "../../infrastructure/db/d1/project-issuance-sequences-repository";
 import { D1UsersRepository } from "../../infrastructure/db/d1/users-repository";
 import { R2FileStorage } from "../../infrastructure/storage/r2-file-storage";
 
@@ -42,6 +45,7 @@ export interface V2RouteDependencies {
   records?: RecordService;
   revisions?: RevisionService;
   files?: FileService;
+  issuances?: IssuanceService;
 }
 
 export function createV2RouteDependencies(
@@ -63,6 +67,8 @@ export function createV2RouteDependencies(
     environment.DB,
     recordRevisionSequences,
   );
+  const files = new D1RevisionFilesRepository(environment.DB);
+  const storage = new R2FileStorage(environment.FILES);
   const sessions = new SessionResolutionService(users, memberships);
   const accessConfiguration = {
     teamDomain: environment.CF_ACCESS_TEAM_DOMAIN,
@@ -91,12 +97,18 @@ export function createV2RouteDependencies(
     ),
     records: new RecordService(projects, records),
     revisions: new RevisionService(projects, records, revisions),
-    files: new FileService(
+    files: new FileService(projects, records, revisions, files, storage),
+    issuances: new IssuanceService(
       projects,
       records,
       revisions,
-      new D1RevisionFilesRepository(environment.DB),
-      new R2FileStorage(environment.FILES),
+      files,
+      new D1IssuancesRepository(
+        environment.DB,
+        new D1ProjectIssuanceSequencesRepository(environment.DB),
+      ),
+      users,
+      storage,
     ),
   };
 }

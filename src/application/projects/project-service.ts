@@ -12,6 +12,8 @@ import { requireRevisionManagement } from "../../domain/revisions/authorization"
 import type { RevisionCapability } from "../../domain/revisions/errors";
 import { requireFileManagement } from "../../domain/files/authorization";
 import type { FileCapability } from "../../domain/files/errors";
+import { requireIssuanceManagement } from "../../domain/issuances/authorization";
+import type { IssuanceCapability } from "../../domain/issuances/errors";
 import type { Project, ProjectStatus } from "../../domain/projects/project";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import {
@@ -211,6 +213,30 @@ export class ProjectService {
         actor.userId,
       ));
     requireFileManagement(actor, capability, isAssignedProjectManager);
+    return project;
+  }
+
+  async requireIssuanceAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<Project> {
+    return this.get(actor, projectId);
+  }
+
+  async requireIssuanceManagement(
+    actor: AppSession,
+    projectId: string,
+    capability: IssuanceCapability,
+  ): Promise<Project> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    requireIssuanceManagement(actor, capability, isAssignedProjectManager);
     return project;
   }
 

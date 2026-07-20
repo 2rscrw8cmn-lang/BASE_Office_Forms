@@ -1,6 +1,6 @@
 # Current Application Structure
 
-**Status:** Files Foundation implementation inventory
+**Status:** Issuance Foundation implementation inventory
 **Updated:** 2026-07-20
 
 ## Runtime shape
@@ -37,6 +37,9 @@ Storage
     └── uploaded file binaries, keyed by server-generated storage key
 ```
 
+The D1 binding also contains immutable `issuances` and `issuance_files`
+snapshots plus `project_issuance_sequences` for project-wide issue numbering.
+
 ## Existing shared library
 
 `functions/api/[[path]].ts` owns the existing `/api/documents`, `/api/folders`, and
@@ -69,7 +72,9 @@ project RFI list/detail/draft/update and issue/respond/close/reopen routes. PR 5
 project record list/create/detail/update/archive routes. PR 6 adds the record
 revision list/create/detail/publish routes nested under a record. The Files
 Foundation PR adds file list/upload/detail/download routes nested under a
-revision. Project IDs are resolved only within the authenticated organization;
+revision. The Issuance Foundation adds project-scoped issuance list/detail
+routes and a create route nested under an exact record revision. Project IDs
+are resolved only within the authenticated organization;
 cross-organization and unauthorized project access return the same not-found
 response.
 
@@ -134,8 +139,43 @@ stream of untrusted bytes. The `revision_files` row also carries a four-column
 composite foreign key `(record_id, organization_id, project_id, revision_id)`
 into `record_revisions`, so a file's `project_id` must match the project that
 actually owns its revision and record. API responses never include the storage
-key, bucket name, or any other R2 implementation detail. Issuance remains out
-of scope.
+key, bucket name, or any other R2 implementation detail.
+
+The Issuance Foundation adds `src/domain/issuances`,
+`src/application/issuances`, D1 issuance and project-sequence repositories,
+and migration `0010_issuance_foundation.sql` (schema version 9). An issuance
+is an immutable audit snapshot of one published revision and an explicitly
+selected, nonempty ordered set of that revision's files. The caller supplies
+only a controlled purpose, optional notes, and file IDs; the server allocates
+the permanent project-wide number (`ISS-001`, `ISS-002`, and so on) from
+`project_issuance_sequences`. Contributors and viewers with active project
+assignments may list and read issuances, while issue authority is limited to
+organization administrators, document-control administrators, and assigned
+project managers.
+
+`issuances.revision_snapshot_json` records the complete issuance-relevant
+revision fields that actually exist in the current revision domain, plus the
+issuer's non-authoritative display name when available. `issuance_files`
+copies filename, media type, byte size, SHA-256, storage key, file ID, and
+display order so later joins or mutable user/project metadata cannot change
+the historical meaning of the issuance. Composite foreign keys enforce the
+organization/project/record/revision/issuance/file hierarchy, and D1 triggers
+reject updates or deletes to both snapshot tables.
+
+Before D1 persistence begins, `IssuanceService` uses only private R2 `head()`
+calls to verify every selected source object exists and matches the D1 byte
+size. It does not download bodies, copy objects, or create R2 data. Only after
+all preflight checks pass does one `database.batch()` ensure the project
+sequence row, insert the issuance with its generated number, advance the
+sequence, insert every ordered file snapshot, and append the
+`issuance.created` activity event. Any statement failure rolls back the entire
+batch, so a failed preflight consumes no number and a failed D1 write leaves
+no partial issuance. List/detail reads depend only on normal project access,
+not current record or revision lifecycle state, so historical issuances remain
+readable after record archival, revision supersession, newer publications, or
+project-membership changes (subject to the reader still having current project
+authorization). API responses never expose snapshotted storage keys, bucket
+details, R2 URLs, or raw snapshot JSON.
 
 ## Build and test layout
 
