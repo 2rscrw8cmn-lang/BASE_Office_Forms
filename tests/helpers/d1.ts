@@ -22,6 +22,11 @@ export async function resetIdentityFoundation(): Promise<void> {
     env.DB.prepare("DROP TRIGGER IF EXISTS activity_events_no_delete"),
   ]);
   await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE records SET current_revision_id = NULL WHERE current_revision_id IS NOT NULL",
+    ),
+    env.DB.prepare("DELETE FROM record_revisions"),
+    env.DB.prepare("DELETE FROM record_revision_sequences"),
     env.DB.prepare("DELETE FROM records"),
     env.DB.prepare("DELETE FROM rfi_responses"),
     env.DB.prepare("DELETE FROM rfi_records"),

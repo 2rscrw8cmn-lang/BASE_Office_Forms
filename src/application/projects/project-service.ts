@@ -8,6 +8,8 @@ import { requireRfiManagement } from "../../domain/rfis/authorization";
 import type { RfiCapability } from "../../domain/rfis/errors";
 import { requireRecordManagement } from "../../domain/records/authorization";
 import type { RecordCapability } from "../../domain/records/errors";
+import { requireRevisionManagement } from "../../domain/revisions/authorization";
+import type { RevisionCapability } from "../../domain/revisions/errors";
 import type { Project, ProjectStatus } from "../../domain/projects/project";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import {
@@ -159,6 +161,30 @@ export class ProjectService {
         actor.userId,
       ));
     requireRecordManagement(actor, capability, isAssignedProjectManager);
+    return project;
+  }
+
+  async requireRevisionAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<Project> {
+    return this.get(actor, projectId);
+  }
+
+  async requireRevisionManagement(
+    actor: AppSession,
+    projectId: string,
+    capability: RevisionCapability,
+  ): Promise<Project> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    requireRevisionManagement(actor, capability, isAssignedProjectManager);
     return project;
   }
 

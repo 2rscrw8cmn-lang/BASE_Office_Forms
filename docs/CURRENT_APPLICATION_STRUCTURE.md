@@ -1,6 +1,6 @@
 # Current Application Structure
 
-**Status:** PR 5 implementation inventory
+**Status:** PR 6 implementation inventory
 **Updated:** 2026-07-20
 
 ## Runtime shape
@@ -28,6 +28,8 @@ Storage
 └── D1 binding DB
     ├── folders
     ├── documents
+    ├── record_revisions
+    ├── record_revision_sequences
     └── app_meta
 ```
 
@@ -60,7 +62,8 @@ small router and does not fall through to the legacy API. Alongside
 `GET|HEAD /api/v2/health` and PR 2's authenticated identity routes, PR 3 implements
 project list, create, detail, update, and project-contact routes. PR 4 adds the
 project RFI list/detail/draft/update and issue/respond/close/reopen routes. PR 5 adds
-project record list/create/detail/update/archive routes. Project
+project record list/create/detail/update/archive routes. PR 6 adds the record
+revision list/create/detail/publish routes nested under a record. Project
 IDs are resolved only within the authenticated organization; cross-organization and
 unauthorized project access return the same not-found response.
 
@@ -78,7 +81,17 @@ transition, are scoped to a project, and are never changed. Project, contact, an
 RFI lifecycle mutations append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,
-metadata-update, and archive activity events. Revisions and files remain out of scope.
+metadata-update, and archive activity events. PR 6 adds `src/domain/revisions`,
+`src/application/revisions`, and D1 record-revision and revision-sequence
+repositories. A revision is an immutable, record-scoped metadata snapshot with a
+server-generated, permanent, per-record revision number; revisions are created as
+`draft`, and publishing a revision supersedes any previously published revision for
+the same record and atomically updates `records.current_revision_id`. Published
+revisions cannot be edited or republished, and draft deletion is out of scope for
+this PR. Revision creation and publication both reject archived records.
+`records.current_revision_id` is enforced at the database level to reference only a
+revision belonging to the same organization and record. Files and issuance remain
+out of scope.
 
 ## Build and test layout
 
@@ -90,7 +103,7 @@ src/rendering/           schema validator
 tests/unit/              schema and renderer regressions
 tests/integration/       Worker-runtime, D1, and API regressions
 tests/helpers/           reusable D1 and route test harnesses
-migrations/              existing additive D1 migrations
+migrations/              existing D1 migrations (additive, plus one safe table rebuild)
 .github/workflows/       pull-request validation
 ```
 
