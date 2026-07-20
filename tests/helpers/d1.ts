@@ -18,10 +18,29 @@ export async function resetLegacyLibrary(): Promise<void> {
 
 export async function resetIdentityFoundation(): Promise<void> {
   await env.DB.batch([
+    env.DB.prepare("DROP TRIGGER IF EXISTS activity_events_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS activity_events_no_delete"),
+  ]);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM project_contacts"),
+    env.DB.prepare("DELETE FROM project_memberships"),
+    env.DB.prepare("DELETE FROM projects"),
     env.DB.prepare("DELETE FROM activity_events"),
     env.DB.prepare("DELETE FROM organization_memberships"),
     env.DB.prepare("DELETE FROM users"),
     env.DB.prepare("DELETE FROM organizations"),
+  ]);
+  await env.DB.batch([
+    env.DB.prepare(
+      `CREATE TRIGGER activity_events_no_update
+       BEFORE UPDATE ON activity_events
+       BEGIN SELECT RAISE(ABORT, 'activity_events are append-only'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER activity_events_no_delete
+       BEFORE DELETE ON activity_events
+       BEGIN SELECT RAISE(ABORT, 'activity_events are append-only'); END`,
+    ),
   ]);
 }
 
