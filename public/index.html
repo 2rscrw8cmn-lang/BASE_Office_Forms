@@ -1,83 +1,29 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="BASE controlled document workspace">
-<title>BASE — Document Workspace</title>
-<link rel="icon" type="image/svg+xml" href="assets/base-logo.svg?v=20260718">
-<link rel="stylesheet" href="base.css">
-</head>
-<body class="workspace-body">
-<header class="app-topbar">
-  <a class="app-brand" href="index.html" aria-label="BASE document workspace home">
-    <img src="assets/base-logo.svg?v=20260718" alt="BASE">
-  </a>
-  <span class="app-divider" aria-hidden="true"></span>
-  <nav class="app-crumbs" aria-label="Breadcrumb"><span>Documents</span></nav>
-  <form class="global-search" id="globalSearch" role="search">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
-    <label class="sr-only" for="searchInput">Search documents and templates</label>
-    <input id="searchInput" type="search" autocomplete="off" placeholder="Search documents, templates, or records">
-  </form>
-  <button class="user-placeholder" type="button" title="User sign in will be added later" aria-label="User account placeholder">User</button>
-</header>
-
-<main class="workspace-shell">
-  <section class="workspace-intro" aria-labelledby="workspace-title">
-    <p class="eyebrow">Controlled document system</p>
-    <h1 id="workspace-title">Document workspace</h1>
-    <p>Create new documents or work with controlled records already in the library.</p>
-  </section>
-
-  <section class="primary-actions" aria-label="Create or access documents">
-    <article class="primary-card">
-      <div class="primary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V21H6z"></path><path d="M14 3.5V8h4"></path></svg></div>
-      <div><h2>From Template</h2><p>Start from a prepared BASE form, document, or package.</p></div>
-      <a class="quiet-button" href="#templates">Browse templates <span aria-hidden="true">→</span></a>
-    </article>
-    <article class="primary-card">
-      <div class="primary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"></rect><path d="M9 8h6M9 12h6"></path></svg></div>
-      <div><h2>From Scratch</h2><p>Open a clean workspace for exactly the record you need.</p></div>
-      <div class="segmented-actions" aria-label="Create from scratch">
-        <a href="builder.html?new=form">Form</a><a href="builder.html?new=document">Document</a><a href="builder.html?new=package">Package</a>
-      </div>
-    </article>
-    <article class="primary-card">
-      <div class="primary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v11H3z"></path><path d="M3 7V5h7l2 2"></path></svg></div>
-      <div><h2>Controlled Documents</h2><p>View drafts, issued files, revisions, and shared records.</p></div>
-      <a class="quiet-button" href="#library">Open library <span aria-hidden="true">→</span></a>
-    </article>
-  </section>
-
-  <section class="library-surface" id="library" aria-labelledby="library-title">
-    <div class="section-heading">
-      <div><p class="eyebrow">Shared records</p><h2 id="library-title">Document library</h2></div>
-      <p id="libraryCount" aria-live="polite">Loading library…</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="BASE project document-control workspace"
+    />
+    <title>BASE Office Forms</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/assets/base-logo.svg?v=20260718"
+    />
+    <link rel="stylesheet" href="/base.css" />
+    <link rel="stylesheet" href="/app-shell.css" />
+  </head>
+  <body class="app-shell-body">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="app" class="app-root" aria-busy="true">
+      <main id="main-content" class="app-boot" tabindex="-1">
+        <p class="eyebrow">BASE Office Forms</p>
+        <h1>Loading workspace&hellip;</h1>
+      </main>
     </div>
-    <div class="library-filters" id="libraryFilters" aria-label="Filter library by type">
-      <button class="active" type="button" data-kind="">All records</button>
-      <button type="button" data-kind="form">Forms</button>
-      <button type="button" data-kind="document">Documents</button>
-      <button type="button" data-kind="package">Packages</button>
-    </div>
-    <div class="library-table" role="table" aria-label="Controlled documents">
-      <div class="library-table-head" role="row">
-        <span role="columnheader">Document</span><span role="columnheader">Type</span><span role="columnheader">Revision</span><span role="columnheader">Updated</span><span aria-hidden="true"></span>
-      </div>
-      <div id="libraryRows" role="rowgroup"><div class="library-loading">Loading controlled documents…</div></div>
-    </div>
-  </section>
-
-  <section class="template-strip" id="templates" aria-labelledby="template-title">
-    <div class="section-heading compact"><div><p class="eyebrow">Starting points</p><h2 id="template-title">Templates</h2></div><p id="templateCount"></p></div>
-    <div class="template-grid" id="templateGrid"></div>
-  </section>
-</main>
-
-<script src="engine.js"></script>
-<script src="library-api.js"></script>
-<script src="global-search.js"></script>
-<script src="home.js"></script>
-</body>
+    <script type="module" src="/app-shell.js"></script>
+  </body>
 </html>
