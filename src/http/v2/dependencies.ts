@@ -4,6 +4,7 @@ import { ProjectContactService } from "../../application/projects/project-contac
 import { ProjectService } from "../../application/projects/project-service";
 import { RfiService } from "../../application/rfis/rfi-service";
 import { RecordService } from "../../application/records/record-service";
+import { RevisionService } from "../../application/revisions/revision-service";
 import {
   CloudflareAccessAuthenticationAdapter,
   CloudflareAccessJwtVerifier,
@@ -18,6 +19,8 @@ import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-n
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { D1RecordsRepository } from "../../infrastructure/db/d1/records-repository";
+import { D1RecordRevisionsRepository } from "../../infrastructure/db/d1/record-revisions-repository";
+import { D1RecordRevisionSequencesRepository } from "../../infrastructure/db/d1/record-revision-sequences-repository";
 import { D1UsersRepository } from "../../infrastructure/db/d1/users-repository";
 
 export interface V2Environment {
@@ -33,6 +36,7 @@ export interface V2RouteDependencies {
   projectContacts?: ProjectContactService;
   rfis?: RfiService;
   records?: RecordService;
+  revisions?: RevisionService;
 }
 
 export function createV2RouteDependencies(
@@ -46,6 +50,10 @@ export function createV2RouteDependencies(
   );
   const rfiSequences = new D1RfiNumberSequencesRepository(environment.DB);
   const rfiResponses = new D1RfiResponsesRepository(environment.DB);
+  const recordRevisionSequences = new D1RecordRevisionSequencesRepository(
+    environment.DB,
+  );
+  const records = new D1RecordsRepository(environment.DB);
   const sessions = new SessionResolutionService(users, memberships);
   const accessConfiguration = {
     teamDomain: environment.CF_ACCESS_TEAM_DOMAIN,
@@ -72,9 +80,11 @@ export function createV2RouteDependencies(
       new D1RfiRecordsRepository(environment.DB, rfiSequences, rfiResponses),
       rfiResponses,
     ),
-    records: new RecordService(
+    records: new RecordService(projects, records),
+    revisions: new RevisionService(
       projects,
-      new D1RecordsRepository(environment.DB),
+      records,
+      new D1RecordRevisionsRepository(environment.DB, recordRevisionSequences),
     ),
   };
 }

@@ -11,11 +11,17 @@ import {
   RfiIllegalTransitionError,
   RfiAuthorizationError,
 } from "../../domain/rfis/errors";
+import {
+  RevisionNotFoundError,
+  RevisionIllegalTransitionError,
+  RevisionAuthorizationError,
+} from "../../domain/revisions/errors";
 import { AuthorizationError } from "../../domain/identity/authorization";
 import { ProjectAuthorizationError } from "../../domain/projects/authorization";
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
 import type { Record } from "../../domain/records/record";
+import type { Revision } from "../../domain/revisions/revision";
 import {
   apiError,
   apiSuccess,
@@ -41,6 +47,7 @@ import {
   parseRecordCreate,
   parseRecordUpdate,
 } from "./record-schemas";
+import { parseRevisionCreate } from "./revision-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -94,6 +101,20 @@ export async function routeV2Request(
       decodeURIComponent(recordRoute[1]),
       recordRoute[2] ? decodeURIComponent(recordRoute[2]) : undefined,
       recordRoute[3],
+    );
+  }
+  const revisionRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions(?:\/([^/]+)(?:\/(publish))?)?$/,
+  );
+  if (revisionRoute && dependencies) {
+    return handleRevisionRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(revisionRoute[1]),
+      decodeURIComponent(revisionRoute[2]),
+      revisionRoute[3] ? decodeURIComponent(revisionRoute[3]) : undefined,
+      revisionRoute[4],
     );
   }
   const rfiRoute = pathname.match(
@@ -215,6 +236,89 @@ async function handleRecordRoute(
       },
     );
     return apiSuccess(context, serializeRecord(record));
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleRevisionRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  recordId: string,
+  revisionId: string | undefined,
+  action: string | undefined,
+): Promise<Response> {
+  const allowedMethods = action
+    ? ["POST"]
+    : revisionId
+      ? ["GET"]
+      : ["GET", "POST"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const revisions = dependencies.revisions;
+  const records = dependencies.records;
+  if (!revisions || !records) return unavailable(context);
+  try {
+    if (!revisionId) {
+      if (request.method === "GET") {
+        return apiSuccess(
+          context,
+          (
+            await revisions.list(authenticated.session, projectId, recordId)
+          ).map(serializeRevision),
+        );
+      }
+      const current = await records.get(
+        authenticated.session,
+        projectId,
+        recordId,
+      );
+      const revision = await revisions.createDraft(
+        authenticated.session,
+        projectId,
+        recordId,
+        {
+          ...parseRevisionCreate(
+            await parseJsonRequest(request),
+            toRevisionParentDefaults(current),
+          ),
+          correlationId: context.requestId,
+        },
+      );
+      return apiSuccess(context, serializeRevision(revision), 201);
+    }
+    if (action === "publish") {
+      return apiSuccess(
+        context,
+        serializeRevision(
+          await revisions.publish(
+            authenticated.session,
+            projectId,
+            recordId,
+            revisionId,
+            context.requestId,
+          ),
+        ),
+      );
+    }
+    return apiSuccess(
+      context,
+      serializeRevision(
+        await revisions.get(
+          authenticated.session,
+          projectId,
+          recordId,
+          revisionId,
+        ),
+      ),
+    );
   } catch (error) {
     return projectError(context, error);
   }
@@ -677,6 +781,22 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RfiIllegalTransitionError)
     return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
+  if (error instanceof RevisionNotFoundError)
+    return apiError(
+      context,
+      404,
+      "REVISION_NOT_FOUND",
+      "The requested revision was not found.",
+    );
+  if (error instanceof RevisionAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
+  if (error instanceof RevisionIllegalTransitionError)
+    return apiError(context, 409, "REVISION_ILLEGAL_TRANSITION", error.message);
   if (error instanceof RecordArchivedError)
     return apiError(context, 409, "RECORD_ARCHIVED", error.message);
   if (
@@ -773,6 +893,31 @@ function serializeRecord(record: Record) {
     archivedAt: record.archivedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  };
+}
+function serializeRevision(revision: Revision) {
+  return {
+    id: revision.id,
+    projectId: revision.projectId,
+    recordId: revision.recordId,
+    revisionNumber: revision.revisionNumber,
+    revisionLabel: revision.revisionLabel,
+    title: revision.title,
+    description: revision.description,
+    discipline: revision.discipline,
+    source: revision.source,
+    changeSummary: revision.changeSummary,
+    status: revision.status,
+    createdBy: revision.createdBy,
+    createdAt: revision.createdAt,
+  };
+}
+function toRevisionParentDefaults(record: Record) {
+  return {
+    title: record.title,
+    description: record.description,
+    discipline: record.discipline,
+    source: record.source,
   };
 }
 function serializeRfiResponse(response: RfiResponse) {
