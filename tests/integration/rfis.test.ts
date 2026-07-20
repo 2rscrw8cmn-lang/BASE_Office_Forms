@@ -208,11 +208,11 @@ describe("RFI foundation API", () => {
     await seed();
   });
 
-  it("creates and edits drafts, with schema version 5", async () => {
+  it("creates and edits drafts, with schema version 6", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(5);
+    expect(version?.schema_version).toBe(6);
     const project = await createProject("P-RFI-1");
     const draft = await createDraft(project.id);
     expect(draft).toMatchObject({

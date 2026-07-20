@@ -2,6 +2,11 @@ import type { AuthenticationResult } from "../../auth/authentication-adapter";
 import { ProjectContactNotFoundError } from "../../application/projects/project-contact-service";
 import { ProjectNotFoundError } from "../../application/projects/project-service";
 import {
+  RecordArchivedError,
+  RecordAuthorizationError,
+  RecordNotFoundError,
+} from "../../domain/records/errors";
+import {
   RfiNotFoundError,
   RfiIllegalTransitionError,
   RfiAuthorizationError,
@@ -10,6 +15,7 @@ import { AuthorizationError } from "../../domain/identity/authorization";
 import { ProjectAuthorizationError } from "../../domain/projects/authorization";
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
+import type { Record } from "../../domain/records/record";
 import {
   apiError,
   apiSuccess,
@@ -30,6 +36,11 @@ import {
   parseRfiResponse,
   parseRfiUpdate,
 } from "./rfi-schemas";
+import {
+  parseIncludeArchived,
+  parseRecordCreate,
+  parseRecordUpdate,
+} from "./record-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -72,6 +83,19 @@ export async function routeV2Request(
   if (pathname === `${V2_BASE_PATH}/projects` && dependencies) {
     return handleProjects(request, context, dependencies);
   }
+  const recordRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive))?)?$/,
+  );
+  if (recordRoute && dependencies) {
+    return handleRecordRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(recordRoute[1]),
+      recordRoute[2] ? decodeURIComponent(recordRoute[2]) : undefined,
+      recordRoute[3],
+    );
+  }
   const rfiRoute = pathname.match(
     /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(issue|respond|close|reopen))?)?$/,
   );
@@ -105,6 +129,95 @@ export async function routeV2Request(
     "API_ROUTE_NOT_FOUND",
     "The requested API route was not found.",
   );
+}
+
+async function handleRecordRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  recordId: string | undefined,
+  action: string | undefined,
+): Promise<Response> {
+  const allowedMethods = action
+    ? ["POST"]
+    : recordId
+      ? ["GET", "PATCH"]
+      : ["GET", "POST"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const records = dependencies.records;
+  if (!records) return unavailable(context);
+  try {
+    if (!recordId) {
+      if (request.method === "GET") {
+        const includeArchived = parseIncludeArchived(
+          new URL(request.url).searchParams.get("includeArchived"),
+        );
+        return apiSuccess(
+          context,
+          (
+            await records.list(
+              authenticated.session,
+              projectId,
+              includeArchived,
+            )
+          ).map(serializeRecord),
+        );
+      }
+      const record = await records.create(authenticated.session, projectId, {
+        ...parseRecordCreate(await parseJsonRequest(request)),
+        correlationId: context.requestId,
+      });
+      return apiSuccess(context, serializeRecord(record), 201);
+    }
+    if (action === "archive") {
+      return apiSuccess(
+        context,
+        serializeRecord(
+          await records.archive(
+            authenticated.session,
+            projectId,
+            recordId,
+            context.requestId,
+          ),
+        ),
+      );
+    }
+    if (request.method === "GET") {
+      return apiSuccess(
+        context,
+        serializeRecord(
+          await records.get(authenticated.session, projectId, recordId),
+        ),
+      );
+    }
+    const current = await records.get(
+      authenticated.session,
+      projectId,
+      recordId,
+    );
+    const record = await records.update(
+      authenticated.session,
+      projectId,
+      recordId,
+      {
+        ...parseRecordUpdate(
+          await parseJsonRequest(request),
+          toRecordWriteInput(current),
+        ),
+        correlationId: context.requestId,
+      },
+    );
+    return apiSuccess(context, serializeRecord(record));
+  } catch (error) {
+    return projectError(context, error);
+  }
 }
 
 async function handleRfiRoute(
@@ -541,6 +654,20 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       "RFI_NOT_FOUND",
       "The requested RFI was not found.",
     );
+  if (error instanceof RecordNotFoundError)
+    return apiError(
+      context,
+      404,
+      "RECORD_NOT_FOUND",
+      "The requested record was not found.",
+    );
+  if (error instanceof RecordAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
   if (error instanceof RfiAuthorizationError)
     return apiError(
       context,
@@ -550,6 +677,8 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RfiIllegalTransitionError)
     return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
+  if (error instanceof RecordArchivedError)
+    return apiError(context, 409, "RECORD_ARCHIVED", error.message);
   if (
     error instanceof Error &&
     error.message.includes("projects.organization_id, projects.project_number")
@@ -559,6 +688,18 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       409,
       "PROJECT_NUMBER_CONFLICT",
       "A project with this number already exists.",
+    );
+  if (
+    error instanceof Error &&
+    error.message.includes(
+      "records.organization_id, records.project_id, records.record_number",
+    )
+  )
+    return apiError(
+      context,
+      409,
+      "RECORD_NUMBER_CONFLICT",
+      "A record with this number already exists in this project.",
     );
   throw error;
 }
@@ -616,6 +757,24 @@ function serializeRfi(rfi: Rfi) {
     updatedAt: rfi.updatedAt,
   };
 }
+function serializeRecord(record: Record) {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    recordType: record.recordType,
+    recordNumber: record.recordNumber,
+    title: record.title,
+    description: record.description,
+    status: record.status,
+    discipline: record.discipline,
+    source: record.source,
+    createdBy: record.createdBy,
+    currentRevisionId: record.currentRevisionId,
+    archivedAt: record.archivedAt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
 function serializeRfiResponse(response: RfiResponse) {
   return {
     id: response.id,
@@ -664,6 +823,16 @@ function toRfiWriteInput(rfi: Rfi) {
     dueDate: rfi.dueDate,
     costImpact: rfi.costImpact,
     scheduleImpact: rfi.scheduleImpact,
+  };
+}
+function toRecordWriteInput(record: Record) {
+  return {
+    recordType: record.recordType,
+    recordNumber: record.recordNumber,
+    title: record.title,
+    description: record.description,
+    discipline: record.discipline,
+    source: record.source,
   };
 }
 function serializeOrganization(organization: {
