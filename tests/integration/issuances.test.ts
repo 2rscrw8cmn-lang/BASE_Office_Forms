@@ -89,12 +89,14 @@ class HeadOnlyStorage implements IssuanceStoragePort {
   readonly objects = new Map<string, number>();
   readonly headCalls: string[] = [];
   failure: Error | null = null;
+  beforeHeadReturn: ((key: string) => Promise<void>) | null = null;
 
-  head(key: string): Promise<{ size: number } | null> {
+  async head(key: string): Promise<{ size: number } | null> {
     this.headCalls.push(key);
-    if (this.failure) return Promise.reject(this.failure);
+    if (this.failure) throw this.failure;
+    await this.beforeHeadReturn?.(key);
     const size = this.objects.get(key);
-    return Promise.resolve(size === undefined ? null : { size });
+    return size === undefined ? null : { size };
   }
 }
 
@@ -737,6 +739,90 @@ describe("issuance foundation", () => {
       } finally {
         await database.prepare(`DROP TRIGGER IF EXISTS ${trigger}`).run();
       }
+      expect(await count("issuances")).toBe(0);
+      expect(await count("issuance_files")).toBe(0);
+      expect(await count("project_issuance_sequences")).toBe(0);
+      const events = await database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM activity_events WHERE action = 'issuance.created'",
+        )
+        .first<{ count: number }>();
+      expect(events?.count).toBe(0);
+    },
+  );
+
+  it("copies permanent file metadata from revision_files at commit time", async () => {
+    const database = testDatabase();
+    const repository = new D1IssuancesRepository(
+      database,
+      new D1ProjectIssuanceSequencesRepository(database),
+    );
+    const created = await repository.createWithFilesAndActivity({
+      id: "issuance-forged-metadata",
+      organizationId: "org-a",
+      projectId: "project-a",
+      recordId: "record-a",
+      revisionId: "revision-published",
+      purpose: "for_construction",
+      notes: null,
+      revisionSnapshotJson: "{}",
+      issuedBy: "user-admin",
+      issuedAt: "2026-07-20T13:00:00.000Z",
+      correlationId: "correlation-forged-metadata",
+      files: [
+        {
+          issuanceId: "issuance-forged-metadata",
+          organizationId: "org-a",
+          projectId: "project-a",
+          recordId: "record-a",
+          revisionId: "revision-published",
+          fileId: "file-a-1",
+          originalFilename: "forged-name.exe",
+          mediaType: "application/x-forged",
+          byteSize: 999,
+          sha256: "f".repeat(64),
+          storageKey: "private/forged-key",
+          displayOrder: 0,
+        },
+      ],
+    });
+
+    expect(created.files).toEqual([
+      {
+        issuanceId: "issuance-forged-metadata",
+        organizationId: "org-a",
+        projectId: "project-a",
+        recordId: "record-a",
+        revisionId: "revision-published",
+        fileId: "file-a-1",
+        originalFilename: "one.pdf",
+        mediaType: "application/pdf",
+        byteSize: 11,
+        sha256: "a".repeat(64),
+        storageKey: "private/a-1",
+        displayOrder: 0,
+      },
+    ]);
+  });
+
+  it.each([
+    ["disappears", "DELETE FROM revision_files WHERE id = 'file-a-1'"],
+    [
+      "moves to another hierarchy",
+      "UPDATE revision_files SET record_id = 'record-other', revision_id = 'revision-other' WHERE id = 'file-a-1'",
+    ],
+  ])(
+    "rolls back the complete issuance when a selected source file %s before the batch",
+    async (_label, mutation) => {
+      const database = testDatabase();
+      storage.beforeHeadReturn = async () => {
+        storage.beforeHeadReturn = null;
+        await database.prepare(mutation).run();
+      };
+
+      const response = await issue(storage);
+      expect(response.status).toBe(500);
+      expect(await errorCode(response)).toBe("ISSUANCE_PERSISTENCE_FAILED");
       expect(await count("issuances")).toBe(0);
       expect(await count("issuance_files")).toBe(0);
       expect(await count("project_issuance_sequences")).toBe(0);

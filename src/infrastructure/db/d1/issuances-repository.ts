@@ -223,21 +223,22 @@ export class D1IssuancesRepository {
         this.database
           .prepare(
             `INSERT INTO issuance_files (${ISSUANCE_FILE_COLUMNS})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             SELECT ?, source.organization_id, source.project_id, source.record_id,
+                    source.revision_id, source.id, source.original_filename,
+                    source.media_type, source.byte_size, source.sha256,
+                    source.storage_key, ?
+             FROM revision_files AS source
+             WHERE source.organization_id = ? AND source.project_id = ?
+               AND source.record_id = ? AND source.revision_id = ? AND source.id = ?`,
           )
           .bind(
-            file.issuanceId,
-            file.organizationId,
-            file.projectId,
-            file.recordId,
-            file.revisionId,
-            file.fileId,
-            file.originalFilename,
-            file.mediaType,
-            file.byteSize,
-            file.sha256,
-            file.storageKey,
+            input.id,
             file.displayOrder,
+            input.organizationId,
+            input.projectId,
+            input.recordId,
+            input.revisionId,
+            file.fileId,
           ),
       );
     }
@@ -249,7 +250,13 @@ export class D1IssuancesRepository {
           `INSERT INTO activity_events
             (id, organization_id, actor_user_id, actor_type, object_type, object_id,
              action, prior_state_json, new_state_json, metadata_json, correlation_id, created_at)
-           VALUES (?, ?, ?, 'user', 'issuance', ?, 'issuance.created', NULL,
+           VALUES (?, ?, ?, 'user', 'issuance', ?,
+             CASE WHEN (
+               SELECT COUNT(*) FROM issuance_files
+               WHERE issuance_id = ? AND organization_id = ? AND project_id = ?
+                 AND record_id = ? AND revision_id = ?
+             ) = ? THEN 'issuance.created' ELSE NULL END,
+             NULL,
              (SELECT json_object(
                'id', issuance.id,
                'organizationId', issuance.organization_id,
@@ -288,6 +295,12 @@ export class D1IssuancesRepository {
           input.organizationId,
           input.issuedBy,
           input.id,
+          input.id,
+          input.organizationId,
+          input.projectId,
+          input.recordId,
+          input.revisionId,
+          input.files.length,
           input.id,
           input.id,
           input.correlationId,
