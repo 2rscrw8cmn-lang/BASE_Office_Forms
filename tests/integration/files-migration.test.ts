@@ -57,6 +57,11 @@ describe("files migration 0009", () => {
         .bind(now, now),
       database
         .prepare(
+          "INSERT INTO projects (id, organization_id, project_number, name, status, timezone, created_at, updated_at) VALUES ('project-files-mig-b', 'org-files-mig', 'P-FILES-MIG-B', 'Second Migration Project', 'planning', 'America/New_York', ?, ?)",
+        )
+        .bind(now, now),
+      database
+        .prepare(
           "INSERT INTO records (id, organization_id, project_id, record_type, title, status, created_by, created_at, updated_at) VALUES ('record-files-mig', 'org-files-mig', 'project-files-mig', 'document', 'Pre-existing Record', 'active', 'user-files-mig', ?, ?)",
         )
         .bind(now, now),
@@ -151,6 +156,24 @@ describe("files migration 0009", () => {
              'revision-files-mig', 'organizations/org-files-mig/projects/project-files-mig/records/record-files-mig/revisions/revision-files-mig/files/file-bad-uploader',
              'plan.pdf', 'application/pdf', 1024,
              '${"d".repeat(64)}', 'missing-user', ?)`,
+        )
+        .bind(now)
+        .run(),
+    ).rejects.toThrow();
+
+    // A file whose revision/record belong to Project A but whose project_id
+    // points at a different project in the same organization is rejected by
+    // the four-column composite foreign key.
+    await expect(
+      database
+        .prepare(
+          `INSERT INTO revision_files
+            (id, organization_id, project_id, record_id, revision_id, storage_key,
+             original_filename, media_type, byte_size, sha256, uploaded_by, uploaded_at)
+           VALUES ('file-cross-project', 'org-files-mig', 'project-files-mig-b', 'record-files-mig',
+             'revision-files-mig', 'organizations/org-files-mig/projects/project-files-mig-b/records/record-files-mig/revisions/revision-files-mig/files/file-cross-project',
+             'plan.pdf', 'application/pdf', 1024,
+             '${"e".repeat(64)}', 'user-files-mig', ?)`,
         )
         .bind(now)
         .run(),

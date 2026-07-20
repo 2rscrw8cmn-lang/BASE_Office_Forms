@@ -19,6 +19,7 @@ import {
 import {
   FileNotFoundError,
   FileAuthorizationError,
+  FileObjectIntegrityError,
   FileObjectMissingError,
   FileStorageWriteError,
   FileUploadCompensationError,
@@ -927,6 +928,8 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 500, "FILE_UPLOAD_FAILED", error.message);
   if (error instanceof FileObjectMissingError)
     return apiError(context, 500, "FILE_OBJECT_MISSING", error.message);
+  if (error instanceof FileObjectIntegrityError)
+    return apiError(context, 500, "FILE_OBJECT_INTEGRITY", error.message);
   if (
     error instanceof Error &&
     error.message.includes(
@@ -1074,7 +1077,10 @@ function fileContentResponse(
   download: FileDownload,
 ): Response {
   const headers = new Headers({
-    "Content-Type": download.contentType ?? download.file.mediaType,
+    // Content-Type comes from the authoritative persisted metadata, never
+    // from R2's stored HTTP metadata, so a tampered or drifted object cannot
+    // change the type the caller is told to expect.
+    "Content-Type": download.file.mediaType,
     "Content-Disposition": buildContentDisposition(
       download.file.originalFilename,
     ),

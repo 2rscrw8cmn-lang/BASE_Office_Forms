@@ -109,23 +109,33 @@ media type; there is no content-type whitelist. The storage key is always
 server-generated as
 `organizations/{organizationId}/projects/{projectId}/records/{recordId}/revisions/{revisionId}/files/{fileId}`
 and never derived from the client-supplied filename or accepted from the
-client. SHA-256 is computed server-side from the exact bytes written to R2 and
-persisted as lowercase hex; it is never accepted from the client. Because D1
-and R2 cannot share one transaction, `FileService.upload` writes the R2 object
-first, then persists the file row and its `file.uploaded` activity event in a
-single `database.batch()`; if that D1 write fails, the already-written R2
-object is deleted to compensate, and the request never reports success unless
-both sides succeeded. If the compensating delete itself fails, that is logged
-server-side (with the storage key, for operational diagnosis) but never
-exposed to the API caller. Reads (list/detail/download) are allowed under
-archived records so historical binaries stay reachable; only uploads are
-rejected for an archived record's parent. The download route
-(`GET .../files/:fileId/content`) streams the object directly from R2 with a
-sanitized `Content-Disposition`, `Cache-Control: private, no-store`, and never
-redirects to a public or signed URL; if D1 metadata exists but the R2 object
-is missing, it returns an internal-consistency error rather than a 404. API
-responses never include the storage key, bucket name, or any other R2
-implementation detail. Issuance remains out of scope.
+client. SHA-256 is computed server-side from the exact bytes written to R2,
+passed to R2 so it verifies the received bytes, and persisted as lowercase
+hex; it is never accepted from the client. The R2 write is create-only
+(`If-None-Match: *`): if an object already exists at the key R2 returns null
+and the write is treated as a failure, so an uploaded binary can never be
+silently overwritten. Because D1 and R2 cannot share one transaction,
+`FileService.upload` writes the R2 object first, then persists the file row
+and its `file.uploaded` activity event in a single `database.batch()`; if that
+D1 write fails, the already-written R2 object is deleted to compensate, and the
+request never reports success unless both sides succeeded. If the compensating
+delete itself fails, that is logged server-side (with the storage key, for
+operational diagnosis) but never exposed to the API caller. Reads
+(list/detail/download) are allowed under archived records so historical
+binaries stay reachable; only uploads are rejected for an archived record's
+parent. The download route (`GET .../files/:fileId/content`) streams the object
+directly from R2, setting `Content-Type` from the authoritative persisted
+`media_type` (never from R2's stored metadata), with a sanitized
+`Content-Disposition`, `Cache-Control: private, no-store`, and never redirects
+to a public or signed URL. D1 metadata is authoritative: if the stored object
+is missing, or is present but its size disagrees with the recorded byte size,
+the route returns a stable internal-consistency error rather than a 404 or a
+stream of untrusted bytes. The `revision_files` row also carries a four-column
+composite foreign key `(record_id, organization_id, project_id, revision_id)`
+into `record_revisions`, so a file's `project_id` must match the project that
+actually owns its revision and record. API responses never include the storage
+key, bucket name, or any other R2 implementation detail. Issuance remains out
+of scope.
 
 ## Build and test layout
 

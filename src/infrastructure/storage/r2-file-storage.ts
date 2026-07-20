@@ -18,7 +18,14 @@ export class R2FileStorage implements FileStoragePort {
     content: ArrayBuffer,
     metadata: FileObjectMetadata,
   ): Promise<void> {
-    await this.bucket.put(key, content, {
+    // `etagDoesNotMatch: "*"` makes this a create-only (If-None-Match: *)
+    // write: R2 returns null instead of overwriting an object that already
+    // exists at this key, so an uploaded binary can never be silently
+    // replaced. `sha256` has R2 verify the received bytes against the digest
+    // the application already computed, rejecting the write if they differ.
+    const result = await this.bucket.put(key, content, {
+      onlyIf: { etagDoesNotMatch: "*" },
+      sha256: metadata.sha256,
       httpMetadata: { contentType: metadata.contentType },
       customMetadata: {
         originalFilename: metadata.originalFilename,
@@ -30,6 +37,11 @@ export class R2FileStorage implements FileStoragePort {
         sha256: metadata.sha256,
       },
     });
+    if (result === null) {
+      throw new Error(
+        "The file object already exists and was not overwritten.",
+      );
+    }
   }
 
   async get(key: string): Promise<StoredFileObject | null> {

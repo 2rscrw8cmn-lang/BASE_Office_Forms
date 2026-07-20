@@ -45,3 +45,15 @@ export class FileObjectMissingError extends Error {
     super("The file's stored content is missing.");
   }
 }
+
+/**
+ * Thrown when a file's R2 object exists but disagrees with the authoritative
+ * D1 metadata (for example its byte size differs). Distinct from a missing
+ * object: the stored content is present but cannot be trusted, so it must not
+ * be streamed to the caller.
+ */
+export class FileObjectIntegrityError extends Error {
+  constructor() {
+    super("The file's stored content does not match its recorded metadata.");
+  }
+}

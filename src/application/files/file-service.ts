@@ -1,6 +1,7 @@
 import type { AppSession } from "../../auth/authentication-adapter";
 import {
   FileNotFoundError,
+  FileObjectIntegrityError,
   FileObjectMissingError,
   FileStorageWriteError,
   FileUploadCompensationError,
@@ -232,6 +233,10 @@ export class FileService {
     const file = await this.findFile(revision.id, fileId, actor.organizationId);
     const object = await this.storage.get(file.storageKey);
     if (!object) throw new FileObjectMissingError();
+    // D1 metadata is authoritative. If the stored object's size disagrees
+    // with the recorded byte size, the content cannot be trusted and must not
+    // be streamed -- surface a stable internal-consistency error instead.
+    if (object.size !== file.byteSize) throw new FileObjectIntegrityError();
     return {
       file,
       body: object.body,

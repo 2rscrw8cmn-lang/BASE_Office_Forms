@@ -11,6 +11,7 @@ import { OrganizationService } from "../../src/application/identity/organization
 import { ProjectService } from "../../src/application/projects/project-service";
 import { RecordService } from "../../src/application/records/record-service";
 import { RevisionService } from "../../src/application/revisions/revision-service";
+import { sha256Hex } from "../../src/domain/files/checksum";
 import { MAX_FILE_BYTES } from "../../src/domain/files/validation";
 import type {
   AppSession,
@@ -104,6 +105,65 @@ class ControllableFileStorage implements FileStoragePort {
     if (this.failDelete)
       return Promise.reject(new Error("forced R2 delete failure"));
     return this.inner.delete(key);
+  }
+}
+
+/**
+ * Pins every operation to the key of the first put, so a second upload
+ * collides on the create-only put and exercises the conditional-write
+ * rejection end to end (normal uploads never collide because keys embed a
+ * random file id). `collidedKey` exposes the real R2 key for assertions.
+ */
+class CollidingFileStorage implements FileStoragePort {
+  collidedKey: string | null = null;
+  private readonly inner = new R2FileStorage(env.FILES);
+
+  put(
+    key: string,
+    content: ArrayBuffer,
+    metadata: FileObjectMetadata,
+  ): Promise<void> {
+    this.collidedKey ??= key;
+    return this.inner.put(this.collidedKey, content, metadata);
+  }
+
+  get(key: string): Promise<StoredFileObject | null> {
+    return this.inner.get(this.collidedKey ?? key);
+  }
+
+  delete(key: string): Promise<void> {
+    return this.inner.delete(this.collidedKey ?? key);
+  }
+}
+
+/**
+ * Returns a caller-controlled stored object from `get` so download-time
+ * integrity handling can be exercised with a content type and size that
+ * disagree with the authoritative D1 metadata, without any real R2 access.
+ */
+class StubGetFileStorage implements FileStoragePort {
+  constructor(
+    private readonly size: number,
+    private readonly contentType: string | null,
+  ) {}
+
+  put(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  delete(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  get(): Promise<StoredFileObject | null> {
+    const body = new Response("stub object body").body;
+    if (!body) throw new Error("Expected a readable body.");
+    return Promise.resolve({
+      body,
+      size: this.size,
+      httpEtag: null,
+      contentType: this.contentType,
+    });
   }
 }
 
@@ -970,5 +1030,143 @@ describe("files foundation API", () => {
     );
     expect(response.status).toBe(500);
     expect((await jsonError(response)).code).toBe("FILE_OBJECT_MISSING");
+  });
+
+  it("refuses to overwrite an existing R2 object and preserves the original bytes", async () => {
+    const storage = new R2FileStorage(env.FILES);
+    const key = `test-overwrite/${crypto.randomUUID()}`;
+    const first = new TextEncoder().encode("original bytes");
+    const second = new TextEncoder().encode(
+      "REPLACEMENT bytes, different length",
+    );
+    const metadata = (sha256: string): FileObjectMetadata => ({
+      contentType: "application/octet-stream",
+      originalFilename: "f.bin",
+      organizationId: "org-a",
+      projectId: "project",
+      recordId: "record",
+      revisionId: "revision",
+      fileId: "file",
+      sha256,
+    });
+
+    await expect(
+      storage.put(key, first.buffer, metadata(await sha256Hex(first.buffer))),
+    ).resolves.toBeUndefined();
+    await expect(
+      storage.put(key, second.buffer, metadata(await sha256Hex(second.buffer))),
+    ).rejects.toThrow();
+
+    const object = await storage.get(key);
+    if (!object) throw new Error("Expected the original object to remain.");
+    const stored = new Uint8Array(
+      await new Response(object.body).arrayBuffer(),
+    );
+    expect(new TextDecoder().decode(stored)).toBe("original bytes");
+    await env.FILES.delete(key);
+  });
+
+  it("creates no additional D1 row, event, or object bytes when the conditional put collides", async () => {
+    const project = await createProject("P-FILES-13");
+    const record = await createRecord(project.id);
+    const revision = await createDraft(project.id, record.id);
+    const storage = new CollidingFileStorage();
+
+    const firstResponse = await upload(
+      project.id,
+      record.id,
+      revision.id,
+      fileFormData("first upload content"),
+      "admin",
+      storage,
+    );
+    expect(firstResponse.status).toBe(201);
+
+    const secondResponse = await upload(
+      project.id,
+      record.id,
+      revision.id,
+      fileFormData("second upload content that must not overwrite"),
+      "admin",
+      storage,
+    );
+    expect(secondResponse.status).toBe(502);
+    expect((await jsonError(secondResponse)).code).toBe(
+      "FILE_STORAGE_UNAVAILABLE",
+    );
+
+    const rows = await testDatabase()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM revision_files WHERE revision_id = ?",
+      )
+      .bind(revision.id)
+      .first<{ count: number }>();
+    expect(rows?.count).toBe(1);
+    const events = await testDatabase()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM activity_events WHERE action = 'file.uploaded'",
+      )
+      .first<{ count: number }>();
+    expect(events?.count).toBe(1);
+
+    const collidedKey = storage.collidedKey;
+    if (!collidedKey)
+      throw new Error("Expected the first put to record a key.");
+    const object = await env.FILES.get(collidedKey);
+    if (!object) throw new Error("Expected the first object to remain.");
+    const stored = await object.text();
+    expect(stored).toBe("first upload content");
+    await env.FILES.delete(collidedKey);
+  });
+
+  it("returns an integrity error rather than streaming when the stored object size disagrees with the metadata", async () => {
+    const project = await createProject("P-FILES-14");
+    const record = await createRecord(project.id);
+    const revision = await createDraft(project.id, record.id);
+    const bytes = new TextEncoder().encode("abcd");
+    const file = await jsonData<ApiFile>(
+      await upload(
+        project.id,
+        record.id,
+        revision.id,
+        fileFormData(bytes, "doc.pdf", "application/pdf"),
+      ),
+    );
+
+    const mismatched = new StubGetFileStorage(
+      file.byteSize + 100,
+      "application/pdf",
+    );
+    const response = await invokeV2Api(
+      filesPath(project.id, record.id, revision.id, `/${file.id}/content`),
+      request("admin"),
+      dependencies(mismatched),
+    );
+    expect(response.status).toBe(500);
+    expect((await jsonError(response)).code).toBe("FILE_OBJECT_INTEGRITY");
+  });
+
+  it("sets Content-Type from the persisted metadata, not from the stored R2 object", async () => {
+    const project = await createProject("P-FILES-15");
+    const record = await createRecord(project.id);
+    const revision = await createDraft(project.id, record.id);
+    const bytes = new TextEncoder().encode("abcd");
+    const file = await jsonData<ApiFile>(
+      await upload(
+        project.id,
+        record.id,
+        revision.id,
+        fileFormData(bytes, "doc.pdf", "application/pdf"),
+      ),
+    );
+
+    const wrongType = new StubGetFileStorage(file.byteSize, "text/html");
+    const response = await invokeV2Api(
+      filesPath(project.id, record.id, revision.id, `/${file.id}/content`),
+      request("admin"),
+      dependencies(wrongType),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
   });
 });
