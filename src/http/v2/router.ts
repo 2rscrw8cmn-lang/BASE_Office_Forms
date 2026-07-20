@@ -16,12 +16,26 @@ import {
   RevisionIllegalTransitionError,
   RevisionAuthorizationError,
 } from "../../domain/revisions/errors";
+import {
+  FileNotFoundError,
+  FileAuthorizationError,
+  FileObjectIntegrityError,
+  FileObjectMissingError,
+  FileStorageWriteError,
+  FileUploadCompensationError,
+} from "../../domain/files/errors";
+import {
+  buildContentDisposition,
+  FileValidationError,
+} from "../../domain/files/validation";
 import { AuthorizationError } from "../../domain/identity/authorization";
 import { ProjectAuthorizationError } from "../../domain/projects/authorization";
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
 import type { Record } from "../../domain/records/record";
 import type { Revision } from "../../domain/revisions/revision";
+import type { RevisionFile } from "../../domain/files/file";
+import type { FileDownload } from "../../application/files/file-service";
 import {
   apiError,
   apiSuccess,
@@ -48,6 +62,7 @@ import {
   parseRecordUpdate,
 } from "./record-schemas";
 import { parseRevisionCreate } from "./revision-schemas";
+import { parseFileUpload } from "./file-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -115,6 +130,21 @@ export async function routeV2Request(
       decodeURIComponent(revisionRoute[2]),
       revisionRoute[3] ? decodeURIComponent(revisionRoute[3]) : undefined,
       revisionRoute[4],
+    );
+  }
+  const fileRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions\/([^/]+)\/files(?:\/([^/]+)(?:\/(content))?)?$/,
+  );
+  if (fileRoute && dependencies) {
+    return handleFileRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(fileRoute[1]),
+      decodeURIComponent(fileRoute[2]),
+      decodeURIComponent(fileRoute[3]),
+      fileRoute[4] ? decodeURIComponent(fileRoute[4]) : undefined,
+      fileRoute[5],
     );
   }
   const rfiRoute = pathname.match(
@@ -316,6 +346,80 @@ async function handleRevisionRoute(
           projectId,
           recordId,
           revisionId,
+        ),
+      ),
+    );
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleFileRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  recordId: string,
+  revisionId: string,
+  fileId: string | undefined,
+  action: string | undefined,
+): Promise<Response> {
+  const allowedMethods = action || fileId ? ["GET"] : ["GET", "POST"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const files = dependencies.files;
+  if (!files) return unavailable(context);
+  try {
+    if (!fileId) {
+      if (request.method === "GET") {
+        return apiSuccess(
+          context,
+          (
+            await files.list(
+              authenticated.session,
+              projectId,
+              recordId,
+              revisionId,
+            )
+          ).map(serializeFile),
+        );
+      }
+      const upload = await parseFileUpload(request);
+      const file = await files.upload(
+        authenticated.session,
+        projectId,
+        recordId,
+        revisionId,
+        { ...upload, correlationId: context.requestId },
+      );
+      return apiSuccess(context, serializeFile(file), 201);
+    }
+    if (action === "content") {
+      return fileContentResponse(
+        context,
+        await files.download(
+          authenticated.session,
+          projectId,
+          recordId,
+          revisionId,
+          fileId,
+        ),
+      );
+    }
+    return apiSuccess(
+      context,
+      serializeFile(
+        await files.get(
+          authenticated.session,
+          projectId,
+          recordId,
+          revisionId,
+          fileId,
         ),
       ),
     );
@@ -797,6 +901,35 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RevisionIllegalTransitionError)
     return apiError(context, 409, "REVISION_ILLEGAL_TRANSITION", error.message);
+  if (error instanceof FileNotFoundError)
+    return apiError(
+      context,
+      404,
+      "FILE_NOT_FOUND",
+      "The requested file was not found.",
+    );
+  if (error instanceof FileAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
+  if (error instanceof FileValidationError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
+  if (error instanceof FileStorageWriteError)
+    return apiError(
+      context,
+      502,
+      "FILE_STORAGE_UNAVAILABLE",
+      "The file could not be stored.",
+    );
+  if (error instanceof FileUploadCompensationError)
+    return apiError(context, 500, "FILE_UPLOAD_FAILED", error.message);
+  if (error instanceof FileObjectMissingError)
+    return apiError(context, 500, "FILE_OBJECT_MISSING", error.message);
+  if (error instanceof FileObjectIntegrityError)
+    return apiError(context, 500, "FILE_OBJECT_INTEGRITY", error.message);
   if (
     error instanceof Error &&
     error.message.includes(
@@ -923,6 +1056,41 @@ function serializeRevision(revision: Revision) {
     createdBy: revision.createdBy,
     createdAt: revision.createdAt,
   };
+}
+function serializeFile(file: RevisionFile) {
+  return {
+    id: file.id,
+    organizationId: file.organizationId,
+    projectId: file.projectId,
+    recordId: file.recordId,
+    revisionId: file.revisionId,
+    originalFilename: file.originalFilename,
+    mediaType: file.mediaType,
+    byteSize: file.byteSize,
+    sha256: file.sha256,
+    uploadedBy: file.uploadedBy,
+    uploadedAt: file.uploadedAt,
+  };
+}
+function fileContentResponse(
+  context: ApiRequestContext,
+  download: FileDownload,
+): Response {
+  const headers = new Headers({
+    // Content-Type comes from the authoritative persisted metadata, never
+    // from R2's stored HTTP metadata, so a tampered or drifted object cannot
+    // change the type the caller is told to expect.
+    "Content-Type": download.file.mediaType,
+    "Content-Disposition": buildContentDisposition(
+      download.file.originalFilename,
+    ),
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Request-ID": context.requestId,
+  });
+  headers.set("Content-Length", String(download.size));
+  if (download.httpEtag) headers.set("ETag", download.httpEtag);
+  return new Response(download.body, { status: 200, headers });
 }
 function toRevisionParentDefaults(record: Record) {
   return {

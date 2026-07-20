@@ -10,6 +10,8 @@ import { requireRecordManagement } from "../../domain/records/authorization";
 import type { RecordCapability } from "../../domain/records/errors";
 import { requireRevisionManagement } from "../../domain/revisions/authorization";
 import type { RevisionCapability } from "../../domain/revisions/errors";
+import { requireFileManagement } from "../../domain/files/authorization";
+import type { FileCapability } from "../../domain/files/errors";
 import type { Project, ProjectStatus } from "../../domain/projects/project";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import {
@@ -185,6 +187,30 @@ export class ProjectService {
         actor.userId,
       ));
     requireRevisionManagement(actor, capability, isAssignedProjectManager);
+    return project;
+  }
+
+  async requireFileAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<Project> {
+    return this.get(actor, projectId);
+  }
+
+  async requireFileManagement(
+    actor: AppSession,
+    projectId: string,
+    capability: FileCapability,
+  ): Promise<Project> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    requireFileManagement(actor, capability, isAssignedProjectManager);
     return project;
   }
 
