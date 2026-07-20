@@ -55,6 +55,11 @@ export function createAppShell(options = {}) {
   const appWindow = options.window || window;
   const appDocument = options.document || document;
   const fetchImpl = options.fetch || appWindow.fetch.bind(appWindow);
+  const matchMediaImpl =
+    options.matchMedia ||
+    (typeof appWindow.matchMedia === "function"
+      ? appWindow.matchMedia.bind(appWindow)
+      : null);
   const root = appDocument.getElementById("app");
   if (!root) throw new Error("The application root was not found.");
 
@@ -511,8 +516,41 @@ export function createAppShell(options = {}) {
     focusPageHeading();
   }
 
+  const mobileMediaQuery = matchMediaImpl
+    ? matchMediaImpl("(max-width: 620px)")
+    : null;
+
+  function onViewportChange(event) {
+    const isMobile =
+      event && typeof event.matches === "boolean"
+        ? event.matches
+        : Boolean(mobileMediaQuery?.matches);
+    if (isMobile) return;
+    // The viewport left mobile mode: CSS now hides the drawer and its trigger,
+    // so drop the inert desktop shell and reset drawer state. The mobile
+    // trigger is hidden, so focus must not be restored to it.
+    closeMobileNav({ restoreFocus: false });
+  }
+
+  function addMediaQueryListener() {
+    if (!mobileMediaQuery) return;
+    if (typeof mobileMediaQuery.addEventListener === "function")
+      mobileMediaQuery.addEventListener("change", onViewportChange);
+    else if (typeof mobileMediaQuery.addListener === "function")
+      mobileMediaQuery.addListener(onViewportChange);
+  }
+
+  function removeMediaQueryListener() {
+    if (!mobileMediaQuery) return;
+    if (typeof mobileMediaQuery.removeEventListener === "function")
+      mobileMediaQuery.removeEventListener("change", onViewportChange);
+    else if (typeof mobileMediaQuery.removeListener === "function")
+      mobileMediaQuery.removeListener(onViewportChange);
+  }
+
   appDocument.addEventListener("keydown", onDocumentKeydown);
   appWindow.addEventListener("popstate", onPopState);
+  addMediaQueryListener();
   resolveCurrentRoute();
   render();
   const sessionReady = loadSession();
@@ -529,6 +567,7 @@ export function createAppShell(options = {}) {
     destroy() {
       appDocument.removeEventListener("keydown", onDocumentKeydown);
       appWindow.removeEventListener("popstate", onPopState);
+      removeMediaQueryListener();
     },
   };
 }

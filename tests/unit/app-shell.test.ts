@@ -27,7 +27,11 @@ function response(data: unknown, status = 200) {
   );
 }
 
-async function mount(pathname: string, role: Role = "viewer") {
+async function mount(
+  pathname: string,
+  role: Role = "viewer",
+  options: { matchMedia?: (query: string) => unknown } = {},
+) {
   const window = new Window({ url: `https://base.test${pathname}` });
   const document = window.document as unknown as Document;
   document.body.innerHTML = '<div id="app"></div>';
@@ -65,10 +69,45 @@ async function mount(pathname: string, role: Role = "viewer") {
     window,
     document,
     fetch,
+    ...(options.matchMedia ? { matchMedia: options.matchMedia } : {}),
   });
   shells.push(shell);
   await shell.ready;
   return { window, document, shell, fetch };
+}
+
+type FakeMediaQueryList = {
+  matches: boolean;
+  media: string;
+  addEventListener: (type: string, listener: (event: unknown) => void) => void;
+  removeEventListener: (
+    type: string,
+    listener: (event: unknown) => void,
+  ) => void;
+  emitChange: () => void;
+};
+
+function createFakeMediaQuery(initialMatches: boolean): {
+  matchMedia: (query: string) => FakeMediaQueryList;
+  mediaQuery: FakeMediaQueryList;
+} {
+  const listeners = new Set<(event: unknown) => void>();
+  const mediaQuery: FakeMediaQueryList = {
+    matches: initialMatches,
+    media: "(max-width: 620px)",
+    addEventListener(type, listener) {
+      if (type === "change") listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === "change") listeners.delete(listener);
+    },
+    emitChange() {
+      listeners.forEach((listener) => {
+        listener({ matches: this.matches, media: this.media });
+      });
+    },
+  };
+  return { matchMedia: () => mediaQuery, mediaQuery };
 }
 
 describe("application shell", () => {
@@ -200,6 +239,38 @@ describe("application shell", () => {
     await Promise.resolve();
     expect(shell.getState().drawerOpen).toBe(false);
     expect(window.location.pathname).toBe("/tools/forms");
+  });
+
+  it("restores the interactive desktop shell when the viewport leaves mobile mode", async () => {
+    const { matchMedia, mediaQuery } = createFakeMediaQuery(true);
+    const { document, shell } = await mount("/dashboard", "viewer", {
+      matchMedia,
+    });
+    const trigger = document.querySelector<HTMLButtonElement>(
+      ".mobile-menu-button",
+    );
+    trigger?.focus();
+    shell.openMobileNav(trigger);
+
+    const main = document.querySelector<HTMLElement>(".app-main");
+    const sidebar = document.querySelector<HTMLElement>(".app-sidebar");
+    const drawer = document.querySelector<HTMLElement>(".mobile-nav-drawer");
+    expect(shell.getState().drawerOpen).toBe(true);
+    expect(main?.inert).toBe(true);
+    expect(sidebar?.inert).toBe(true);
+
+    // Cross above the mobile breakpoint while the drawer is open.
+    mediaQuery.matches = false;
+    mediaQuery.emitChange();
+
+    expect(shell.getState().drawerOpen).toBe(false);
+    expect(main?.inert).toBe(false);
+    expect(sidebar?.inert).toBe(false);
+    expect(document.body.classList.contains("mobile-nav-open")).toBe(false);
+    expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(drawer?.getAttribute("aria-hidden")).toBe("true");
+    // Focus must not be restored to the now-hidden mobile trigger.
+    expect(document.activeElement).not.toBe(trigger);
   });
 
   it("renders Not Found for an unknown route", async () => {
