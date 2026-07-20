@@ -75,7 +75,8 @@
       id,
       type,
       height: Math.max(36, Number(source.height || source.h) || 46),
-      multiline: Boolean(source.multiline)
+      multiline: Boolean(source.multiline),
+      break: Boolean(source.break)
     };
   }
 
@@ -89,9 +90,7 @@
     const walk = section => {
       if (section.row) return section.row.forEach(walk);
       if (section.fields) section.fields = section.fields.map(field => normField(field, uid, schema, "text"));
-      if (section.sign) section.sign = Array.isArray(section.sign[0])
-        ? section.sign.map(row => row.map(field => normField(field, uid, schema, "text")))
-        : section.sign.map(field => normField(field, uid, schema, "text"));
+      if (section.sign) section.sign = section.sign.map(field => normField(field, uid, schema, "text"));
       if (section.checks) {
         const sectionLabel = section.name || section.heading || "Choice";
         section._gid = uid(slug(section.id || sectionLabel));
@@ -136,18 +135,17 @@
       }).join("") + `</div>`;
   }
 
+  // A field with `break: true` starts a new stacked row; otherwise all fields render in one row.
   function signBlock(fields, fill, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
-    return `<div class="sign-grid" style="--sign-tpl:${normalized.map(field => field.w + "fr").join(" ")};">` +
-      normalized.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
-      `</div>`;
-  }
-
-  // `sign` accepts either a flat field array (single row) or an array of row arrays (stacked rows).
-  function signRows(sign, fill, namePrefix) {
-    if (!sign || !sign.length) return "";
-    const rows = Array.isArray(sign[0]) ? sign : [sign];
-    return rows.map(row => `<div class="block-gap">${signBlock(row, fill, namePrefix)}</div>`).join("");
+    const rows = [];
+    normalized.forEach(field => {
+      if (field.break || !rows.length) rows.push([]);
+      rows[rows.length - 1].push(field);
+    });
+    return rows.map(row => `<div class="sign-grid" style="--sign-tpl:${row.map(field => field.w + "fr").join(" ")};">` +
+      row.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
+      `</div>`).join("");
   }
 
   function markPreview(html, collection, index) {
@@ -254,7 +252,7 @@
       case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
       case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block, fill, namePrefix)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "attachments": return `<section class="section big attachment-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Attachments / References", block.req)}${docFields(block, fill, namePrefix)}</section>`;
-      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${block.checks && block.checks.length ? checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix) : ""}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${signRows(block.sign, Boolean(fill), namePrefix)}</section>`;
+      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${block.checks && block.checks.length ? checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix) : ""}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "pagebreak": return `<div class="page-break" aria-hidden="true"></div>`;
       default: return "";
     }
@@ -451,10 +449,10 @@
       form.control["Doc. Control"] = "BASE-SUB-001";
       form.sections = [
         { name: "Project & Submittal Details", req: "REQUIRED", fields: [{ label: "Project", w: 2 }, { label: "Specification Section", w: 1.5 }, { label: "Revision", w: 1 }, { label: "Submittal No.", w: 1 }, { label: "Date Submitted", w: 1 }] },
-        { type: "approval", heading: "Review Disposition", req: "REQUIRED", fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [
-          [{ label: "Contractor", w: 1 }, { label: "Contractor's Stamp", w: 2, height: 90 }],
-          [{ label: "Architect", w: 1 }, { label: "Architect's Stamp", w: 2, height: 90 }],
-          [{ label: "Engineer", w: 1 }, { label: "Engineer's Stamp", w: 2, height: 90 }]
+        { type: "approval", heading: "Review Disposition", req: "REQUIRED", checks: [], fields: [{ label: "Review comments / exceptions", w: 1, height: 100, multiline: true }], sign: [
+          { label: "Contractor", w: 1 }, { label: "Contractor's Stamp", w: 2, height: 90 },
+          { label: "Architect", w: 1, break: true }, { label: "Architect's Stamp", w: 2, height: 90 },
+          { label: "Engineer", w: 1, break: true }, { label: "Engineer's Stamp", w: 2, height: 90 }
         ] }
       ];
       return form;
