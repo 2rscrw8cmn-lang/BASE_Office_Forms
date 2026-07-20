@@ -45,10 +45,8 @@ function mapMembership(row: MembershipRow): OrganizationMembership {
 export class D1MembershipsRepository {
   constructor(private readonly database: D1Database) {}
 
-  async findActiveForUser(
-    userId: string,
-  ): Promise<OrganizationMembership | null> {
-    const row = await this.database
+  async listActiveForUser(userId: string): Promise<OrganizationMembership[]> {
+    const result = await this.database
       .prepare(
         `SELECT membership.id, membership.organization_id, membership.user_id,
                 membership.role, membership.status, membership.created_at
@@ -57,12 +55,11 @@ export class D1MembershipsRepository {
          WHERE membership.user_id = ?
            AND membership.status = 'active'
            AND organization.status = 'active'
-         ORDER BY membership.created_at ASC, membership.id ASC
-         LIMIT 1`,
+         ORDER BY membership.created_at ASC, membership.id ASC`,
       )
       .bind(userId)
-      .first<MembershipRow>();
-    return row ? mapMembership(row) : null;
+      .all<MembershipRow>();
+    return result.results.map(mapMembership);
   }
 
   async findForUser(userId: string): Promise<OrganizationMembership | null> {

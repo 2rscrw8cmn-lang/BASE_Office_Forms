@@ -21,6 +21,11 @@ describe("D1 repository test helpers", () => {
       "documents",
       "folders",
     ]);
+
+    const schemaVersion = await db
+      .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
+      .first<{ schema_version: number }>();
+    expect(schemaVersion?.schema_version).toBe(3);
   });
 
   it("seeds definitions for future D1-backed repository tests", async () => {

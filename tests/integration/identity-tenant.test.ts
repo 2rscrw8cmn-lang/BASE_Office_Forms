@@ -244,6 +244,33 @@ describe("identity and tenant foundation", () => {
     });
   });
 
+  it("requires organization selection when a user has multiple active memberships", async () => {
+    await seedFoundation();
+    const database = testDatabase();
+    const users = new D1UsersRepository(database);
+    const memberships = new D1MembershipsRepository(database);
+    const alice = await users.upsertExternalIdentity({
+      subject: "access|alice",
+      email: "alice@base.example",
+      displayName: "Alice Admin",
+    });
+    await memberships.create({
+      organizationId: "org-b",
+      userId: alice.id,
+      role: "viewer",
+    });
+
+    const response = await invokeV2Api(
+      "/api/v2/session",
+      { headers: { "cf-access-jwt-assertion": "verified-alice" } },
+      makeDependencies(),
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "ORGANIZATION_SELECTION_REQUIRED" },
+    });
+  });
+
   it("allows only org admins to create memberships and appends an immutable activity event", async () => {
     const { alice, bobUserId } = await seedFoundation();
     const database = testDatabase();

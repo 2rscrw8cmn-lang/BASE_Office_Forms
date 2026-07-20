@@ -238,6 +238,13 @@ function authenticationFailure(
         "MEMBERSHIP_INACTIVE",
         "Your organization membership is inactive.",
       );
+    case "ORGANIZATION_SELECTION_REQUIRED":
+      return apiError(
+        context,
+        409,
+        "ORGANIZATION_SELECTION_REQUIRED",
+        "Select an organization before continuing.",
+      );
     case "MISSING_CREDENTIALS":
     case "INVALID_CREDENTIALS":
       return apiError(

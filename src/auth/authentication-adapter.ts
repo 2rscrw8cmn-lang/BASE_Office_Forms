@@ -27,7 +27,8 @@ export type AuthenticationResult =
         | "AUTH_PROVIDER_UNAVAILABLE"
         | "USER_DISABLED"
         | "MEMBERSHIP_REQUIRED"
-        | "MEMBERSHIP_INACTIVE";
+        | "MEMBERSHIP_INACTIVE"
+        | "ORGANIZATION_SELECTION_REQUIRED";
     };
 
 /**

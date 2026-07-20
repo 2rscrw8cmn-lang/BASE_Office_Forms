@@ -7,7 +7,11 @@ export type SessionResolutionResult =
   | { resolved: true; session: AppSession }
   | {
       resolved: false;
-      reason: "USER_DISABLED" | "MEMBERSHIP_REQUIRED" | "MEMBERSHIP_INACTIVE";
+      reason:
+        | "USER_DISABLED"
+        | "MEMBERSHIP_REQUIRED"
+        | "MEMBERSHIP_INACTIVE"
+        | "ORGANIZATION_SELECTION_REQUIRED";
     };
 
 export class SessionResolutionService {
@@ -22,8 +26,9 @@ export class SessionResolutionService {
       return { resolved: false, reason: "USER_DISABLED" };
     }
 
-    const activeMembership = await this.memberships.findActiveForUser(user.id);
-    if (activeMembership) {
+    const activeMemberships = await this.memberships.listActiveForUser(user.id);
+    if (activeMemberships.length === 1) {
+      const [activeMembership] = activeMemberships;
       return {
         resolved: true,
         session: {
@@ -33,6 +38,10 @@ export class SessionResolutionService {
           projectPermissions: [],
         },
       };
+    }
+
+    if (activeMemberships.length > 1) {
+      return { resolved: false, reason: "ORGANIZATION_SELECTION_REQUIRED" };
     }
 
     const membership = await this.memberships.findForUser(user.id);
