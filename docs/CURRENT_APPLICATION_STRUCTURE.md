@@ -352,10 +352,16 @@ Every legacy page shares one consistent top-bar contract: the BASE brand links
 to `/dashboard`, the breadcrumb parent is labelled "Document Library" and
 links to `/library`, and a "Back to app" link on the right returns to
 `/dashboard`. The pre-authentication "User" placeholder button was removed
-from Studio, Fill &amp; Export, and the viewer now that the application has
+from Studio, Fill & Export, and the viewer now that the application has
 real Cloudflare Access sessions; the viewer's breadcrumb leaf reads "Shared
 document" so the legacy library vocabulary never collides with the project
 Records register.
+
+`form-generator.html` (Fill & Export) is intentionally unlinked: no page
+navigates to it, and the viewer now carries the same fill, answer
+import/export, and PDF-export capabilities. It remains reachable at its
+direct URL for existing bookmarks, but it is a candidate for retirement in a
+future cleanup rather than a destination to surface in navigation.
 
 The former root shared-library markup is preserved at `library.html`,
 continuing to load `engine.js`, `library-api.js`, `global-search.js`, and

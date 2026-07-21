@@ -27,7 +27,7 @@ Project
 
 An issuance is not a folder, mutable package, or live view of a record. It is a historical event with a server-assigned issue number, a snapshot of one published revision, and an ordered snapshot of selected files.
 
-The existing Forms and Document Library experiences remain intact. They move visually beneath **Tools** and are not redesigned by this release. The renderer, its definition format, and existing renderer behavior remain unchanged.
+The existing Studio and Document Library experiences remain intact. They are reachable as flat, top-level global-navigation destinations beside Dashboard and Projects (the earlier "Tools" grouping was retired by Issue #21) and are not redesigned by this release. The renderer, its definition format, and existing renderer behavior remain unchanged.
 
 ### 1.1 First-release outcomes
 
@@ -73,7 +73,7 @@ The interface must use these terms consistently on desktop, mobile, in empty sta
 | Revision         | One numbered version of a record with `draft`, `published`, or `superseded` status | The record itself                         |
 | File             | An immutable binary attached to one exact revision                                 | A record-level attachment                 |
 | Issuance         | A permanent project event containing selected files from one published revision    | A mutable package or the current revision |
-| Document Library | The existing legacy/shared definition library under Tools                          | The project Records workspace             |
+| Document Library | The existing legacy/shared definition library, a top-level navigation destination  | The project Records workspace             |
 
 ### 2.1 Display rules
 
@@ -138,16 +138,15 @@ Use hybrid navigation: a global left sidebar for application scope and project-l
 ```text
 Dashboard
 Projects
-Tools
-├── Forms
-└── Document Library
+Studio
+Document Library
 Administration            authorized users only
 ```
 
 - **Dashboard** and **Projects** are primary destinations.
-- **Tools** is a visually secondary group. Its children link to the preserved Forms and Document Library experiences.
+- **Studio** and **Document Library** are flat, top-level links to the preserved legacy experiences. They live outside the SPA router, so they are plain full-navigation links at the extensionless `/builder` and `/library` URLs and never carry SPA selected state.
 - **Administration** appears only when the session is authorized. No broad administration redesign is included.
-- Existing direct static URLs must continue to work during migration. New `/tools/...` routes may act as stable adapters rather than relocating or rewriting the legacy tools in the first PR.
+- Existing direct static URLs must continue to work during migration. There are no `/tools/...` routes; the former tools-hub route idea was retired by Issue #21 and those paths resolve to the shared not-found surface.
 
 ### 4.2 Project navigation
 
@@ -176,8 +175,8 @@ On mobile, the project identity remains in the header and the project tabs use a
 | Issuance detail       | `/projects/:projectId/issuances/:issuanceId`                         |
 | Project RFIs          | `/projects/:projectId/rfis`                                          |
 | Project Team          | `/projects/:projectId/team`                                          |
-| Forms tool            | `/tools/forms`                                                       |
-| Document Library tool | `/tools/document-library`                                            |
+| Studio                | `/builder`                                                           |
+| Document Library      | `/library`                                                           |
 
 The application root should redirect to `/dashboard` after authentication. List search, filters, sort, and archive visibility belong in query parameters so back/forward navigation and shared internal URLs restore the view. Do not place mutation state or a provisional issue number in a URL.
 
@@ -201,9 +200,8 @@ Projects
     ├── RFIs
     └── Team
 
-Tools
-├── Forms
-└── Document Library
+Studio
+Document Library
 ```
 
 ## 5. Existing visual system inventory and extension rules
@@ -602,7 +600,7 @@ Files are labeled **Files included in this issuance** and use snapshotted filena
 - **Success feedback:** Downloads use browser feedback. This read-only screen has no mutation success state.
 - **Accessibility:** Page title includes issue number; snapshot and live-record link are clearly separated by headings; file actions include filename; metadata uses semantic description lists.
 
-### 7.11 RFIs, Team, Tools, and Administration integration
+### 7.11 RFIs, Team, legacy tools, and Administration integration
 
 These destinations are part of navigation architecture but are not redesigned in this document-control slice.
 
@@ -610,8 +608,8 @@ These destinations are part of navigation architecture but are not redesigned in
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | RFIs             | Preserve a project-scoped `/projects/:projectId/rfis` destination. A basic existing-API-backed list may be moved under the new project shell in a separately approved PR; do not redesign its lifecycle, issue flow, or detail experience as part of PRs A-E.                  |
 | Team             | Reserve `/projects/:projectId/team` for project membership and contacts. Current `/contacts` data is not equivalent to project membership/capabilities, so do not label contacts as authorized team members. Shipping substantive Team content requires a combined read model. |
-| Forms            | Link from Tools to the preserved Forms experience. No renderer or form-authoring changes.                                                                                                                                                                                      |
-| Document Library | Link from Tools to the preserved shared library. Do not merge legacy library documents into project Records on the client.                                                                                                                                                     |
+| Studio           | Top-level sidebar link to the preserved Studio experience at `/builder`. No renderer or form-authoring changes.                                                                                                                                                                |
+| Document Library | Top-level sidebar link to the preserved shared library at `/library`. Do not merge legacy library documents into project Records on the client.                                                                                                                                |
 | Administration   | Show only with authoritative authorization. This release may link to an existing surface; it does not redesign administration.                                                                                                                                                 |
 
 If a destination has no implemented surface at release time, navigation must use the approved rollout/feature-availability mechanism. Do not ship a fake data screen or a dead link.
@@ -622,7 +620,7 @@ Names are recommendations, not mandatory implementation names. Behavior and boun
 
 | Component                | Responsibility                                                 | Reuse notes                                               |
 | ------------------------ | -------------------------------------------------------------- | --------------------------------------------------------- |
-| `AppSidebar`             | Global destinations, Tools grouping, authorized Administration | Desktop persistent; mobile menu; never owns project tabs  |
+| `AppSidebar`             | Global destinations, legacy tool links, authorized Administration | Desktop persistent; mobile menu; never owns project tabs  |
 | `WorkspaceHeader`        | Page title, user/session affordance, optional global context   | Continue BASE logo and quiet chrome                       |
 | `ProjectHeader`          | Project name, project number, status, breadcrumbs              | Present on every project route                            |
 | `ProjectTabs`            | Overview, Records, Issuances, RFIs, Team                       | Accessible tab-like navigation links, mobile scroll       |
@@ -720,7 +718,7 @@ Backend read-model and integrity gaps required by a UI PR should land first or i
 ### PR A - Application shell and navigation
 
 - Add the desktop sidebar, mobile global menu, application route handling, workspace header, `ProjectHeader`, and `ProjectTabs`.
-- Move Forms and Document Library visually under Tools through stable links/adapters while preserving their files and behavior.
+- Keep Studio and Document Library as flat top-level sidebar links to their preserved pages while preserving their files and behavior.
 - Establish shared focus, state, status, button, table, card, and error primitives grounded in `base.css`.
 - Do not include dashboard read-model simulation or substantive RFIs/Team redesign.
 
