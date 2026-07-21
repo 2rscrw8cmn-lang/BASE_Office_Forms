@@ -43,23 +43,25 @@ export function createProjectForm({
         </div>
         <p class="app-dialog-error" role="alert" hidden></p>
         <div class="app-dialog-body">
-          <div class="field">
-            <label for="pf-number">Project number <span aria-hidden="true">*</span></label>
-            <input id="pf-number" name="projectNumber" type="text" required autocomplete="off"
-              aria-describedby="pf-number-error" />
-            <p class="field-error" id="pf-number-error" hidden></p>
+          <div class="field-row">
+            <div class="field">
+              <label for="pf-number">Project number <span aria-hidden="true">*</span></label>
+              <input id="pf-number" name="projectNumber" type="text" required autocomplete="off"
+                aria-describedby="pf-number-error" />
+              <p class="field-error" id="pf-number-error" hidden></p>
+            </div>
+            <div class="field">
+              <label for="pf-status">Status</label>
+              <select id="pf-status" name="status">
+                ${STATUS_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+              </select>
+            </div>
           </div>
           <div class="field">
             <label for="pf-name">Project name <span aria-hidden="true">*</span></label>
             <input id="pf-name" name="name" type="text" required autocomplete="off"
               aria-describedby="pf-name-error" />
             <p class="field-error" id="pf-name-error" hidden></p>
-          </div>
-          <div class="field">
-            <label for="pf-status">Status</label>
-            <select id="pf-status" name="status">
-              ${STATUS_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
-            </select>
           </div>
           <div class="field-row">
             <div class="field">

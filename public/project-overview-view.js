@@ -87,11 +87,12 @@ export function createProjectOverviewView({
       { label: "Issuances", value: counts.issuances, href: `${base(projectId)}/issuances` },
       { label: "Active RFIs", value: counts.activeRfis, href: `${base(projectId)}/rfis` },
     ];
-    return `<dl class="summary-strip" aria-label="Project summary">${tiles
+    // One compact, shared strip rather than six equal free-standing boxes.
+    return `<dl class="overview-summary" aria-label="Project summary">${tiles
       .map((tile) =>
         tile.href
-          ? `<a class="summary-metric summary-metric-link" href="${escapeHtml(tile.href)}" data-app-link><dt>${escapeHtml(tile.label)}</dt><dd>${escapeHtml(String(tile.value))}</dd></a>`
-          : `<div class="summary-metric"><dt>${escapeHtml(tile.label)}</dt><dd>${escapeHtml(String(tile.value))}</dd></div>`,
+          ? `<a class="overview-metric overview-metric-link" href="${escapeHtml(tile.href)}" data-app-link><dt>${escapeHtml(tile.label)}</dt><dd>${escapeHtml(String(tile.value))}</dd></a>`
+          : `<div class="overview-metric"><dt>${escapeHtml(tile.label)}</dt><dd>${escapeHtml(String(tile.value))}</dd></div>`,
       )
       .join("")}</dl>`;
   }
@@ -163,17 +164,17 @@ export function createProjectOverviewView({
       { label: "RFIs", href: `${base(projectId)}/rfis`, value: counts.activeRfis },
       { label: "Team", href: `${base(projectId)}/team`, value: counts.teamMembers },
     ];
-    return `<section class="overview-section" aria-labelledby="ov-shortcuts">
+    return `<nav class="overview-section overview-shortcuts" aria-labelledby="ov-shortcuts">
         <h2 id="ov-shortcuts">Workflow shortcuts</h2>
         <div class="shortcut-grid">${links
           .map(
             (link) => `<a class="shortcut-card" href="${escapeHtml(link.href)}" data-app-link>
               <span class="shortcut-label">${escapeHtml(link.label)}</span>
-              <span class="shortcut-count">${escapeHtml(String(link.value))}</span>
+              <span class="shortcut-go"><span class="shortcut-count">${escapeHtml(String(link.value))}</span><span class="shortcut-arrow" aria-hidden="true">→</span></span>
             </a>`,
           )
           .join("")}</div>
-      </section>`;
+      </nav>`;
   }
 
   function markup() {

@@ -71,7 +71,7 @@ export function createAppShell(options = {}) {
 
   const state = {
     route: null,
-    session: { status: "loading", data: null },
+    session: { status: "loading", data: null, error: null },
     project: { status: "idle", id: null, data: null, requestId: "" },
     drawerOpen: false,
     drawerTrigger: null,
@@ -171,6 +171,21 @@ export function createAppShell(options = {}) {
     </section>`;
   }
 
+  function renderSessionError() {
+    const error = state.session.error || {};
+    const message =
+      error.message ||
+      "Your session could not be verified. No changes were made.";
+    return `<section class="route-state route-error" aria-labelledby="route-error-title" role="alert">
+      <p class="eyebrow">Unable to continue</p>
+      <h1 id="route-error-title" tabindex="-1">Session unavailable</h1>
+      <p>${escapeHtml(message)}</p>
+      ${error.code ? `<p class="error-code">Error code <code>${escapeHtml(error.code)}</code></p>` : ""}
+      ${error.requestId ? `<p class="request-id">Request ID <code>${escapeHtml(error.requestId)}</code></p>` : ""}
+      <div class="state-actions"><button class="secondary-button" type="button" data-retry="session">Try again</button></div>
+    </section>`;
+  }
+
   function renderNotFound(
     title = "Page not found",
     description = "The requested page is not available.",
@@ -233,12 +248,25 @@ export function createAppShell(options = {}) {
     </section>`;
   }
 
+  // Data-backed surfaces (Dashboard, Projects, Project Overview, and the
+  // project context header) must resolve the session before requesting their
+  // own data. Session-first: while the session is loading show a loading state,
+  // and if it failed show the session error with its safe message, code, and
+  // request ID — never render the `.feature-view` container, which is what
+  // triggers a feature's API request.
+  function sessionGate(loadingLabel) {
+    if (state.session.status === "loading")
+      return renderLoadingState(loadingLabel);
+    if (state.session.status === "error") return renderSessionError();
+    return null;
+  }
+
   function renderRouteContent() {
     const route = state.route;
     if (!route) return renderNotFound();
     if (route.requiresAdministration) {
-      if (state.session.status === "loading")
-        return renderLoadingState("Checking administration access");
+      const gated = sessionGate("Checking administration access");
+      if (gated) return gated;
       if (!canViewAdministration(state.session.data?.membership?.role))
         return renderNotFound();
     }
@@ -248,10 +276,18 @@ export function createAppShell(options = {}) {
     if (route.surface === "forms-tool" || route.surface === "library-tool")
       return renderToolAdapter(route, route.surface);
     if (route.id === "dashboard")
-      return `<div class="feature-view" data-feature="dashboard"></div>`;
+      return (
+        sessionGate("Loading dashboard") ||
+        `<div class="feature-view" data-feature="dashboard"></div>`
+      );
     if (route.id === "projects")
-      return `<div class="feature-view" data-feature="projects"></div>`;
+      return (
+        sessionGate("Loading projects") ||
+        `<div class="feature-view" data-feature="projects"></div>`
+      );
     if (route.params?.projectId) {
+      const gated = sessionGate("Loading project");
+      if (gated) return gated;
       if (
         state.project.id === route.params.projectId &&
         state.project.status === "missing"
@@ -327,7 +363,10 @@ export function createAppShell(options = {}) {
   function syncFeature() {
     const descriptor = featureDescriptor(state.route);
     const container = root.querySelector(".feature-view");
-    if (!descriptor || !container) {
+    // No feature data request may begin until the session is ready. When the
+    // session is unresolved or failed the container is not rendered, so this
+    // also tears down any controller left over from a previous route.
+    if (!descriptor || !container || state.session.status !== "ready") {
       teardownFeature();
       return;
     }
@@ -395,19 +434,35 @@ export function createAppShell(options = {}) {
   }
 
   async function loadSession() {
-    state.session = { status: "loading", data: null };
+    state.session = { status: "loading", data: null, error: null };
+    render();
     try {
-      const response = await fetchImpl("/api/v2/session", {
-        headers: { Accept: "application/json" },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(payload?.error?.message || "Session unavailable");
-      state.session = { status: "ready", data: payload.data };
-    } catch (_error) {
-      state.session = { status: "unavailable", data: null };
+      // Session loading goes through the shared API client so it shares the
+      // same JSON parsing, request-ID extraction, and stable error objects as
+      // every other authenticated call.
+      const { data } = await api.request("/api/v2/session");
+      state.session = { status: "ready", data, error: null };
+    } catch (error) {
+      state.session = {
+        status: "error",
+        data: null,
+        error: {
+          status: error?.status || 0,
+          code: error?.code || "",
+          message: error?.message || "",
+          requestId: error?.requestId || "",
+        },
+      };
     }
     render();
+    // Only after the session resolves do data-backed feature and project
+    // requests begin. A successful session retry therefore also loads whatever
+    // feature or project the current route needs.
+    if (state.session.status === "ready") {
+      const projectId = state.route?.params?.projectId;
+      if (projectId && state.project.id !== projectId)
+        await loadProject(projectId);
+    }
   }
 
   async function loadProject(projectId) {
@@ -415,6 +470,8 @@ export function createAppShell(options = {}) {
       state.project = { status: "idle", id: null, data: null, requestId: "" };
       return;
     }
+    // The project context header is data-backed; it waits for the session too.
+    if (state.session.status !== "ready") return;
     state.project = {
       status: "loading",
       id: projectId,
@@ -525,7 +582,8 @@ export function createAppShell(options = {}) {
       state.project = { status: "idle", id: null, data: null, requestId: "" };
     render();
     if (focus) focusPageHeading();
-    if (projectId) await loadProject(projectId);
+    if (projectId && state.session.status === "ready")
+      await loadProject(projectId);
     if (focus) focusPageHeading();
   }
 
@@ -567,6 +625,9 @@ export function createAppShell(options = {}) {
       ?.addEventListener("click", () =>
         loadProject(state.route?.params?.projectId),
       );
+    root
+      .querySelector("[data-retry='session']")
+      ?.addEventListener("click", () => loadSession());
     root.querySelectorAll("a[data-app-link]").forEach((link) => {
       link.addEventListener("click", (event) => {
         if (
@@ -588,7 +649,8 @@ export function createAppShell(options = {}) {
     resolveCurrentRoute();
     render();
     const projectId = state.route?.params?.projectId;
-    if (projectId) await loadProject(projectId);
+    if (projectId && state.session.status === "ready")
+      await loadProject(projectId);
     focusPageHeading();
   }
 
@@ -628,14 +690,13 @@ export function createAppShell(options = {}) {
   appWindow.addEventListener("popstate", onPopState);
   addMediaQueryListener();
   resolveCurrentRoute();
-  render();
+  // Session-first boot: loadSession renders the loading shell, resolves the
+  // session, and only then loads the current route's project and features. No
+  // Dashboard, Projects, or Overview request is issued before this resolves.
   const sessionReady = loadSession();
-  const projectReady = state.route?.params?.projectId
-    ? loadProject(state.route.params.projectId)
-    : Promise.resolve();
 
   return {
-    ready: Promise.allSettled([sessionReady, projectReady]),
+    ready: sessionReady,
     navigate,
     openMobileNav,
     closeMobileNav,

@@ -6,6 +6,11 @@ import type { IssuancePurpose } from "../../../domain/issuances/issuance";
  * scoped by organization and by the explicit set of project IDs the caller has
  * already been authorized to access, so authorization is never reconstructed
  * here or in the browser. All SQL is parameterized.
+ *
+ * The eight dashboard reads are dispatched through a single `database.batch()`
+ * so the dashboard never opens eight simultaneous D1 connections. `batch()`
+ * runs the prepared statements sequentially over one connection and returns
+ * their results in the order the statements were supplied.
  */
 
 export interface DashboardDraftRevision {
@@ -77,10 +82,153 @@ export interface DashboardReadData {
   recentIssuances: DashboardRecentIssuance[];
 }
 
+interface CountRow {
+  n: number;
+}
+
+interface DraftRevisionRow {
+  revision_id: string;
+  revision_number: number;
+  revision_label: string | null;
+  title: string;
+  record_id: string;
+  record_number: string | null;
+  record_title: string;
+  project_id: string;
+  project_number: string;
+  project_name: string;
+  created_at: string;
+}
+
+interface ReadyToIssueRow extends DraftRevisionRow {
+  file_count: number;
+}
+
+interface ActiveRfiRow {
+  rfi_id: string;
+  rfi_number: string | null;
+  title: string;
+  status: Extract<RfiStatus, "issued" | "answered">;
+  due_date: string | null;
+  project_id: string;
+  project_number: string;
+  project_name: string;
+  created_at: string;
+}
+
+interface RecentFileRow {
+  file_id: string;
+  original_filename: string;
+  uploaded_at: string;
+  revision_id: string;
+  revision_number: number;
+  record_id: string;
+  record_title: string;
+  project_id: string;
+  project_number: string;
+  project_name: string;
+}
+
+interface RecentIssuanceRow {
+  issuance_id: string;
+  issue_number: string;
+  purpose: IssuancePurpose;
+  issued_at: string;
+  issued_by_name: string | null;
+  record_id: string;
+  record_title: string;
+  revision_id: string;
+  project_id: string;
+  project_number: string;
+  project_name: string;
+  file_count: number;
+}
+
 const ATTENTION_LIMIT = 5;
+
+const EMPTY_DASHBOARD: DashboardReadData = {
+  draftRevisionCount: 0,
+  readyToIssueCount: 0,
+  activeRfiCount: 0,
+  draftRevisions: [],
+  readyToIssue: [],
+  activeRfis: [],
+  recentFiles: [],
+  recentIssuances: [],
+};
 
 function placeholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function countOf(result: D1Result<CountRow>): number {
+  return result.results[0]?.n ?? 0;
+}
+
+function mapDraftRevision(row: DraftRevisionRow): DashboardDraftRevision {
+  return {
+    revisionId: row.revision_id,
+    revisionNumber: row.revision_number,
+    revisionLabel: row.revision_label,
+    title: row.title,
+    recordId: row.record_id,
+    recordNumber: row.record_number,
+    recordTitle: row.record_title,
+    projectId: row.project_id,
+    projectNumber: row.project_number,
+    projectName: row.project_name,
+    createdAt: row.created_at,
+  };
+}
+
+function mapReadyToIssue(row: ReadyToIssueRow): DashboardReadyToIssue {
+  return { ...mapDraftRevision(row), fileCount: row.file_count };
+}
+
+function mapActiveRfi(row: ActiveRfiRow): DashboardActiveRfi {
+  return {
+    rfiId: row.rfi_id,
+    rfiNumber: row.rfi_number,
+    title: row.title,
+    status: row.status,
+    dueDate: row.due_date,
+    projectId: row.project_id,
+    projectNumber: row.project_number,
+    projectName: row.project_name,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRecentFile(row: RecentFileRow): DashboardRecentFile {
+  return {
+    fileId: row.file_id,
+    originalFilename: row.original_filename,
+    uploadedAt: row.uploaded_at,
+    revisionId: row.revision_id,
+    revisionNumber: row.revision_number,
+    recordId: row.record_id,
+    recordTitle: row.record_title,
+    projectId: row.project_id,
+    projectNumber: row.project_number,
+    projectName: row.project_name,
+  };
+}
+
+function mapRecentIssuance(row: RecentIssuanceRow): DashboardRecentIssuance {
+  return {
+    issuanceId: row.issuance_id,
+    issueNumber: row.issue_number,
+    purpose: row.purpose,
+    issuedAt: row.issued_at,
+    issuedByName: row.issued_by_name,
+    fileCount: row.file_count,
+    recordId: row.record_id,
+    recordTitle: row.record_title,
+    revisionId: row.revision_id,
+    projectId: row.project_id,
+    projectNumber: row.project_number,
+    projectName: row.project_name,
+  };
 }
 
 export class D1DashboardReadRepository {
@@ -91,17 +239,24 @@ export class D1DashboardReadRepository {
     projectIds: readonly string[],
   ): Promise<DashboardReadData> {
     if (projectIds.length === 0) {
-      return {
-        draftRevisionCount: 0,
-        readyToIssueCount: 0,
-        activeRfiCount: 0,
-        draftRevisions: [],
-        readyToIssue: [],
-        activeRfis: [],
-        recentFiles: [],
-        recentIssuances: [],
-      };
+      return { ...EMPTY_DASHBOARD };
     }
+
+    // Prepare every read up front, then dispatch them through a single
+    // `batch()` call. This keeps the dashboard to one D1 connection instead of
+    // the eight simultaneous connections a `Promise.all` of independent
+    // statements would open. Statement order below is mirrored by the
+    // destructured results, which preserves the response contract exactly.
+    const statements = [
+      this.draftRevisionCountStatement(organizationId, projectIds),
+      this.readyToIssueCountStatement(organizationId, projectIds),
+      this.activeRfiCountStatement(organizationId, projectIds),
+      this.draftRevisionsStatement(organizationId, projectIds),
+      this.readyToIssueStatement(organizationId, projectIds),
+      this.activeRfisStatement(organizationId, projectIds),
+      this.recentFilesStatement(organizationId, projectIds),
+      this.recentIssuancesStatement(organizationId, projectIds),
+    ];
 
     const [
       draftRevisionCount,
@@ -112,34 +267,35 @@ export class D1DashboardReadRepository {
       activeRfis,
       recentFiles,
       recentIssuances,
-    ] = await Promise.all([
-      this.countDraftRevisions(organizationId, projectIds),
-      this.countReadyToIssue(organizationId, projectIds),
-      this.countActiveRfis(organizationId, projectIds),
-      this.listDraftRevisions(organizationId, projectIds),
-      this.listReadyToIssue(organizationId, projectIds),
-      this.listActiveRfis(organizationId, projectIds),
-      this.listRecentFiles(organizationId, projectIds),
-      this.listRecentIssuances(organizationId, projectIds),
-    ]);
+    ] = await this.database.batch(statements);
 
     return {
-      draftRevisionCount,
-      readyToIssueCount,
-      activeRfiCount,
-      draftRevisions,
-      readyToIssue,
-      activeRfis,
-      recentFiles,
-      recentIssuances,
+      draftRevisionCount: countOf(draftRevisionCount as D1Result<CountRow>),
+      readyToIssueCount: countOf(readyToIssueCount as D1Result<CountRow>),
+      activeRfiCount: countOf(activeRfiCount as D1Result<CountRow>),
+      draftRevisions: (
+        draftRevisions as D1Result<DraftRevisionRow>
+      ).results.map(mapDraftRevision),
+      readyToIssue: (readyToIssue as D1Result<ReadyToIssueRow>).results.map(
+        mapReadyToIssue,
+      ),
+      activeRfis: (activeRfis as D1Result<ActiveRfiRow>).results.map(
+        mapActiveRfi,
+      ),
+      recentFiles: (recentFiles as D1Result<RecentFileRow>).results.map(
+        mapRecentFile,
+      ),
+      recentIssuances: (
+        recentIssuances as D1Result<RecentIssuanceRow>
+      ).results.map(mapRecentIssuance),
     };
   }
 
-  private async countDraftRevisions(
+  private draftRevisionCountStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<number> {
-    const row = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT COUNT(*) AS n
          FROM record_revisions rev
@@ -150,16 +306,14 @@ export class D1DashboardReadRepository {
            AND rec.status = 'active'
            AND rev.project_id IN (${placeholders(projectIds.length)})`,
       )
-      .bind(organizationId, ...projectIds)
-      .first<{ n: number }>();
-    return row?.n ?? 0;
+      .bind(organizationId, ...projectIds);
   }
 
-  private async countReadyToIssue(
+  private readyToIssueCountStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<number> {
-    const row = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT COUNT(*) AS n FROM (
            SELECT rev.id
@@ -180,16 +334,14 @@ export class D1DashboardReadRepository {
              )
          )`,
       )
-      .bind(organizationId, ...projectIds)
-      .first<{ n: number }>();
-    return row?.n ?? 0;
+      .bind(organizationId, ...projectIds);
   }
 
-  private async countActiveRfis(
+  private activeRfiCountStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<number> {
-    const row = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT COUNT(*) AS n
          FROM rfi_records
@@ -197,16 +349,14 @@ export class D1DashboardReadRepository {
            AND status IN ('issued', 'answered')
            AND project_id IN (${placeholders(projectIds.length)})`,
       )
-      .bind(organizationId, ...projectIds)
-      .first<{ n: number }>();
-    return row?.n ?? 0;
+      .bind(organizationId, ...projectIds);
   }
 
-  private async listDraftRevisions(
+  private draftRevisionsStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<DashboardDraftRevision[]> {
-    const result = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT rev.id AS revision_id, rev.revision_number, rev.revision_label,
                 rev.title, rev.record_id, rec.record_number, rec.title AS record_title,
@@ -223,40 +373,14 @@ export class D1DashboardReadRepository {
          ORDER BY rev.created_at DESC, rev.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
-      .bind(organizationId, ...projectIds)
-      .all<{
-        revision_id: string;
-        revision_number: number;
-        revision_label: string | null;
-        title: string;
-        record_id: string;
-        record_number: string | null;
-        record_title: string;
-        project_id: string;
-        project_number: string;
-        project_name: string;
-        created_at: string;
-      }>();
-    return result.results.map((row) => ({
-      revisionId: row.revision_id,
-      revisionNumber: row.revision_number,
-      revisionLabel: row.revision_label,
-      title: row.title,
-      recordId: row.record_id,
-      recordNumber: row.record_number,
-      recordTitle: row.record_title,
-      projectId: row.project_id,
-      projectNumber: row.project_number,
-      projectName: row.project_name,
-      createdAt: row.created_at,
-    }));
+      .bind(organizationId, ...projectIds);
   }
 
-  private async listReadyToIssue(
+  private readyToIssueStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<DashboardReadyToIssue[]> {
-    const result = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT rev.id AS revision_id, rev.revision_number, rev.revision_label,
                 rev.title, rev.record_id, rec.record_number, rec.title AS record_title,
@@ -283,42 +407,14 @@ export class D1DashboardReadRepository {
          ORDER BY rev.created_at DESC, rev.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
-      .bind(organizationId, ...projectIds)
-      .all<{
-        revision_id: string;
-        revision_number: number;
-        revision_label: string | null;
-        title: string;
-        record_id: string;
-        record_number: string | null;
-        record_title: string;
-        project_id: string;
-        project_number: string;
-        project_name: string;
-        created_at: string;
-        file_count: number;
-      }>();
-    return result.results.map((row) => ({
-      revisionId: row.revision_id,
-      revisionNumber: row.revision_number,
-      revisionLabel: row.revision_label,
-      title: row.title,
-      recordId: row.record_id,
-      recordNumber: row.record_number,
-      recordTitle: row.record_title,
-      projectId: row.project_id,
-      projectNumber: row.project_number,
-      projectName: row.project_name,
-      createdAt: row.created_at,
-      fileCount: row.file_count,
-    }));
+      .bind(organizationId, ...projectIds);
   }
 
-  private async listActiveRfis(
+  private activeRfisStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<DashboardActiveRfi[]> {
-    const result = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT r.id AS rfi_id, r.rfi_number, r.title, r.status, r.due_date,
                 r.project_id, p.project_number, p.name AS project_name, r.created_at
@@ -332,36 +428,14 @@ export class D1DashboardReadRepository {
                   r.due_date ASC, r.created_at DESC, r.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
-      .bind(organizationId, ...projectIds)
-      .all<{
-        rfi_id: string;
-        rfi_number: string | null;
-        title: string;
-        status: Extract<RfiStatus, "issued" | "answered">;
-        due_date: string | null;
-        project_id: string;
-        project_number: string;
-        project_name: string;
-        created_at: string;
-      }>();
-    return result.results.map((row) => ({
-      rfiId: row.rfi_id,
-      rfiNumber: row.rfi_number,
-      title: row.title,
-      status: row.status,
-      dueDate: row.due_date,
-      projectId: row.project_id,
-      projectNumber: row.project_number,
-      projectName: row.project_name,
-      createdAt: row.created_at,
-    }));
+      .bind(organizationId, ...projectIds);
   }
 
-  private async listRecentFiles(
+  private recentFilesStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<DashboardRecentFile[]> {
-    const result = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT f.id AS file_id, f.original_filename, f.uploaded_at,
                 f.revision_id, rev.revision_number, f.record_id,
@@ -379,38 +453,14 @@ export class D1DashboardReadRepository {
          ORDER BY f.uploaded_at DESC, f.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
-      .bind(organizationId, ...projectIds)
-      .all<{
-        file_id: string;
-        original_filename: string;
-        uploaded_at: string;
-        revision_id: string;
-        revision_number: number;
-        record_id: string;
-        record_title: string;
-        project_id: string;
-        project_number: string;
-        project_name: string;
-      }>();
-    return result.results.map((row) => ({
-      fileId: row.file_id,
-      originalFilename: row.original_filename,
-      uploadedAt: row.uploaded_at,
-      revisionId: row.revision_id,
-      revisionNumber: row.revision_number,
-      recordId: row.record_id,
-      recordTitle: row.record_title,
-      projectId: row.project_id,
-      projectNumber: row.project_number,
-      projectName: row.project_name,
-    }));
+      .bind(organizationId, ...projectIds);
   }
 
-  private async listRecentIssuances(
+  private recentIssuancesStatement(
     organizationId: string,
     projectIds: readonly string[],
-  ): Promise<DashboardRecentIssuance[]> {
-    const result = await this.database
+  ): D1PreparedStatement {
+    return this.database
       .prepare(
         `SELECT i.id AS issuance_id, i.issue_number, i.purpose, i.issued_at,
                 u.display_name AS issued_by_name, i.record_id,
@@ -432,34 +482,6 @@ export class D1DashboardReadRepository {
          ORDER BY i.issued_at DESC, i.issue_sequence DESC, i.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
-      .bind(organizationId, ...projectIds)
-      .all<{
-        issuance_id: string;
-        issue_number: string;
-        purpose: IssuancePurpose;
-        issued_at: string;
-        issued_by_name: string | null;
-        record_id: string;
-        record_title: string;
-        revision_id: string;
-        project_id: string;
-        project_number: string;
-        project_name: string;
-        file_count: number;
-      }>();
-    return result.results.map((row) => ({
-      issuanceId: row.issuance_id,
-      issueNumber: row.issue_number,
-      purpose: row.purpose,
-      issuedAt: row.issued_at,
-      issuedByName: row.issued_by_name,
-      fileCount: row.file_count,
-      recordId: row.record_id,
-      recordTitle: row.record_title,
-      revisionId: row.revision_id,
-      projectId: row.project_id,
-      projectNumber: row.project_number,
-      projectName: row.project_name,
-    }));
+      .bind(organizationId, ...projectIds);
   }
 }

@@ -92,14 +92,16 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
   function heading(session) {
     const showCreate = canCreateProjects(session);
     return `<div class="page-heading page-heading-actions"><div>
-        <p class="eyebrow">Project directory</p>
-        <h1 id="page-title" tabindex="-1">Projects</h1>
-        <p>Open a project workspace, or search and filter the projects you can access.</p>
-      </div>${
-        showCreate
-          ? `<button class="primary-button" type="button" data-create-project>Create project</button>`
-          : ""
-      }</div>`;
+        <div class="page-heading-text">
+          <p class="eyebrow">Project directory</p>
+          <h1 id="page-title" tabindex="-1">Projects</h1>
+          <p>Open a project workspace, or search and filter the projects you can access.</p>
+        </div>${
+          showCreate
+            ? `<button class="primary-button" type="button" data-create-project>Create project</button>`
+            : ""
+        }
+      </div></div>`;
   }
 
   function toolbar(projects) {
@@ -137,8 +139,8 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
           <td><span class="status-badge status-${project.status === "active" ? "success" : "neutral"}">${escapeHtml(statusLabel(project.status))}</span></td>
           <td>${escapeHtml(locationText(project) || "—")}</td>
           <td class="cell-date">${escapeHtml(formatDate(project.updatedAt) || "—")}</td>
-          <td class="cell-open"><a href="${overviewHref(project)}" data-app-link
-              aria-label="Open ${escapeHtml(project.name)}">Open</a></td>
+          <td class="cell-open"><a class="open-link" href="${overviewHref(project)}" data-app-link
+              aria-label="Open ${escapeHtml(project.name)}">Open<span class="open-arrow" aria-hidden="true">→</span></a></td>
         </tr>`,
       )
       .join("");

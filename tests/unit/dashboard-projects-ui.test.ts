@@ -622,11 +622,11 @@ describe("project overview view", () => {
     await shell.ready;
     await waitFor(() => {
       expect(
-        document.querySelector(".overview-view .summary-strip"),
+        document.querySelector(".overview-view .overview-summary"),
       ).not.toBeNull();
     });
     const counts = [
-      ...document.querySelectorAll(".overview-view .summary-metric dd"),
+      ...document.querySelectorAll(".overview-view .overview-metric dd"),
     ].map((element) => element.textContent.trim());
     expect(counts).toEqual(["4", "1", "2", "6", "3", "1"]);
 
@@ -671,13 +671,13 @@ describe("project overview view", () => {
     await shell.navigate("/projects/proj-2/overview");
     await waitFor(() => {
       expect(
-        document.querySelector(".overview-view .summary-strip"),
+        document.querySelector(".overview-view .overview-summary"),
       ).not.toBeNull();
     });
     // proj-2 rendered from its own (non-deferred) response; the deferred proj-1
     // controller was destroyed on the route change and cannot replace it.
     const counts = [
-      ...document.querySelectorAll(".overview-view .summary-metric dd"),
+      ...document.querySelectorAll(".overview-view .overview-metric dd"),
     ].map((element) => element.textContent.trim());
     expect(counts).toEqual(["4", "1", "2", "6", "3", "1"]);
   });

@@ -1,7 +1,7 @@
 # Current Application Structure
 
 **Status:** Application Shell implementation inventory
-**Updated:** 2026-07-20
+**Updated:** 2026-07-21
 
 ## Runtime shape
 
@@ -207,7 +207,17 @@ and a request ID when available.
 
 The **Projects** directory renders the authenticated project list as a
 professional table on desktop and cards on mobile, using only fields the project
-API returns (number, name, status, city/region, updated date). It provides text
+API returns (number, name, status, city/region, updated date). The page header
+keeps its eyebrow, left-aligned title, and description together, with the
+Create Project action placed on the right on desktop and stacked full width on
+mobile; the title is never centered. Search, status filter, result count, and a
+restrained clear-filters link form one cohesive toolbar in which search takes the
+most width and the status filter stays compact, rather than each control sitting
+in its own heavy bordered box. The desktop table has a stronger column hierarchy
+with readable (non-tiny) sentence-case header labels, a confident row height, the
+project name emphasized in a semantic `th[scope="row"]`, a compact status badge,
+and a distinct Open chip affordance; the table and toolbar share the same content
+width. Mobile keeps compact, touch-friendly cards. The directory provides text
 search across number and name, a status filter built from the statuses present,
 a clear-filter action, an announced result count, and a no-results state.
 Sorting is deterministic: active first, then project number, name, and ID.
@@ -217,21 +227,30 @@ and are never an authorization mechanism.
 The **Create Project** action appears only for roles the backend permits to
 create projects (`org_admin` and `document_control_admin`, mirroring
 `canCreateProjects`); other roles never see it, and the backend remains
-authoritative. The dialog (`project-form.js`) has dialog semantics, a focus
-trap, initial focus, Escape-to-close, focus restoration, labelled title and
-description, inline validation linked with `aria-describedby`, a submission
-loading state, and server error display with the request ID. It sends only
-fields the current create schema accepts and never optimistically shows a
-project before the server confirms; on success it announces, closes, and
-navigates to the new project's Overview.
+authoritative. The dialog (`project-form.js`) uses a compact grouped layout:
+project number and status on the first row, project name full width, city and
+state/region on one row, then description. Fields use neutral borders with a
+maroon focus ring; red is reserved for validation errors only, so focusing a
+valid field never reads as an error. A divider separates the footer actions. The
+dialog has dialog semantics, a focus trap, initial focus, Escape-to-close, focus
+restoration, labelled title and description, inline validation linked with
+`aria-describedby`, a submission loading state, and server error display with the
+request ID. Its behavior and payload are unchanged: it sends only fields the
+current create schema accepts and never optimistically shows a project before the
+server confirms; on success it announces, closes, and navigates to the new
+project's Overview.
 
-The **Project Overview** reuses the shell's project header and tabs and adds a
-compact operational summary (records, draft revisions, published revisions,
-files, issuances, active RFIs), needs-attention lists, a recent project-activity
-timeline, and workflow shortcuts (Records, Issuances, RFIs, Team). Counts and
-shortcuts link to canonical routes when one exists. It loads its own read model
-and reuses the same project-access authorization as project detail, so a
-cross-tenant or unassigned project yields the same generic not-found surface.
+The **Project Overview** reuses the shell's project header and tabs and presents
+its counts (records, draft revisions, published revisions, files, issuances,
+active RFIs) as one compact shared summary strip rather than six equal free-
+standing boxes. Needs attention is the prominent section; when nothing needs
+attention it collapses to a compact empty state rather than a large blank area.
+Recent activity reads as a clear activity feed, and workflow shortcuts (Records,
+Issuances, RFIs, Team) read as navigation — a label with a subtle count and a
+directional affordance — rather than another metric row. Counts and shortcuts
+link to canonical routes when one exists. It loads its own read model and reuses
+the same project-access authorization as project detail, so a cross-tenant or
+unassigned project yields the same generic not-found surface.
 
 All four surfaces preserve logical reading order and are responsive: summary
 tiles wrap, attention groups and recent activity stack, the projects table
@@ -240,6 +259,22 @@ becomes a full-width sheet — without horizontal page overflow. Status is never
 communicated by color alone (badges carry text labels). After route changes the
 shell moves focus to the page heading and announces the new page through the
 existing live region.
+
+## Session-first feature loading
+
+The shell resolves the session before it requests any data-backed feature. On
+boot, and again after any navigation, `loadSession` runs first through the shared
+`app-api.js` client (so session loading shares the same JSON parsing, request-ID
+extraction, and stable `ApiError` objects as every other call). While the session
+is unresolved the Dashboard, Projects, and Project Overview routes render a
+loading state and their feature controllers are not instantiated, so no
+`/api/v2/dashboard`, `/api/v2/projects`, or `/api/v2/projects/:id/overview`
+request — nor the `/api/v2/projects/:id` project-header request — is issued. If
+the session fails, the route shows a session error surface that preserves the
+safe API message, error code, and request ID and offers a retry. Retrying the
+session, once it succeeds, then loads whatever feature or project the current
+route needs. This is a loading-order guarantee only; it introduces no
+authentication bypass and hardcodes no users or roles.
 
 ## Authentication and authorization-aware navigation
 
@@ -284,6 +319,21 @@ successful creation navigating to overview, failed creation preserving input
 with a request ID), and the project overview (counts, attention items, activity,
 canonical shortcut routes, a generic not-found, and cross-project stale-response
 protection).
+
+`tests/unit/session-first-loading.test.ts` covers the session-first contract:
+503 `AUTHENTICATION_UNAVAILABLE`, 401 `AUTHENTICATION_REQUIRED`, and 403
+membership/session failures each surface the safe message, code, and request ID
+while issuing no Dashboard, Projects, Overview, or project-header request; a
+successful session retry then loads the current feature; and no feature request
+is issued until the session has resolved. `tests/unit/dashboard-projects-polish.test.ts`
+pins the polish DOM contract (projects header hierarchy and create-action
+placement, the cohesive toolbar controls, the desktop table structure and Open
+affordance, mobile cards, the Create Project field order, focus styling not
+reading as a validation error, the compact dashboard summary, and the compact
+overview summary with navigation-style shortcuts) without brittle pixel
+snapshots. `tests/unit/dashboard-read-repository.test.ts` proves the dashboard
+read dispatches its eight reads through a single `database.batch()` and never
+launches eight independent concurrent statements.
 
 `tests/integration/read-models.test.ts` exercises the dashboard and overview
 read models end to end: organization isolation, assigned-project filtering,
@@ -452,6 +502,16 @@ activity is attributed to a project by joining each event's object back to the
 row it references — never by parsing stored state JSON — and exposes only safe
 public fields (id, action, object type/id, actor identity, timestamp), never
 `prior_state_json`, `new_state_json`, `metadata_json`, or storage keys.
+
+`D1DashboardReadRepository.load` prepares its eight reads (three counts and five
+attention/recent lists) and dispatches them through a single `database.batch()`
+instead of eight independent `Promise.all` statements, so the dashboard stays
+within Cloudflare's D1 simultaneous-connection limits by using one connection.
+`batch()` runs the prepared statements in order and returns their results in the
+same order, which the repository maps back into the unchanged dashboard response
+(the definitions, limits, ordering, response shape, authorization, and schema
+version are all preserved). When the caller has no accessible projects the
+repository returns the empty dashboard without touching D1 at all.
 
 ## Build and test layout
 
