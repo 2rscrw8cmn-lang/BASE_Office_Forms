@@ -4,6 +4,14 @@
   const DRAFT_KEY = "baseStudio.draft.v2";
   const $ = selector => document.querySelector(selector);
   const esc = BASE.esc;
+
+  // A permanent identity for a newly created field/section/block, independent
+  // of its label. See normField() in engine.js: once an id is present it is
+  // never re-derived from the label, so renaming a field can't silently
+  // change its stored answer key.
+  function newId(prefix) {
+    return `${prefix || "f"}_${Math.random().toString(36).slice(2, 9)}`;
+  }
   let activeId = null;
   let activeVersion = null;
   let activeFolderId = null;
@@ -34,7 +42,13 @@
     if (!Array.isArray(value)) {
       const align = ["top", "center", "bottom"].includes(value.align) ? value.align : undefined;
       const textHeight = Number(value.textHeight) > 0 ? Number(value.textHeight) : undefined;
-      return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: Boolean(value.multiline), id: value.id || "", break: Boolean(value.break), align, textHeight };
+      // Input style lives in `type` going forward. Legacy definitions that
+      // only ever set the `multiline` boolean are migrated the moment they
+      // pass through here; `multiline` itself stays for older readers that
+      // never see this normalization (e.g. a definition rendered directly
+      // without ever opening in Studio).
+      const type = value.type || (value.multiline ? "multiline" : "text");
+      return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: false, id: value.id || "", break: Boolean(value.break), align, textHeight, type };
     }
     return { label: value[0] || "Field", w: Number(value[1]) || 1, id: value[2] || "", height: Number(value[3]) || 46, multiline: Boolean(value[4]) };
   }
@@ -111,15 +125,12 @@
   }
 
   function status(message, tone) {
-    const el = $("#status");
-    el.textContent = message;
-    el.dataset.tone = tone || "";
-    clearTimeout(status.timer);
-    status.timer = setTimeout(() => { el.textContent = "Drafts save locally; Save shared publishes to the team library."; el.dataset.tone = ""; }, 3500);
+    BASE_TOAST.toast(message, tone);
   }
 
   function persist() {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(clean(rootDefinition())));
+    BASE_TOAST.setState("draft");
   }
 
   function textInput(label, path, value, options) {
@@ -175,12 +186,18 @@
     defaultAlign = defaultAlign || "top";
     return `<label class="lbl">${esc(label || "Fields")}</label>` + (fields || []).map((field, index) => {
       const align = field.align || defaultAlign;
+      const type = field.type || (field.multiline ? "multiline" : "text");
       return `<div class="field-editor">
       <input class="in" data-path="${base}.${index}.label" value="${esc(field.label)}" placeholder="Label">
       <input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">
       <input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">
       <input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">
-      <label class="icon-toggle" title="Multiline"><input type="checkbox" data-path="${base}.${index}.multiline" data-value-type="bool"${field.multiline ? " checked" : ""}>↵</label>
+      <select class="sel small" data-path="${base}.${index}.type" title="Input style">
+        <option value="text"${type === "text" ? " selected" : ""}>Single line</option>
+        <option value="multiline"${type === "multiline" ? " selected" : ""}>Multiline</option>
+        <option value="date"${type === "date" ? " selected" : ""}>Date</option>
+        <option value="number"${type === "number" ? " selected" : ""}>Number</option>
+      </select>
       <select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
         <option value="top"${align === "top" ? " selected" : ""}>Top</option>
         <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
@@ -188,7 +205,7 @@
       </select>
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
-    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. The preview shows a dashed outline where it will sit.</div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. The preview shows a dashed outline where it will sit.</div>`;
   }
 
   function cardHead(type, index, noun) {
@@ -336,9 +353,22 @@
     $("#ed").innerHTML = packageNav + commonPanel() + controlPanel() + appearancePanel() + (def.kind === "form" ? formEditor() : def.kind === "document" ? documentEditor() : packageEditor());
   }
 
+  // Keeps the last preview that rendered successfully so a definition that
+  // becomes momentarily invalid (e.g. mid-edit, or a bad AI import) never
+  // blanks the builder -- it shows the last good page and an error toast
+  // instead of a broken/blank preview.
+  let lastGoodPreviewHtml = "";
+
   function renderPreview() {
-    $("#pv").innerHTML = BASE.render(def, { fill: false });
-    requestAnimationFrame(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit(); });
+    try {
+      const html = BASE.render(def, { fill: false });
+      lastGoodPreviewHtml = html;
+      $("#pv").innerHTML = html;
+      requestAnimationFrame(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit(); });
+    } catch (error) {
+      if (lastGoodPreviewHtml) $("#pv").innerHTML = lastGoodPreviewHtml;
+      status(`Could not render the preview: ${error.message}. Showing the last valid version.`, "error");
+    }
   }
 
   function renderAll() {
@@ -390,9 +420,9 @@
 
   function addSection(type) {
     const templates = {
-      fields: { name: "New Section", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46 }] },
-      checks: { name: "New Choices", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"] },
-      sign: { name: "Authorization", req: "REQUIRED", sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
+      fields: { name: "New Section", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46, id: newId() }] },
+      checks: { name: "New Choices", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"], id: newId("g") },
+      sign: { name: "Authorization", req: "REQUIRED", sign: [{ label: "Signature", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
       text: { name: "Instructions", text: "Add instructions here." }
     };
     def.sections.push(templates[type]);
@@ -402,14 +432,14 @@
 
   function newBlock(type) {
     const templates = {
-      prose: { type, heading: "New Section", paras: ["Write here."] }, fields: { type, heading: "Information", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46 }] },
-      checks: { type, heading: "Options", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"] }, checklist: { type, heading: "Checklist", items: ["Item one", "Item two"] },
+      prose: { type, heading: "New Section", paras: ["Write here."] }, fields: { type, heading: "Information", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46, id: newId() }] },
+      checks: { type, heading: "Options", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"], id: newId("g") }, checklist: { type, heading: "Checklist", items: ["Item one", "Item two"], id: newId("g") },
       list: { type, heading: "List", ordered: false, items: ["Item one", "Item two"] }, table: { type, columns: ["Column A", "Column B"], rows: [["", ""]] },
       keyvalue: { type, items: [["Label", "Value"], ["Label", "Value"]] }, callout: { type, text: "Important callout." }, note: { type, title: "Note", text: "Important note." },
-      signature: { type, heading: "Authorization", req: "REQUIRED", fields: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
-      ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46 }], sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
-      attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46 }, { label: "Attachment / drawing / reference 2", w: 1, height: 46 }] },
-      approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments", w: 1, height: 78, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
+      signature: { type, heading: "Authorization", req: "REQUIRED", fields: [{ label: "Signature", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
+      ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46, id: newId() }], sign: [{ label: "Signature", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
+      attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46, id: newId() }, { label: "Attachment / drawing / reference 2", w: 1, height: 46, id: newId() }] },
+      approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], id: newId("g"), fields: [{ label: "Review comments", w: 1, height: 78, type: "multiline", id: newId() }], sign: [{ label: "Reviewed By", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
       budget: { type, heading: "Budget / Cost Breakdown", currency: "$", rows: [["01", "Labor", "1", "0.00", ""], ["02", "Materials", "1", "0.00", ""], ["03", "Equipment", "1", "0.00", ""]] },
       schedule: { type, heading: "Schedule / Milestones", columns: ["Milestone", "Owner", "Start", "Due", "Status"], rows: [["Milestone one", "", "", "", "Not Started"], ["Milestone two", "", "", "", "Not Started"]] },
       contacts: { type, heading: "Project Contacts", columns: ["Company / Person", "Role", "Email", "Phone"], rows: [["", "", "", ""], ["", "", "", ""]] },
@@ -512,18 +542,20 @@
   }
 
   async function saveLibrary() {
+    BASE_TOAST.setState("saving");
     try {
       const document = clean(rootDefinition());
-      status("Saving to the shared library…");
       const saved = await BASE_LIBRARY.saveDocument(document, { id: activeId, folderId: activeFolderId, version: activeVersion });
       activeId = saved.document.id;
       activeVersion = saved.document.version;
       activeFolderId = saved.document.folderId || null;
       updateCommandState();
       status(`Saved to the shared library · version ${saved.document.version}.`, "success");
+      BASE_TOAST.setState("saved");
       return saved.document;
     } catch (error) {
       status(`Could not save: ${error.message}`, "error");
+      BASE_TOAST.setState("error");
       throw error;
     }
   }
@@ -536,8 +568,8 @@
       `Update the "${label}" template with your current changes?\n\nEveryone who starts a new "${label}" from now on will get this version. This cannot be undone.`
     );
     if (!confirmed) return;
+    BASE_TOAST.setState("saving");
     try {
-      status("Updating template…");
       const definition = clean(rootDefinition());
       const published = await BASE_TEMPLATES.publishTemplate(activeTemplateKey, {
         name: def.title || label,
@@ -545,9 +577,11 @@
         definition
       });
       status(`Template updated — "${label}" is now on version ${published.publishedVersion.versionNumber}.`, "success");
+      BASE_TOAST.setState("saved");
       return published;
     } catch (error) {
       status(`Could not update template: ${error.message}`, "error");
+      BASE_TOAST.setState("error");
       throw error;
     }
   }
@@ -666,7 +700,7 @@
     if (button.dataset.addFormBlock) return addFormBlock(button.dataset.addFormBlock);
     if (button.dataset.addBlock) return addBlock(button.dataset.addBlock);
     const action = button.dataset.action;
-    if (action === "add-field") { getPath(def, button.dataset.base).push({ label: "New field", w: 1, height: 46 }); return renderAll(); }
+    if (action === "add-field") { getPath(def, button.dataset.base).push({ label: "New field", w: 1, height: 46, id: newId() }); return renderAll(); }
     if (action === "delete-field") { getPath(def, button.dataset.base).splice(Number(button.dataset.index), 1); return renderAll(); }
     if (["move-up", "move-down", "delete-item"].includes(action)) {
       const array = currentArray(button.dataset.noun), index = Number(button.dataset.index);
@@ -834,6 +868,8 @@
   setupToolbarMenus();
   window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
+  window.addEventListener("offline", () => BASE_TOAST.setState("offline"));
+  window.addEventListener("online", () => BASE_TOAST.setState("draft"));
 
   async function initialize() {
     try { folders = await BASE_LIBRARY.listFolders(); }

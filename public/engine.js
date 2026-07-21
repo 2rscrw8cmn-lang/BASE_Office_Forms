@@ -66,7 +66,11 @@
       ? { label: input[0], w: input[1], id: input[2], height: input[3], type: input[4] }
       : (input || {});
     const label = source.label || "Field";
-    const id = uid(slug(source.id || label));
+    // A field's id is its permanent identity (used as the answer key). Once a
+    // field has an explicit id, edits to its label must never change it --
+    // only fields without one (legacy definitions) fall back to a
+    // label-derived slug for backward compatibility.
+    const id = source.id ? uid(source.id) : uid(slug(label));
     const type = source.type || defaultType || "text";
     if (schema) schema.push({ id, type, label });
     return {
@@ -93,12 +97,12 @@
   // visible but non-interactive placeholder in the same position and size,
   // so the box's position and size can be seen and designed without turning
   // the preview into a live form.
-  function writeBox(fill, isTextarea, name, textHeight) {
+  function writeBox(fill, isTextarea, name, textHeight, htmlType) {
     const sizeStyle = textHeight ? ` style="height:${textHeight}px;flex:none"` : "";
     if (fill) {
       return isTextarea
         ? `<textarea class="ftx" name="${esc(name)}"${sizeStyle}></textarea>`
-        : `<input class="fin" name="${esc(name)}"${sizeStyle}>`;
+        : `<input class="fin" name="${esc(name)}"${htmlType && htmlType !== "text" ? ` type="${esc(htmlType)}"` : ""}${sizeStyle}>`;
     }
     return `<div class="fin-ghost ${isTextarea ? "ghost-area" : "ghost-line"}"${sizeStyle} aria-hidden="true"></div>`;
   }
@@ -116,12 +120,12 @@
       if (section.sign) section.sign = section.sign.map(field => normField(field, uid, schema, "text"));
       if (section.checks) {
         const sectionLabel = section.name || section.heading || "Choice";
-        section._gid = uid(slug(section.id || sectionLabel));
+        section._gid = section.id ? uid(section.id) : uid(slug(sectionLabel));
         section._opts = section.checks.map(option => String(option).replace(/[†‡]\s*$/, "").trim());
         schema.push({ id: section._gid, type: section.single ? "choose_one" : "choose_any", label: sectionLabel, options: section._opts });
       }
       if (section.type === "checklist" && section.items) {
-        section._gid = uid(slug(section.id || section.heading || "checklist"));
+        section._gid = section.id ? uid(section.id) : uid(slug(section.heading || "checklist"));
         schema.push({ id: section._gid, type: "choose_any", label: section.heading || "Checklist", options: section.items.map(String) });
       }
     };
@@ -136,7 +140,11 @@
     const template = normalized.map(field => `${field.w}fr`).join(" ");
     return `<div class="grid" style="--tpl:${template};">` + normalized.map(field => {
       const height = tall ? Math.max(76, field.height) : field.height;
-      const input = writeBox(fill, field.multiline || height >= 70, (namePrefix || "") + field.id, field.textHeight);
+      // Input style is explicit -- a tall box (e.g. a stamp) never silently
+      // becomes a textarea; only an explicit multiline/type setting does.
+      const isMultiline = field.type === "multiline" || Boolean(field.multiline);
+      const htmlType = field.type === "date" || field.type === "number" ? field.type : "text";
+      const input = writeBox(fill, isMultiline, (namePrefix || "") + field.id, field.textHeight, htmlType);
       const align = field.align && field.align !== "top" ? ` field-align-${field.align}` : "";
       return `<div class="field${height >= 70 ? " field-tall" : ""}${align}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
     }).join("") + `</div>`;
@@ -271,7 +279,7 @@
         return `<table class="dtable avoid"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
       }
       case "list": return `<div class="list-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}<${block.ordered ? "ol" : "ul"}>${(block.items || []).map(item => `<li>${esc(item)}</li>`).join("")}</${block.ordered ? "ol" : "ul"}></div>`;
-      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<label class="checkline">${fill ? `<input type="checkbox" name="${esc((namePrefix || "") + (block._gid || slug(block.heading || "checklist")))}" value="${esc(item)}">` : ""}<span class="box"></span><span>${esc(item)}</span></label>`).join("")}</div>`;
+      case "checklist": return `<div class="checklist-block avoid">${block.heading ? `<h3>${esc(block.heading)}</h3>` : ""}${(block.items || []).map(item => `<label class="checkline">${fill ? `<input type="checkbox" name="${esc((namePrefix || "") + (block.id || slug(block.heading || "checklist")))}" value="${esc(item)}">` : ""}<span class="box"></span><span>${esc(item)}</span></label>`).join("")}</div>`;
       case "keyvalue": return `<div class="keyvalue avoid">${(block.items || []).map(item => `<div class="key">${esc(item[0] || item.label)}</div><div class="value">${esc(item[1] || item.value)}</div>`).join("")}</div>`;
       case "budget": return budgetBlock(block);
       case "schedule": return structuredTable(block, "schedule-block");
@@ -279,11 +287,11 @@
       case "revisions": return structuredTable(block, "revisions-block");
       case "evidence": return structuredTable(block, "evidence-block");
       case "fields": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Information", block.req)}${docFields(block, fill, namePrefix)}</section>`;
-      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix)}</section>`;
+      case "checks": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Checklist", block.req)}${checksBlock({ ...block, name: block.heading, _gid: block.id || slug(block.heading) }, Boolean(fill), namePrefix)}</section>`;
       case "signature": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Authorization", block.req)}${signBlock(block.fields || [], Boolean(fill), namePrefix)}</section>`;
       case "ack": return `<section class="section big">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Acknowledgment", block.req || "REQUIRED")}${block.intro ? `<p class="prose">${esc(block.intro)}</p>` : ""}${docFields(block, fill, namePrefix)}${block.sign ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "attachments": return `<section class="section big attachment-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Attachments / References", block.req)}${docFields(block, fill, namePrefix)}</section>`;
-      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${block.checks && block.checks.length ? checksBlock({ ...block, name: block.heading, _gid: block._gid || slug(block.heading) }, Boolean(fill), namePrefix) : ""}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
+      case "approval": return `<section class="section big approval-block">${sectionBar(String(++counter.n).padStart(2, "0"), block.heading || "Review Decision", block.req || "REQUIRED")}${block.checks && block.checks.length ? checksBlock({ ...block, name: block.heading, _gid: block.id || slug(block.heading) }, Boolean(fill), namePrefix) : ""}${block.fields && block.fields.length ? `<div class="block-gap">${docFields(block, fill, namePrefix)}</div>` : ""}${block.sign && block.sign.length ? `<div class="block-gap">${signBlock(block.sign, Boolean(fill), namePrefix)}</div>` : ""}</section>`;
       case "pagebreak": return `<div class="page-break" aria-hidden="true"></div>`;
       default: return "";
     }

@@ -48,8 +48,15 @@
   .studio-head .head-row { display:flex; align-items:baseline; gap:10px; }
   .studio-head strong { display:block; font:400 20px/1 Georgia,'Times New Roman',serif; }
   #kindBadge { display:inline-block; color:var(--accent); font:600 7px/1 var(--code); letter-spacing:1px; }
-  #status { margin-top:7px; font:400 9px/1.5 var(--sans); color:#858286; }
-  #status[data-tone="success"] { color:#267044; } #status[data-tone="error"] { color:#9a1e25; }
+  .draft-state { margin-top:7px; display:inline-flex; align-items:center; gap:6px; font:600 8px/1 var(--code); text-transform:uppercase; letter-spacing:.5px; color:#858286; }
+  .draft-state::before { content:''; width:6px; height:6px; border-radius:50%; background:#b9b6b1; }
+  .draft-state[data-state="saving"] { color:#8c6d1f; } .draft-state[data-state="saving"]::before { background:#d9a520; }
+  .draft-state[data-state="saved"] { color:#267044; } .draft-state[data-state="saved"]::before { background:#2f9e63; }
+  .draft-state[data-state="offline"] { color:#6f6c70; } .draft-state[data-state="offline"]::before { background:#9d9994; }
+  .draft-state[data-state="error"] { color:#9a1e25; } .draft-state[data-state="error"]::before { background:#c9333a; }
+  .toast-stack { position:fixed; z-index:200; right:18px; bottom:18px; display:flex; flex-direction:column-reverse; gap:8px; max-width:min(360px,calc(100vw - 36px)); }
+  .toast { padding:11px 14px; border-radius:5px; background:#2b2a2c; color:#fff; box-shadow:0 10px 30px rgba(20,18,17,.28); font:500 10px/1.4 var(--sans); cursor:pointer; }
+  .toast-success { background:#1f6b45; } .toast-error { background:#8e1b20; }
   .preview-head { position:sticky; top:0; z-index:15; height:59px; margin:0 -26px 24px; padding:0 26px; display:flex; align-items:center; justify-content:space-between; background:rgba(250,249,247,.92); border-bottom:1px solid #dedbd7; backdrop-filter:blur(8px); }
   .preview-head strong { font:600 9px/1 var(--sans); text-transform:uppercase; letter-spacing:.7px; }
   .preview-head span { color:#8c898d; font:500 8px/1 var(--code); }
@@ -85,10 +92,8 @@
   .spacer { flex:1; }
   .mini { width:27px; height:27px; border:1px solid #dbd8d4; background:#fff; border-radius:3px; cursor:pointer; color:#656267; }
   .mini:hover { border-color:#aaa6a2; background:#faf9f8; } .mini.del:hover,.danger:hover { background:#9b2328!important; color:#fff!important; }
-  .field-editor { display:grid; grid-template-columns:1fr 52px 62px 62px 29px 64px 27px; gap:5px; align-items:center; margin:5px 0; }
+  .field-editor { display:grid; grid-template-columns:1fr 52px 62px 62px 84px 64px 27px; gap:5px; align-items:center; margin:5px 0; }
   .field-editor .small { text-align:center; padding-inline:3px; }
-  .icon-toggle { display:grid; place-items:center; height:31px; border:1px solid #d7d4d0; border-radius:3px; background:#fff; font:600 12px/1 var(--code); }
-  .icon-toggle input { position:absolute; opacity:0; } .icon-toggle:has(input:checked) { background:var(--accent); color:#fff; }
   .addrow { margin-top:7px; padding:8px 10px; border:1px dashed #cda9ab; color:var(--accent); background:#fff; border-radius:3px; cursor:pointer; font:600 8px/1 var(--code); }
   .block-picker { margin-top:16px; border-top:1px solid #e5e2df; }
   .block-picker>summary { padding:15px 20px; list-style:none; cursor:pointer; color:#4b484d; font:400 17px/1 Georgia,'Times New Roman',serif; }
@@ -220,16 +225,18 @@
 </div>
 <div class="app">
   <section class="editor" aria-label="Document editor">
-    <div class="studio-head"><div class="head-row"><strong>Structure &amp; settings</strong><span id="kindBadge"></span></div><div id="status">Drafts save locally; Save to library publishes to the shared workspace.</div></div>
+    <div class="studio-head"><div class="head-row"><strong>Structure &amp; settings</strong><span id="kindBadge"></span></div><div id="draftState" class="draft-state" data-state="draft" role="status">Draft</div></div>
     <div id="ed"></div>
   </section>
   <main class="previewpane"><div class="preview-head"><strong>Live preview</strong><span>Changes save locally</span></div><div class="previewscale" id="pv"></div></main>
 </div>
 <div class="modal" id="modal" hidden><div class="modal-backdrop"></div><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button data-action="close-modal" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
+<div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 <script src="engine.js"></script>
 <script src="library-api.js"></script>
 <script src="template-api.js"></script>
 <script src="global-search.js"></script>
+<script src="studio-toast.js"></script>
 <script src="studio.js"></script>
 </body>
 </html>
