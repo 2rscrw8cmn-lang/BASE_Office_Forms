@@ -76,7 +76,11 @@
       type,
       height: Math.max(36, Number(source.height || source.h) || 46),
       multiline: Boolean(source.multiline),
-      break: Boolean(source.break)
+      break: Boolean(source.break),
+      // Where the write-in box sits when the field is taller than one line
+      // (e.g. a stamp box). Renderers apply their own default when unset:
+      // fieldsBlock defaults to "top", signBlock to "bottom".
+      align: ["top", "center", "bottom"].includes(source.align) ? source.align : undefined
     };
   }
 
@@ -118,7 +122,8 @@
           ? `<textarea class="ftx" name="${esc((namePrefix || "") + field.id)}"></textarea>`
           : `<input class="fin" name="${esc((namePrefix || "") + field.id)}">`)
         : "";
-      return `<div class="field${height >= 70 ? " field-tall" : ""}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
+      const align = field.align && field.align !== "top" ? ` field-align-${field.align}` : "";
+      return `<div class="field${height >= 70 ? " field-tall" : ""}${align}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
     }).join("") + `</div>`;
   }
 
@@ -144,7 +149,10 @@
       rows[rows.length - 1].push(field);
     });
     return rows.map(row => `<div class="sign-grid" style="--sign-tpl:${row.map(field => field.w + "fr").join(" ")};">` +
-      row.map(field => `<div class="sign" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`).join("") +
+      row.map(field => {
+        const align = field.align && field.align !== "bottom" ? ` sign-align-${field.align}` : "";
+        return `<div class="sign${align}" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`;
+      }).join("") +
       `</div>`).join("");
   }
 
@@ -234,6 +242,13 @@
       case "callout": return `<div class="pull avoid"><div class="pull-q">${esc(block.text)}</div>${block.attribution ? `<div class="pull-a">${esc(block.attribution)}</div>` : ""}</div>`;
       case "note": return `<div class="note avoid">${block.title ? `<div class="note-t">${esc(block.title)}</div>` : ""}<div class="note-b">${esc(block.text)}</div></div>`;
       case "signatory": return `<div class="signatory avoid"><div class="sig-line"></div><div class="sig-name">${esc(block.name)}</div><div class="sig-role">${esc(block.role)}</div></div>`;
+      case "header": {
+        const contactLines = [block.address, block.phone, block.email].filter(Boolean).map(esc);
+        return `<div class="header-block avoid">
+          <img class="header-block-logo" src="assets/base-logo.svg?v=20260718" alt="BASE">
+          <div class="header-block-contact">${block.companyName ? `<strong>${esc(block.companyName)}</strong>` : ""}${contactLines.map(line => `<span>${line}</span>`).join("")}</div>
+        </div>`;
+      }
       case "table": {
         const header = `<tr>${(block.columns || []).map(column => `<th>${esc(column)}</th>`).join("")}</tr>`;
         const rows = (block.rows || []).map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("");

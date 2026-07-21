@@ -168,14 +168,23 @@
     </details>`;
   }
 
-  function fieldRows(base, fields, label) {
-    return `<label class="lbl">${esc(label || "Fields")}</label>` + (fields || []).map((field, index) => `<div class="field-editor">
+  function fieldRows(base, fields, label, defaultAlign) {
+    defaultAlign = defaultAlign || "top";
+    return `<label class="lbl">${esc(label || "Fields")}</label>` + (fields || []).map((field, index) => {
+      const align = field.align || defaultAlign;
+      return `<div class="field-editor">
       <input class="in" data-path="${base}.${index}.label" value="${esc(field.label)}" placeholder="Label">
       <input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">
       <input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">
       <label class="icon-toggle" title="Multiline"><input type="checkbox" data-path="${base}.${index}.multiline" data-value-type="bool"${field.multiline ? " checked" : ""}>↵</label>
+      <select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
+        <option value="top"${align === "top" ? " selected" : ""}>Top</option>
+        <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
+        <option value="bottom"${align === "bottom" ? " selected" : ""}>Bottom</option>
+      </select>
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
-    </div>`).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height controls the write-in area.</div>`;
+    </div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height controls the write-in area. Top/Middle/Bottom controls where the write-in box sits when the field is taller than one line.</div>`;
   }
 
   function cardHead(type, index, noun) {
@@ -208,6 +217,7 @@
       revisions: `<path d="M6 3h10l3 3v15H6zM15 3v4h4M9 11h7M9 15h7M9 19h5"/>`,
       evidence: `<rect x="3" y="5" width="18" height="15" rx="1"/><circle cx="9" cy="10" r="2"/><path d="m5 18 5-5 3 3 2-2 4 4"/>`,
       signatory: `<circle cx="12" cy="7" r="3"/><path d="M5 20c.5-5 3-7 7-7s6.5 2 7 7"/>`,
+      header: `<rect x="3" y="4" width="7" height="7" rx="1"/><path d="M13 6h8M13 10h5M3 16h18"/>`,
       pagebreak: `<path d="M4 7h16M4 17h16M8 12h8M12 9v6"/>`,
       text: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
       sign: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`
@@ -227,6 +237,7 @@
     return `<details class="block-picker" data-panel-key="block-picker"${openAttribute("block-picker", true)}><summary>Add a block</summary><div class="addmenu">
       ${pickerGroup("Write & organize", [
         pickerButton(attribute, "prose", "Text section", "Narrative with an optional numbered heading."),
+        pickerButton(attribute, "header", "Header", "The BASE logo alongside your company's contact information."),
         pickerButton(attribute, "list", "List", "Ordered steps or a simple bulleted list."),
         pickerButton(attribute, "table", "Table", "Repeated records arranged in columns and rows."),
         pickerButton(attribute, "keyvalue", "Key / value", "Compact label-and-value document facts.")
@@ -264,8 +275,8 @@
         if (section.type) return blockEditor(section, index, "sections", "section");
         const type = section.fields ? "fields" : section.checks ? "choices" : section.sign ? "signature" : "text";
         let body = `<div class="two">${textInput("Section name", `sections.${index}.name`, section.name)}${textInput("Requirement", `sections.${index}.req`, section.req)}</div>`;
-        if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields");
-        if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields");
+        if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields", "top");
+        if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields", "bottom");
         if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
         if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
         return editorCard(type, index, "section", section.name || "Untitled section", body, section);
@@ -281,6 +292,7 @@
     if (block.type === "callout") body = textArea("Callout", `${base}.text`, block.text) + textInput("Attribution", `${base}.attribution`, block.attribution);
     if (block.type === "note") body = textInput("Note title", `${base}.title`, block.title) + textArea("Note text", `${base}.text`, block.text);
     if (block.type === "signatory") body = textInput("Name", `${base}.name`, block.name) + textInput("Role", `${base}.role`, block.role);
+    if (block.type === "header") body = textInput("Company name", `${base}.companyName`, block.companyName) + `<div class="two">${textInput("Phone", `${base}.phone`, block.phone)}${textInput("Email", `${base}.email`, block.email)}</div>` + textInput("Address", `${base}.address`, block.address);
     if (block.type === "table") body = textInput("Columns — comma separated", `${base}.columns`, (block.columns || []).join(", "), { valueType: "commas" }) + textArea("Rows — one per line, cells separated by |", `${base}.rows`, (block.rows || []).map(row => row.join(" | ")).join("\n"), "rows");
     if (block.type === "list") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Numbered list", `${base}.ordered`, Boolean(block.ordered))}</div>` + textArea("Items — one per line", `${base}.items`, (block.items || []).join("\n"), "lines");
     if (block.type === "checklist") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Checklist items", `${base}.items`, (block.items || []).join("\n"), "lines");
@@ -290,13 +302,13 @@
     if (["fields", "signature", "ack", "attachments"].includes(block.type)) {
       body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>`;
       if (block.type === "ack") body += textArea("Acknowledgment text", `${base}.intro`, block.intro);
-      body += fieldRows(`${base}.fields`, block.fields || [], block.type === "signature" ? "Signature fields" : block.type === "attachments" ? "Attachment / reference rows" : "Fields");
-      if (block.type === "ack") body += fieldRows(`${base}.sign`, block.sign || [], "Signature fields");
+      body += fieldRows(`${base}.fields`, block.fields || [], block.type === "signature" ? "Signature fields" : block.type === "attachments" ? "Attachment / reference rows" : "Fields", block.type === "signature" ? "bottom" : "top");
+      if (block.type === "ack") body += fieldRows(`${base}.sign`, block.sign || [], "Signature fields", "bottom");
     }
     if (block.type === "checks") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, Boolean(block.single))}${textInput("Columns", `${base}.cols`, block.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
-    if (block.type === "approval") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>` + textArea("Decision options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, block.single !== false)}${textInput("Columns", `${base}.cols`, block.cols || 2, { type: "number", valueType: "number", min: 1 })}</div>` + fieldRows(`${base}.fields`, block.fields || [], "Review / response fields") + fieldRows(`${base}.sign`, block.sign || [], "Reviewer sign-off");
+    if (block.type === "approval") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>` + textArea("Decision options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, block.single !== false)}${textInput("Columns", `${base}.cols`, block.cols || 2, { type: "number", valueType: "number", min: 1 })}</div>` + fieldRows(`${base}.fields`, block.fields || [], "Review / response fields", "top") + fieldRows(`${base}.sign`, block.sign || [], "Reviewer sign-off", "bottom");
     if (block.type === "pagebreak") body = `<p class="micro">Forces the following content onto a new printed page.</p>`;
-    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, budget: block.heading, schedule: block.heading, contacts: block.heading, revisions: block.heading, evidence: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, pagebreak: "Page break" };
+    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, budget: block.heading, schedule: block.heading, contacts: block.heading, revisions: block.heading, evidence: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, header: block.companyName || "Header", pagebreak: "Page break" };
     return editorCard(block.type, index, noun, titles[block.type] || "Untitled block", body, block);
   }
 
@@ -397,7 +409,9 @@
       contacts: { type, heading: "Project Contacts", columns: ["Company / Person", "Role", "Email", "Phone"], rows: [["", "", "", ""], ["", "", "", ""]] },
       revisions: { type, heading: "Revision History", columns: ["Revision", "Date", "Author", "Description"], rows: [["1.0", "", "", "Initial issue"]] },
       evidence: { type, heading: "Evidence / Photo Log", columns: ["Photo / File Ref.", "Caption", "Date", "Location"], rows: [["", "", "", ""], ["", "", "", ""]] },
-      signatory: { type, name: "Name", role: "Title" }, pagebreak: { type }
+      signatory: { type, name: "Name", role: "Title" },
+      header: { type, companyName: def.org || "", address: "", phone: "", email: "" },
+      pagebreak: { type }
     };
     return BASE.clone(templates[type] || templates.prose);
   }
