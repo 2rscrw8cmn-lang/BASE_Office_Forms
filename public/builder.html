@@ -10,6 +10,9 @@
   body { height:100vh; overflow:hidden; background:#f4f3f1; }
   .studio-topbar { min-height:72px; }
   .studio-topbar .global-search { height:40px; }
+  .legacy-shell-return { grid-column:6; min-height:40px; display:inline-flex; align-items:center; padding:0 14px; color:var(--accent); border:1px solid #d9d5d1; border-radius:4px; text-decoration:none; font:600 9px/1 var(--sans); white-space:nowrap; }
+  .legacy-shell-return:hover { border-color:var(--accent); }
+  @media (max-width:950px) { .legacy-shell-return { grid-column:4; } }
   .studio-commandbar { min-height:58px; padding:8px 24px; display:flex; align-items:center; gap:8px; background:#fff; border-bottom:1px solid #dfddda; }
   .studio-commandbar .command-group { display:flex; align-items:center; gap:7px; }
   .studio-commandbar .command-group:last-child { margin-left:auto; }
@@ -122,12 +125,12 @@
 <header class="app-topbar studio-topbar">
   <a class="app-brand" href="/dashboard" aria-label="Return to BASE workspace"><img src="assets/base-logo.svg?v=20260718" alt="BASE"></a>
   <span class="app-divider" aria-hidden="true"></span>
-  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Documents</a><i>/</i><span>Studio</span></nav>
+  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Document Library</a><i>/</i><span>Studio</span></nav>
   <form class="global-search" action="/library" role="search">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
     <label class="sr-only" for="studioSearch">Search the document workspace</label><input id="studioSearch" name="q" type="search" placeholder="Search documents, templates, or records">
   </form>
-  <button class="user-placeholder" type="button" title="User sign in will be added later">User</button>
+  <a class="legacy-shell-return" href="/dashboard">Back to app</a>
 </header>
 <div class="studio-commandbar">
   <div class="command-group"><select id="templateSelect" aria-label="Document template"></select><button id="newButton">Use template</button></div>

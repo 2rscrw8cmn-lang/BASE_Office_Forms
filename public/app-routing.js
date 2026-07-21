@@ -7,7 +7,7 @@ const routes = [
     title: "Work dashboard",
     eyebrow: "Workspace",
     description:
-      "A focused view of document-control work across your projects will live here.",
+      "A focused view of document-control work across your projects.",
     globalSection: "dashboard",
   },
   {
@@ -67,8 +67,7 @@ const routes = [
     id: "project-records",
     title: "Records",
     eyebrow: "Project documents",
-    description:
-      "The project record register will be implemented in the records milestone.",
+    description: "The project document register.",
     globalSection: "projects",
     projectTab: "records",
     params: ["projectId"],
@@ -133,8 +132,7 @@ const routes = [
     id: "project-overview",
     title: "Overview",
     eyebrow: "Project workspace",
-    description:
-      "Project summary and activity will be implemented in the projects milestone.",
+    description: "Project summary, attention items, and recent activity.",
     globalSection: "projects",
     projectTab: "overview",
     params: ["projectId"],

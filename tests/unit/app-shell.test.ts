@@ -282,7 +282,7 @@ describe("application shell", () => {
   it("keeps Studio and Document Library reachable as top-level nav links, not a nested Tools submenu", async () => {
     const { document } = await mount("/dashboard");
     const studioLink = document.querySelector<HTMLAnchorElement>(
-      '.app-navigation-desktop a[href="/builder.html"]',
+      '.app-navigation-desktop a[href="/builder"]',
     );
     const libraryLink = document.querySelector<HTMLAnchorElement>(
       '.app-navigation-desktop a[href="/library"]',

@@ -86,8 +86,8 @@ html {
   border-bottom: 1px solid var(--shell-border-soft);
 }
 .sidebar-brand img {
-  width: 72px;
-  height: 34px;
+  width: 86px;
+  height: 40px;
   object-fit: contain;
 }
 .sidebar-brand span {
@@ -504,7 +504,7 @@ html {
     gap: 9px;
   }
   .sidebar-brand img {
-    width: 62px;
+    width: 74px;
   }
   .sidebar-brand span {
     font-size: 7px;
@@ -532,7 +532,7 @@ html {
     z-index: 80;
     height: 64px;
     display: grid;
-    grid-template-columns: 44px 64px minmax(0, 1fr);
+    grid-template-columns: 44px 76px minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     padding: 0 14px;
@@ -554,13 +554,13 @@ html {
     cursor: pointer;
   }
   .mobile-brand {
-    height: 42px;
+    height: 50px;
     display: grid;
     place-items: center;
   }
   .mobile-brand img {
-    width: 62px;
-    height: 34px;
+    width: 74px;
+    height: 40px;
     object-fit: contain;
   }
   .mobile-context {
