@@ -38,6 +38,7 @@ import { RendererDefinitionValidationError } from "../../rendering/renderer-defi
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
 import type { Record } from "../../domain/records/record";
+import type { RecordListSummaryItem } from "../../application/read-models/project-records-service";
 import type { Revision } from "../../domain/revisions/revision";
 import type { RevisionFile } from "../../domain/files/file";
 import type { TemplateWithPublishedVersion } from "../../domain/templates/template";
@@ -277,19 +278,20 @@ async function handleRecordRoute(
   try {
     if (!recordId) {
       if (request.method === "GET") {
+        const projectRecords = dependencies.projectRecords;
+        if (!projectRecords) return unavailable(context);
         const includeArchived = parseIncludeArchived(
           new URL(request.url).searchParams.get("includeArchived"),
         );
-        return apiSuccess(
-          context,
-          (
-            await records.list(
-              authenticated.session,
-              projectId,
-              includeArchived,
-            )
-          ).map(serializeRecord),
+        const model = await projectRecords.load(
+          authenticated.session,
+          projectId,
+          includeArchived,
         );
+        return apiSuccess(context, {
+          records: model.records.map(serializeRecordSummary),
+          capabilities: model.capabilities,
+        });
       }
       const record = await records.create(authenticated.session, projectId, {
         ...parseRecordCreate(await parseJsonRequest(request)),
@@ -1323,6 +1325,41 @@ function serializeRecord(record: Record) {
     archivedAt: record.archivedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  };
+}
+// List-summary shape for the Records register. Deliberately narrower than the
+// full record: no storage keys, activity blobs, or raw authorization internals.
+// `currentRevision` is the record's authoritative current revision (or null),
+// `fileCount` is the total files across all of the record's revisions, and
+// `updatedAt` is the record row's own last-modified time (record metadata),
+// distinct from `createdAt`.
+function serializeRecordSummary(summary: RecordListSummaryItem) {
+  return {
+    id: summary.id,
+    projectId: summary.projectId,
+    recordNumber: summary.recordNumber,
+    title: summary.title,
+    recordType: summary.recordType,
+    discipline: summary.discipline,
+    status: summary.status,
+    currentRevision: summary.currentRevision
+      ? {
+          id: summary.currentRevision.id,
+          revisionNumber: summary.currentRevision.revisionNumber,
+          revisionLabel: summary.currentRevision.revisionLabel,
+          status: summary.currentRevision.status,
+          title: summary.currentRevision.title,
+        }
+      : null,
+    hasDraftRevision: summary.hasDraftRevision,
+    draftRevisionId: summary.draftRevisionId,
+    fileCount: summary.fileCount,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+    capabilities: {
+      update: summary.capabilities.update,
+      archive: summary.capabilities.archive,
+    },
   };
 }
 function serializeTemplate(template: TemplateWithPublishedVersion) {

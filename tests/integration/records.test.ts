@@ -13,6 +13,8 @@ import { D1OrganizationsRepository } from "../../src/infrastructure/db/d1/organi
 import { D1ProjectMembershipsRepository } from "../../src/infrastructure/db/d1/project-memberships-repository";
 import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
+import { D1ProjectRecordsReadRepository } from "../../src/infrastructure/db/d1/project-records-read-repository";
+import { ProjectRecordsReadModelService } from "../../src/application/read-models/project-records-service";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 import { invokeV2Api } from "../helpers/api";
 import { resetIdentityFoundation, testDatabase } from "../helpers/d1";
@@ -75,6 +77,10 @@ function dependencies(): V2RouteDependencies {
     ),
     projects,
     records: new RecordService(projects, new D1RecordsRepository(database)),
+    projectRecords: new ProjectRecordsReadModelService(
+      projects,
+      new D1ProjectRecordsReadRepository(database),
+    ),
   };
 }
 
@@ -222,7 +228,10 @@ describe("records foundation API", () => {
       dependencies(),
     );
     await expect(list.json()).resolves.toMatchObject({
-      data: [{ id: record.id }],
+      data: {
+        records: [{ id: record.id, currentRevision: null, fileCount: 0 }],
+        capabilities: { createRecord: true },
+      },
     });
     const detail = await invokeV2Api(
       `/api/v2/projects/${project.id}/records/${record.id}`,
@@ -274,14 +283,16 @@ describe("records foundation API", () => {
       request("admin"),
       dependencies(),
     );
-    await expect(activeList.json()).resolves.toMatchObject({ data: [] });
+    await expect(activeList.json()).resolves.toMatchObject({
+      data: { records: [] },
+    });
     const allList = await invokeV2Api(
       `/api/v2/projects/${project.id}/records?includeArchived=true`,
       request("admin"),
       dependencies(),
     );
     await expect(allList.json()).resolves.toMatchObject({
-      data: [{ id: record.id, status: "archived" }],
+      data: { records: [{ id: record.id, status: "archived" }] },
     });
   });
 
