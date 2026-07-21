@@ -103,33 +103,38 @@ export function createProjectsView({
     );
   }
 
+  function hasActiveFilters() {
+    return Boolean(filters.search.trim()) || filters.status !== "all";
+  }
+
   function heading(session) {
     const showCreate = canCreateProjects(session);
-    return `<div class="page-heading page-heading-actions"><div class="app-container-register">
-        <div class="page-heading-text">
-          <p class="app-eyebrow">Project directory</p>
+    const total = state.status === "loaded" ? state.data.length : null;
+    return `<header class="app-register-header app-container-register">
+        <div class="app-register-title">
           <h1 id="page-title" tabindex="-1">Projects</h1>
-          <p>Open a project workspace, or search and filter the projects you can access.</p>
+          ${total === null ? "" : `<span class="app-register-count">${total} project${total === 1 ? "" : "s"}</span>`}
         </div>${
           showCreate
             ? `<button class="primary-button" type="button" data-create-project>Create project</button>`
             : ""
         }
-      </div></div>`;
+      </header>`;
   }
 
   function toolbar(projects) {
     const statuses = [
       ...new Set(projects.map((project) => project.status)),
     ].sort();
-    return `<div class="projects-toolbar">
-        <div class="app-field app-search-field">
-          <label for="projects-search">Search projects</label>
-          <input id="projects-search" type="search" placeholder="Search by number or name"
+    return `<div class="app-register-toolbar projects-toolbar">
+      <div class="app-register-controls">
+        <div class="app-field app-search-field app-register-search app-register-control">
+          <label class="sr-only" for="projects-search">Search projects</label>
+          <input id="projects-search" type="search" placeholder="Search projects..."
             autocomplete="off" value="${escapeHtml(filters.search)}" />
         </div>
-        <div class="app-field app-filter-field">
-          <label for="projects-status">Status</label>
+        <div class="app-field app-filter-field app-register-control">
+          <label class="sr-only" for="projects-status">Filter projects by status</label>
           <select id="projects-status">
             <option value="all">All statuses</option>
             ${statuses
@@ -140,23 +145,25 @@ export function createProjectsView({
               .join("")}
           </select>
         </div>
-        <button class="text-link" type="button" data-clear-filters>Clear filters</button>
-        <p class="result-count" aria-live="polite" data-result-count></p>
-      </div>`;
+      </div>
+      <div class="app-register-filter-state">
+        <button class="text-link" type="button" data-clear-filters hidden>Clear all</button>
+        <p class="app-register-result-count" aria-live="polite" data-result-count></p>
+      </div>
+    </div>`;
   }
 
   function tableRows(projects) {
     return projects
       .map(
-        (project) => `<tr>
-          <td class="cell-number">${escapeHtml(project.projectNumber || "—")}</td>
+        (
+          project,
+        ) => `<tr class="app-data-row" data-app-row data-href="${overviewHref(project)}">
           <th scope="row"><a href="${overviewHref(project)}" data-app-link
-              aria-label="Open ${escapeHtml(project.name)} (${escapeHtml(project.projectNumber || "no number")})">${escapeHtml(project.name)}</a></th>
+              aria-label="Open ${escapeHtml(project.name)} (${escapeHtml(project.projectNumber || "no number")})">${escapeHtml(project.name)}</a><span class="project-number">${escapeHtml(project.projectNumber || "No project number")}</span></th>
           <td><span class="status-badge status-${project.status === "active" ? "success" : "neutral"}">${escapeHtml(statusLabel(project.status))}</span></td>
           <td>${escapeHtml(locationText(project) || "—")}</td>
           <td class="cell-date">${escapeHtml(formatDate(project.updatedAt) || "—")}</td>
-          <td class="cell-open"><a class="open-link" href="${overviewHref(project)}" data-app-link
-              aria-label="Open ${escapeHtml(project.name)}">Open<span class="open-arrow" aria-hidden="true">→</span></a></td>
         </tr>`,
       )
       .join("");
@@ -174,7 +181,7 @@ export function createProjectsView({
             <span class="status-badge status-${project.status === "active" ? "success" : "neutral"}">${escapeHtml(statusLabel(project.status))}</span>
           </span>
           <span class="project-card-name">${escapeHtml(project.name)}</span>
-          <span class="project-card-meta">${escapeHtml(locationText(project) || "No location")} · Updated ${escapeHtml(formatDate(project.updatedAt) || "—")}</span>
+          <span class="project-card-meta"><span>${escapeHtml(locationText(project) || "No location")}</span><span>Updated ${escapeHtml(formatDate(project.updatedAt) || "—")}</span></span>
         </a></li>`,
       )
       .join("");
@@ -187,18 +194,16 @@ export function createProjectsView({
     }
     if (!filtered.length) {
       return `<div class="projects-empty" role="status"><p class="section-empty">No projects match your search or filters.</p>
-        <button class="secondary-button" type="button" data-clear-filters>Clear filters</button></div>`;
+        <button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>`;
     }
     return `<div class="projects-table-wrap" role="region" aria-label="Projects" tabindex="0">
-        <table class="projects-table">
+        <table class="projects-table app-data-table">
           <caption class="sr-only">Projects you can access</caption>
           <thead><tr>
-            <th scope="col">Number</th>
             <th scope="col">Project</th>
             <th scope="col">Status</th>
             <th scope="col">Location</th>
             <th scope="col">Updated</th>
-            <th scope="col"><span class="sr-only">Actions</span></th>
           </tr></thead>
           <tbody>${tableRows(filtered)}</tbody>
         </table>
@@ -231,8 +236,14 @@ export function createProjectsView({
     const filtered = applyFilters(state.data);
     const countEl = container.querySelector("[data-result-count]");
     if (countEl) {
-      countEl.textContent = `Showing ${filtered.length} of ${state.data.length} project${state.data.length === 1 ? "" : "s"}`;
+      countEl.textContent = hasActiveFilters()
+        ? `${filtered.length} of ${state.data.length} project${state.data.length === 1 ? "" : "s"}`
+        : "";
     }
+    const clear = container.querySelector(
+      ".projects-toolbar [data-clear-filters]",
+    );
+    if (clear) clear.hidden = !hasActiveFilters();
     bindResultLinks(container);
   }
 
@@ -251,6 +262,27 @@ export function createProjectsView({
             return;
           event.preventDefault();
           navigate(link.getAttribute("href"));
+        });
+      });
+    container
+      .querySelectorAll("[data-results] [data-app-row]")
+      .forEach((row) => {
+        row.addEventListener("click", (event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            event.target.closest?.(
+              "a, button, input, select, textarea, label, [contenteditable='true']",
+            )
+          )
+            return;
+          const selection = row.ownerDocument.defaultView?.getSelection?.();
+          if (selection && !selection.isCollapsed && selection.toString())
+            return;
+          navigate(row.getAttribute("data-href"));
         });
       });
     container
@@ -290,7 +322,7 @@ export function createProjectsView({
 
   function mount(container) {
     const session = getSession?.();
-    container.innerHTML = `<section class="workspace-page projects-view">${heading(session)}${body()}</section>`;
+    container.innerHTML = `<section class="workspace-page projects-view app-register-page">${heading(session)}${body()}</section>`;
 
     container
       .querySelector("[data-projects-retry]")

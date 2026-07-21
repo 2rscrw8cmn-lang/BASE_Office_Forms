@@ -1177,12 +1177,13 @@ html {
   font: 600 10px/1.2 var(--code);
 }
 .project-card-name {
-  font:
-    400 18px/1.2 Georgia,
-    "Times New Roman",
-    serif;
+  font: 600 15px/1.3 var(--sans);
 }
 .project-card-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   color: #7c797d;
   font: 500 10px/1.4 var(--sans);
 }
@@ -1383,10 +1384,7 @@ html {
   font: 600 10px/1.2 var(--code);
 }
 .record-card-title {
-  font:
-    400 18px/1.2 Georgia,
-    "Times New Roman",
-    serif;
+  font: 600 15px/1.3 var(--sans);
 }
 .record-card-meta,
 .record-card-revision {
@@ -1409,6 +1407,185 @@ html {
   background: var(--shell-panel);
   border: 1px solid var(--shell-border);
   border-radius: 5px;
+}
+.records-empty h3 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font: 600 15px/1.3 var(--sans);
+}
+
+/* Shared Projects / Records register pattern ----------------------------- */
+.app-register-page {
+  min-width: 0;
+}
+.app-register-header {
+  min-height: 82px;
+  padding-block: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.app-register-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.app-register-title h1,
+.app-register-title h2 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font:
+    400 26px/1.15 Georgia,
+    "Times New Roman",
+    serif;
+  letter-spacing: -0.2px;
+}
+.app-register-title h1:focus,
+.app-register-title h2:focus {
+  outline: 0;
+}
+.app-register-count {
+  color: var(--app-text-muted);
+  font: 500 11px/1.3 var(--sans);
+  white-space: nowrap;
+}
+.projects-body,
+.records-body {
+  margin-top: 0;
+}
+.app-register-toolbar {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--app-border-subtle);
+  border-bottom: 1px solid var(--app-border-subtle);
+}
+.app-register-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-register-search {
+  flex: 1 1 360px;
+}
+.app-register-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-register-control {
+  gap: 0;
+}
+.app-register-control input,
+.app-register-control select {
+  min-height: var(--app-control-height);
+  padding-block: 7px;
+}
+.app-register-control select {
+  min-width: 126px;
+  max-width: 176px;
+}
+.app-register-sort {
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--app-border-subtle);
+}
+.app-register-filter-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.app-filter-chip-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.app-filter-chip-list[hidden],
+.app-register-toolbar [hidden],
+.app-register-result-count:empty {
+  display: none;
+}
+.app-filter-chip {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  color: #5e5658;
+  background: #f7f3f2;
+  border: 1px solid #ded2d0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 500 10px/1.2 var(--sans);
+}
+.app-filter-chip strong {
+  color: var(--app-text-primary);
+  font-weight: 600;
+}
+.app-filter-chip:hover {
+  color: var(--app-accent);
+  border-color: #cdb7b5;
+  background: #fff;
+}
+.app-filter-chip:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 2px;
+}
+.app-register-result-count {
+  margin: 0 0 0 auto;
+  color: var(--app-text-muted);
+  font: 600 10px/1.3 var(--code);
+  white-space: nowrap;
+}
+.app-data-table thead th {
+  padding: 11px 14px;
+}
+.app-data-table tbody td,
+.app-data-table tbody th {
+  padding: 12px 14px;
+}
+.app-data-row {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.app-data-row:hover {
+  background: #faf8f7;
+  box-shadow: inset 3px 0 0 var(--app-accent);
+}
+.app-data-table th[scope="row"] a:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 3px;
+}
+.project-number {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text-muted);
+  font: 500 10px/1.3 var(--code);
+}
+.projects-table th[scope="row"] {
+  width: 46%;
+}
+.records-table th[scope="row"] {
+  width: 36%;
+}
+.cell-revision {
+  white-space: nowrap;
+}
+.record-revision-status {
+  display: block;
+  margin-top: 3px;
+  color: var(--app-text-muted);
+  font: 500 10px/1.3 var(--sans);
+}
+.record-card-meta,
+.record-card-foot {
+  justify-content: space-between;
 }
 
 /* Project overview ------------------------------------------------------- */
@@ -1685,6 +1862,42 @@ html {
   .dashboard-body,
   .projects-body {
     margin-block: 16px 32px;
+  }
+  .app-register-header {
+    min-height: 0;
+    padding-block: 18px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .app-register-title h1,
+  .app-register-title h2 {
+    font-size: 24px;
+  }
+  .app-register-header .primary-button {
+    width: 100%;
+  }
+  .app-register-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .app-register-filters {
+    max-width: 100%;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .app-register-search,
+  .app-register-control {
+    flex: none;
+  }
+  .app-register-sort {
+    margin-left: 0;
+    padding-left: 8px;
+  }
+  .app-register-result-count {
+    margin-left: 0;
   }
   .overview-view {
     padding-block: 20px 34px;
