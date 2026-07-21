@@ -114,6 +114,20 @@ export async function routeV2Request(
     return handleCurrentOrganization(request, context, dependencies);
   if (pathname === `${V2_BASE_PATH}/members`)
     return handleMembers(request, context, dependencies);
+  if (pathname === `${V2_BASE_PATH}/dashboard`)
+    return handleDashboard(request, context, dependencies);
+
+  const projectOverviewRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/overview$/,
+  );
+  if (projectOverviewRoute && dependencies) {
+    return handleProjectOverview(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(projectOverviewRoute[1]),
+    );
+  }
 
   if (pathname === `${V2_BASE_PATH}/projects` && dependencies) {
     return handleProjects(request, context, dependencies);
@@ -679,6 +693,55 @@ async function handleProjects(
         "You are not allowed to access this resource.",
       );
     }
+    return projectError(context, error);
+  }
+}
+
+async function handleDashboard(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies?: V2RouteDependencies,
+): Promise<Response> {
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    ["GET"],
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const dashboard = dependencies?.dashboard;
+  if (!dashboard) return unavailable(context);
+  try {
+    return apiSuccess(context, await dashboard.load(authenticated.session));
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleProjectOverview(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+): Promise<Response> {
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    ["GET"],
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const overview = dependencies.projectOverview;
+  if (!overview) return unavailable(context);
+  try {
+    const model = await overview.load(authenticated.session, projectId);
+    return apiSuccess(context, {
+      project: serializeProject(model.project),
+      counts: model.counts,
+      attention: model.attention,
+      recentActivity: model.recentActivity,
+    });
+  } catch (error) {
     return projectError(context, error);
   }
 }

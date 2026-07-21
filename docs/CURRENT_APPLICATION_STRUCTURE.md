@@ -14,6 +14,12 @@ Browser
 ├── public/index.html and public/app-shell.js  authenticated workspace shell
 ├── public/app-routing.js                      browser route definitions
 ├── public/app-shell.css                       responsive shell styles
+├── public/app-api.js                          shared /api/v2 browser client
+├── public/app-format.js                       shared label/date/reason helpers
+├── public/dashboard-view.js                   Work Dashboard feature module
+├── public/projects-view.js                    Projects directory feature module
+├── public/project-form.js                     Create Project dialog
+├── public/project-overview-view.js            Project Overview feature module
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
@@ -47,10 +53,42 @@ snapshots plus `project_issuance_sequences` for project-wide issue numbering.
 
 The browser application remains framework-free static HTML, CSS, and JavaScript.
 `public/index.html` is the single entry point for new application routes and loads
-two browser-native ES modules: `app-routing.js` owns route matching and selected
+browser-native ES modules: `app-routing.js` owns route matching and selected
 navigation state, while `app-shell.js` owns composition, history navigation,
-session/project requests, focus management, and mobile drawer behavior. No
-frontend runtime framework or build pipeline was added.
+session/project requests, focus management, mobile drawer behavior, and the
+lifecycle of per-route feature modules. No frontend runtime framework or build
+pipeline was added.
+
+The shell delegates the data-backed routes to focused feature modules rather
+than rendering their data, forms, and state itself:
+
+- `app-api.js` is a shared `/api/v2` client. It centralizes `Accept`/
+  `Content-Type` headers, JSON parsing, request-ID extraction,
+  `AbortController` support, and a stable `ApiError` (status, code, requestId,
+  aborted) so no feature duplicates fetch or error handling. It never stores
+  authorization decisions.
+- `app-format.js` holds the one consistent layer of human-readable labels:
+  dates, issuance purposes, attention reasons (draft revision, "published with
+  N files and not yet issued", RFI awaiting response / answered and awaiting
+  close, file uploaded, ISS-xxx created), and an activity-action-to-description
+  map used by the overview timeline.
+- `dashboard-view.js`, `projects-view.js`, and `project-overview-view.js` each
+  own one route's data loading, rendering, loading/empty/error/retry states,
+  and event wiring. Each is created by the shell with the shared client, a
+  `navigate` callback, a live-region `announce` callback, and a `requestRender`
+  callback; each guards against stale responses with an `AbortController` and a
+  destroyed flag. The shell keys the overview controller by project ID, so a
+  route change to a different project tears the old controller down and a late
+  response can never replace the newer project's data.
+- `project-form.js` renders the Create Project dialog (see below).
+
+The shell renders an empty `.feature-view` container for `/dashboard`,
+`/projects`, and `/projects/:projectId/overview`, then mounts (or re-mounts on
+its own re-render) the matching controller into it. Feature data is cached in
+the controller, so a shell re-render never refetches. The overview feature calls
+only the overview read model and never issues a second project-detail request;
+the shell's existing project-context request continues to populate the project
+header and tabs.
 
 The shell extends rather than replaces the existing `base.css` visual system:
 
@@ -146,6 +184,63 @@ success descendants keep Issuances selected. Tabs remain sticky beneath the
 project header on desktop and become a horizontally scrollable navigation row on
 mobile, with the selected link scrolled into view after route changes.
 
+## Dashboard, Projects, and Project Overview surfaces
+
+`/dashboard`, `/projects`, `/projects/:projectId`, and
+`/projects/:projectId/overview` are now real, authenticated, data-backed screens
+instead of placeholders. The `/projects/:projectId` → `.../overview`
+normalization is unchanged, and Records, revision, issuance, RFI, Team, and
+Administration destinations remain intentional placeholders reached through the
+same canonical routes.
+
+The **Work Dashboard** answers "what needs my attention today" across every
+project the user can access. It shows organization context, a compact summary
+strip (accessible projects, draft revisions, ready to issue, active RFIs),
+needs-attention groups (draft revisions, ready-to-issue revisions, active RFIs),
+recent file uploads and issuances, and a link to the full Projects page. Every
+item states why it appears and links to its canonical route (revision detail,
+the revision issue route, an RFI, or an issuance). States include loading,
+partial-empty (a group is empty while others are not), completely empty ("No
+work currently requires your attention." only when items are absent, never
+implying no projects unless the project count is zero), API error with retry,
+and a request ID when available.
+
+The **Projects** directory renders the authenticated project list as a
+professional table on desktop and cards on mobile, using only fields the project
+API returns (number, name, status, city/region, updated date). It provides text
+search across number and name, a status filter built from the statuses present,
+a clear-filter action, an announced result count, and a no-results state.
+Sorting is deterministic: active first, then project number, name, and ID.
+Client-side search and filtering only narrow the already server-authorized list
+and are never an authorization mechanism.
+
+The **Create Project** action appears only for roles the backend permits to
+create projects (`org_admin` and `document_control_admin`, mirroring
+`canCreateProjects`); other roles never see it, and the backend remains
+authoritative. The dialog (`project-form.js`) has dialog semantics, a focus
+trap, initial focus, Escape-to-close, focus restoration, labelled title and
+description, inline validation linked with `aria-describedby`, a submission
+loading state, and server error display with the request ID. It sends only
+fields the current create schema accepts and never optimistically shows a
+project before the server confirms; on success it announces, closes, and
+navigates to the new project's Overview.
+
+The **Project Overview** reuses the shell's project header and tabs and adds a
+compact operational summary (records, draft revisions, published revisions,
+files, issuances, active RFIs), needs-attention lists, a recent project-activity
+timeline, and workflow shortcuts (Records, Issuances, RFIs, Team). Counts and
+shortcuts link to canonical routes when one exists. It loads its own read model
+and reuses the same project-access authorization as project detail, so a
+cross-tenant or unassigned project yields the same generic not-found surface.
+
+All four surfaces preserve logical reading order and are responsive: summary
+tiles wrap, attention groups and recent activity stack, the projects table
+becomes cards, the overview timeline becomes a readable list, and the dialog
+becomes a full-width sheet — without horizontal page overflow. Status is never
+communicated by color alone (badges carry text labels). After route changes the
+shell moves focus to the page heading and announces the new page through the
+existing live region.
+
 ## Authentication and authorization-aware navigation
 
 Cloudflare Access and `GET /api/v2/session` remain authoritative. The shell uses
@@ -179,6 +274,24 @@ Administration role policy, unknown paths, tool adapters, and API/static bypass.
 covers navigation content/active state, authenticated project tabs, role-aware
 Administration visibility, the mobile drawer and Escape behavior, close-on-route
 selection, not found, direct nested routes, and legacy Forms/Library links.
+`tests/unit/dashboard-projects-ui.test.ts` mounts the shell against a stubbed
+API and covers the dashboard (summary values, each attention reason, canonical
+destination links, empty state, error/retry, semantic structure, and stale-
+response protection), the projects directory (table and card structure,
+canonical overview links, search by name and number, status filter, clear
+filters, no-results, create-action visibility by role, create-form validation,
+successful creation navigating to overview, failed creation preserving input
+with a request ID), and the project overview (counts, attention items, activity,
+canonical shortcut routes, a generic not-found, and cross-project stale-response
+protection).
+
+`tests/integration/read-models.test.ts` exercises the dashboard and overview
+read models end to end: organization isolation, assigned-project filtering,
+org_admin/document_control_admin visibility, the draft/ready-to-issue/active-RFI
+definitions (ready-to-issue requires published status and at least one file and
+excludes already-issued revisions; archived records are excluded), project-
+scoped overview counts and activity, deterministic ordering and limits, and the
+absence of storage keys or raw state JSON in responses.
 
 ## Existing shared library
 
@@ -317,11 +430,35 @@ project-membership changes (subject to the reader still having current project
 authorization). API responses never expose snapshotted storage keys, bucket
 details, R2 URLs, or raw snapshot JSON.
 
+The Dashboard and Projects UI adds two read-only application read models under
+`src/application/read-models` with parameterized D1 query layers in
+`src/infrastructure/db/d1/dashboard-read-repository.ts` and
+`project-overview-read-repository.ts`. `GET /api/v2/dashboard` returns a
+cross-project attention model, and `GET /api/v2/projects/:projectId/overview`
+returns a single-project overview model; both keep their HTTP handlers thin and
+add no tables, migrations, or schema-version change (schema version remains 9).
+Accessibility is enforced server-side by reusing existing project authorization
+(`ProjectService.list` for the dashboard, `ProjectService.get` for the
+overview), so the browser never filters projects or reconstructs authorization:
+org_admin and document_control_admin see every project in the active
+organization, while assigned project managers, contributors, and viewers see
+only their assigned projects, and tenant isolation is absolute. Draft revisions,
+ready-to-issue revisions, and active RFIs share one definition across both read
+models (a draft revision on a non-archived record; a published revision on a
+non-archived record with at least one file and no existing issuance; an RFI that
+is issued/awaiting-response or answered/awaiting-close). Results use
+deterministic ordering with fixed limits and no pagination. Recent project
+activity is attributed to a project by joining each event's object back to the
+row it references — never by parsing stored state JSON — and exposes only safe
+public fields (id, action, object type/id, actor identity, timestamp), never
+`prior_state_json`, `new_state_json`, `metadata_json`, or storage keys.
+
 ## Build and test layout
 
 ```text
 schemas/                    versioned renderer JSON Schema
 src/auth/                   authentication contracts
+src/application/read-models/ dashboard and project-overview read-model services
 src/http/                   platform response and routing utilities
 src/rendering/               schema validator
 src/infrastructure/storage/  R2 file storage adapter

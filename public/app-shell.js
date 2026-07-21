@@ -4,6 +4,10 @@ import {
   projectTabHref,
   resolveRoute,
 } from "./app-routing.js";
+import { createApiClient } from "./app-api.js";
+import { createDashboardView } from "./dashboard-view.js";
+import { createProjectsView } from "./projects-view.js";
+import { createProjectOverviewView } from "./project-overview-view.js";
 
 const iconPaths = {
   dashboard:
@@ -63,12 +67,15 @@ export function createAppShell(options = {}) {
   const root = appDocument.getElementById("app");
   if (!root) throw new Error("The application root was not found.");
 
+  const api = createApiClient({ fetch: fetchImpl });
+
   const state = {
     route: null,
     session: { status: "loading", data: null },
     project: { status: "idle", id: null, data: null, requestId: "" },
     drawerOpen: false,
     drawerTrigger: null,
+    feature: { key: null, controller: null },
   };
 
   function currentUrl() {
@@ -240,6 +247,10 @@ export function createAppShell(options = {}) {
     if (route.surface === "tools") return renderTools(route);
     if (route.surface === "forms-tool" || route.surface === "library-tool")
       return renderToolAdapter(route, route.surface);
+    if (route.id === "dashboard")
+      return `<div class="feature-view" data-feature="dashboard"></div>`;
+    if (route.id === "projects")
+      return `<div class="feature-view" data-feature="projects"></div>`;
     if (route.params?.projectId) {
       if (
         state.project.id === route.params.projectId &&
@@ -261,9 +272,73 @@ export function createAppShell(options = {}) {
           "project",
         );
       }
-      return `${renderProjectHeader(route)}${renderProjectTabs(route)}<div class="project-route-content">${renderPlaceholder(route)}</div>`;
+      const inner =
+        route.id === "project-overview"
+          ? `<div class="feature-view" data-feature="overview"></div>`
+          : renderPlaceholder(route);
+      return `${renderProjectHeader(route)}${renderProjectTabs(route)}<div class="project-route-content">${inner}</div>`;
     }
     return renderPlaceholder(route);
+  }
+
+  function announce(message) {
+    const region = root.querySelector("#route-announcer");
+    if (region) region.textContent = message;
+  }
+
+  function featureDescriptor(route) {
+    if (!route) return null;
+    if (route.id === "dashboard") return { key: "dashboard", kind: "dashboard" };
+    if (route.id === "projects") return { key: "projects", kind: "projects" };
+    if (route.id === "project-overview") {
+      const projectId = route.params?.projectId;
+      return { key: `overview:${projectId}`, kind: "overview", projectId };
+    }
+    return null;
+  }
+
+  function renderFeatureContainer() {
+    const container = root.querySelector(".feature-view");
+    if (container && state.feature.controller)
+      state.feature.controller.mount(container);
+  }
+
+  function createFeatureController(descriptor) {
+    const shared = {
+      api,
+      navigate,
+      announce,
+      requestRender: renderFeatureContainer,
+      getSession: () => state.session,
+    };
+    if (descriptor.kind === "dashboard") return createDashboardView(shared);
+    if (descriptor.kind === "projects") return createProjectsView(shared);
+    return createProjectOverviewView({
+      ...shared,
+      projectId: descriptor.projectId,
+    });
+  }
+
+  function teardownFeature() {
+    if (state.feature.controller) state.feature.controller.destroy();
+    state.feature = { key: null, controller: null };
+  }
+
+  function syncFeature() {
+    const descriptor = featureDescriptor(state.route);
+    const container = root.querySelector(".feature-view");
+    if (!descriptor || !container) {
+      teardownFeature();
+      return;
+    }
+    if (state.feature.key !== descriptor.key) {
+      teardownFeature();
+      const controller = createFeatureController(descriptor);
+      state.feature = { key: descriptor.key, controller };
+      controller.reload();
+    } else {
+      state.feature.controller.mount(container);
+    }
   }
 
   function render() {
@@ -271,6 +346,7 @@ export function createAppShell(options = {}) {
     root.setAttribute("aria-busy", "false");
     appDocument.title = `${state.route?.title || "Workspace"} | BASE Office Forms`;
     bindRenderedEvents();
+    syncFeature();
     if (state.drawerOpen) {
       const layer = root.querySelector(".mobile-nav-layer");
       const drawer = root.querySelector(".mobile-nav-drawer");
@@ -565,6 +641,7 @@ export function createAppShell(options = {}) {
     closeMobileNav,
     getState: () => state,
     destroy() {
+      teardownFeature();
       appDocument.removeEventListener("keydown", onDocumentKeydown);
       appWindow.removeEventListener("popstate", onPopState);
       removeMediaQueryListener();
