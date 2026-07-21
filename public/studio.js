@@ -9,6 +9,7 @@
   let activeFolderId = null;
   let folders = [];
   let packageContext = null;
+  let activeTemplateKey = null;
   const collapsedItems = new WeakSet();
   const panelStates = new Map();
   let def = loadInitial();
@@ -334,6 +335,8 @@
   function updateCommandState() {
     const button = $("#deleteButton");
     if (button) button.hidden = !activeId || !BASE_LIBRARY.editKey(activeId) || Boolean(packageContext);
+    const updateTemplate = $("#updateTemplateButton");
+    if (updateTemplate) updateTemplate.hidden = !activeTemplateKey || Boolean(packageContext);
   }
 
   function jumpToPreview(collection, index) {
@@ -454,6 +457,7 @@
     if (!item) return;
     packageContext = { packageDef: def, index };
     def = normalize(BASE.clone(item.def || item));
+    activeTemplateKey = null;
     renderAll();
     status("Editing a document inside the package.", "success");
   }
@@ -463,6 +467,7 @@
     syncPackageDocument();
     def = packageContext.packageDef;
     packageContext = null;
+    activeTemplateKey = null;
     renderAll();
     status("Package document updated.", "success");
   }
@@ -480,7 +485,7 @@
     const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
     input.onchange = () => {
       const reader = new FileReader();
-      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; renderAll(); status("Backup imported.", "success"); } catch (error) { status(`Could not import backup: ${error.message}`, "error"); } };
+      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; activeTemplateKey = null; renderAll(); status("Backup imported.", "success"); } catch (error) { status(`Could not import backup: ${error.message}`, "error"); } };
       reader.readAsText(input.files[0]);
     };
     input.click();
@@ -500,6 +505,46 @@
     } catch (error) {
       status(`Could not save: ${error.message}`, "error");
       throw error;
+    }
+  }
+
+  async function updateTemplate() {
+    if (!activeTemplateKey || packageContext) return;
+    const catalogEntry = BASE.templateCatalog.find(item => item.id === activeTemplateKey);
+    const label = (catalogEntry && catalogEntry.label) || activeTemplateKey;
+    const confirmed = window.confirm(
+      `Update the "${label}" template with your current changes?\n\nEveryone who starts a new "${label}" from now on will get this version. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      status("Updating template…");
+      const definition = clean(rootDefinition());
+      const published = await BASE_TEMPLATES.publishTemplate(activeTemplateKey, {
+        name: def.title || label,
+        kind: def.kind,
+        definition
+      });
+      status(`Template updated — "${label}" is now on version ${published.publishedVersion.versionNumber}.`, "success");
+      return published;
+    } catch (error) {
+      status(`Could not update template: ${error.message}`, "error");
+      throw error;
+    }
+  }
+
+  // The built-in template renders immediately (fromTemplate() is synchronous
+  // and used in many places). This optionally swaps in an organization's
+  // published override once it loads, without blocking the initial render.
+  async function applyPublishedTemplateOverride(key) {
+    try {
+      const published = await BASE_TEMPLATES.getTemplate(key);
+      if (activeTemplateKey !== key || packageContext) return;
+      def = normalize(BASE.clone(published.publishedVersion.definition));
+      renderAll();
+      status(`Loaded your organization's updated "${published.name}" template (v${published.publishedVersion.versionNumber}).`, "success");
+    } catch (_) {
+      // No published override yet (or the template API is unavailable) --
+      // the built-in template already rendered, so there is nothing to do.
     }
   }
 
@@ -562,7 +607,7 @@
     try {
       await BASE_LIBRARY.deleteDocument(activeId);
       const kind = def.kind;
-      activeId = null; activeVersion = null; activeFolderId = null; packageContext = null;
+      activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; activeTemplateKey = null;
       def = normalize(kind === "form" ? BASE.blankForm() : kind === "package" ? BASE.blankPackage() : BASE.blankDoc());
       history.replaceState({}, "", "builder.html");
       renderAll();
@@ -642,7 +687,7 @@
       try {
         const item = await BASE_LIBRARY.getDocument(button.dataset.libraryOpen);
         const key = BASE_LIBRARY.editKey(item.id);
-        def = normalize(BASE.clone(item.definition)); activeId = key ? item.id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; packageContext = null;
+        def = normalize(BASE.clone(item.definition)); activeId = key ? item.id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; packageContext = null; activeTemplateKey = null;
         closeModal(); renderAll(); status(key ? "Opened shared library document." : "Opened a public document as a new copy.", "success");
       } catch (error) { status(`Could not open document: ${error.message}`, "error"); }
       return;
@@ -673,7 +718,7 @@
       return;
     }
     if (button.dataset.action === "apply-ai") {
-      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); closeModal(); renderAll(); status("AI JSON imported.", "success"); }
+      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); activeTemplateKey = null; closeModal(); renderAll(); status("AI JSON imported.", "success"); }
       catch (error) { status(`Invalid AI JSON: ${error.message}`, "error"); }
     }
   });
@@ -684,14 +729,24 @@
     activeVersion = null;
     activeFolderId = null;
     packageContext = null;
+    activeTemplateKey = $("#templateSelect").value;
     renderAll();
     status("Template opened in a new local draft.", "success");
+    applyPublishedTemplateOverride(activeTemplateKey);
   });
 
-  $("#newButton").addEventListener("click", () => { def = normalize(BASE.fromTemplate($("#templateSelect").value)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; renderAll(); status("New template created.", "success"); });
+  $("#newButton").addEventListener("click", () => {
+    def = normalize(BASE.fromTemplate($("#templateSelect").value));
+    activeId = null; activeVersion = null; activeFolderId = null; packageContext = null;
+    activeTemplateKey = $("#templateSelect").value;
+    renderAll();
+    status("New template created.", "success");
+    applyPublishedTemplateOverride(activeTemplateKey);
+  });
   $("#loadButton").addEventListener("click", loadJson);
   $("#downloadButton").addEventListener("click", saveJson);
   $("#saveButton").addEventListener("click", () => saveLibrary().catch(() => {}));
+  $("#updateTemplateButton").addEventListener("click", () => updateTemplate().catch(() => {}));
   $("#deleteButton").addEventListener("click", deleteCurrentDocument);
   $("#libraryButton").addEventListener("click", openLibrary);
   $("#shareButton").addEventListener("click", copyShareLink);
@@ -712,7 +767,7 @@
         const suppliedKey = new URLSearchParams(location.hash.slice(1)).get("key") || "";
         if (suppliedKey) BASE_LIBRARY.rememberEditKey(id, suppliedKey);
         const key = suppliedKey || BASE_LIBRARY.editKey(id);
-        def = normalize(BASE.clone(item.definition)); activeId = key ? id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null;
+        def = normalize(BASE.clone(item.definition)); activeId = key ? id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; activeTemplateKey = null;
         status(key ? "Opened editable shared document." : "Opened shared document as a copy.", "success");
       } catch (error) { status(`Could not open shared document: ${error.message}`, "error"); }
     } else if (params.get("template")) {
@@ -720,11 +775,14 @@
       if (BASE.templateCatalog.some(item => item.id === template)) {
         def = normalize(BASE.fromTemplate(template));
         $("#templateSelect").value = template;
+        activeTemplateKey = template;
         status("Template opened in a new local draft.", "success");
+        applyPublishedTemplateOverride(template);
       }
     } else if (params.get("new")) {
       const kind = params.get("new");
       def = normalize(kind === "form" ? BASE.blankForm() : kind === "package" ? BASE.blankPackage() : BASE.blankDoc());
+      activeTemplateKey = null;
       status(`New ${kind === "form" || kind === "package" ? kind : "document"} started.`, "success");
     }
     renderAll();

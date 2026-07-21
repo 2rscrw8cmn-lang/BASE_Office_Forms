@@ -254,7 +254,7 @@ describe("revisions foundation API", () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(8);
+    expect(version?.schema_version).toBe(9);
 
     const project = await createProject("P-REV-1");
     const record = await createRecord(project.id);
