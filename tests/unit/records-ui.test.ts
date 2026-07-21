@@ -83,6 +83,7 @@ const recordsPayload = {
       draftRevisionId: "rev-2",
       fileCount: 2,
       createdAt: "2026-07-05T00:00:00Z",
+      updatedAt: "2026-07-20T12:00:00Z",
     }),
     record({
       id: "rec-2",
@@ -256,26 +257,61 @@ async function mountRecords(
 }
 
 describe("records register view", () => {
+  it("uses the compact register header with total count and capability-gated action", async () => {
+    const { document } = await mountRecords();
+    const header = grab(document, ".records-heading");
+    expect(header.classList.contains("app-register-header")).toBe(true);
+    expect(header.classList.contains("app-container-register")).toBe(true);
+    expect(header.querySelector("h2")?.textContent).toBe("Records");
+    expect(header.querySelector(".app-register-count")?.textContent).toBe(
+      "3 records",
+    );
+    expect(header.querySelector("[data-create-record]")).not.toBeNull();
+    expect(header.querySelector(".app-eyebrow")).toBeNull();
+    expect(header.querySelector("p")).toBeNull();
+  });
+
   it("renders active records as a table with canonical detail links and mobile cards", async () => {
     const { document } = await mountRecords();
     expect(rowIds(document)).toEqual(["rec-1", "rec-2"]);
-    const openHrefs = [
-      ...document.querySelectorAll(".records-table .cell-open a"),
+    const recordHrefs = [
+      ...document.querySelectorAll('.records-table th[scope="row"] a'),
     ].map((link) => link.getAttribute("href"));
-    expect(openHrefs).toContain("/projects/proj-1/records/rec-1");
+    expect(recordHrefs).toContain("/projects/proj-1/records/rec-1");
+    expect(document.querySelector(".records-table .cell-open")).toBeNull();
     expect(document.querySelector(".record-cards")).not.toBeNull();
     expect(document.querySelectorAll(".record-cards li")).toHaveLength(2);
+    expect(
+      document
+        .querySelector(".records-view")
+        ?.classList.contains("app-register-page"),
+    ).toBe(true);
+    const toolbar = grab(document, ".records-toolbar");
+    expect(toolbar.querySelectorAll(".app-field")).toHaveLength(6);
+    expect(toolbar.querySelector(".field")).toBeNull();
   });
 
   it("shows the current revision, no-revision state, draft presence, and file count", async () => {
     const { document } = await mountRecords();
     const firstRow = grab(document, ".records-table tbody tr");
-    expect(firstRow.textContent).toContain("Revision 1");
+    expect(firstRow.textContent).toContain("Rev 1");
     expect(firstRow.textContent).toContain("Published");
     expect(firstRow.textContent).toContain("Draft in progress");
     expect(firstRow.querySelector(".cell-files")?.textContent).toBe("2");
-    expect(textOf(document, ".records-table")).toContain(
-      "No published revision",
+    expect(textOf(document, ".records-table")).toContain("No revision");
+    const headers = [
+      ...document.querySelectorAll(".records-table thead th"),
+    ].map((header) => header.textContent.trim());
+    expect(headers).toEqual([
+      "Record",
+      "Type",
+      "Discipline",
+      "Revision",
+      "Files",
+      "Updated",
+    ]);
+    expect(firstRow.querySelector(".cell-date")?.textContent).toContain(
+      "July 20, 2026",
     );
   });
 
@@ -315,7 +351,7 @@ describe("records register view", () => {
     fire(type, "change");
     await settle();
     expect(rowIds(document)).toEqual(["rec-2"]);
-    expect(textOf(document, "[data-result-count]")).toContain("Showing 1 of 2");
+    expect(textOf(document, "[data-result-count]")).toBe("1 of 2 records");
 
     grab(document, ".records-toolbar [data-clear-filters]").click();
     await settle();
@@ -326,6 +362,102 @@ describe("records register view", () => {
     fire(revision, "change");
     await settle();
     expect(rowIds(document)).toEqual(["rec-2"]);
+  });
+
+  it("renders removable chips and resets only the selected filter", async () => {
+    const { document, window } = await mountRecords();
+    const type = grab(document, "#records-type") as HTMLInputElement;
+    type.value = "drawing";
+    fire(type, "change");
+    const discipline = grab(
+      document,
+      "#records-discipline",
+    ) as HTMLInputElement;
+    discipline.value = "Architecture";
+    fire(discipline, "change");
+    await settle();
+
+    const chips = document.querySelectorAll(".app-filter-chip");
+    expect(chips).toHaveLength(2);
+    expect(chips[0].getAttribute("aria-label")).toBe(
+      "Remove Type filter: Drawing",
+    );
+    expect(window.location.search).toContain("type=drawing");
+    expect(window.location.search).toContain("discipline=Architecture");
+
+    grab(document, '[data-remove-filter="type"]').click();
+    await settle();
+    expect(fieldValue(document, "#records-type")).toBe("all");
+    expect(fieldValue(document, "#records-discipline")).toBe("Architecture");
+    expect(window.location.search).not.toContain("type=");
+    expect(window.location.search).toContain("discipline=Architecture");
+    expect(document.querySelectorAll(".app-filter-chip")).toHaveLength(1);
+  });
+
+  it("shows Clear all only for active filters, not sorting alone", async () => {
+    const { document } = await mountRecords();
+    const clear = grab(document, ".records-toolbar [data-clear-filters]");
+    expect(clear.hasAttribute("hidden")).toBe(true);
+
+    const sort = grab(document, "#records-sort") as HTMLInputElement;
+    sort.value = "title";
+    fire(sort, "change");
+    await settle();
+    expect(clear.hasAttribute("hidden")).toBe(true);
+
+    const search = grab(document, "#records-search") as HTMLInputElement;
+    search.value = "site";
+    fire(search, "input");
+    await settle();
+    expect(clear.hasAttribute("hidden")).toBe(false);
+    clear.click();
+    await settle();
+    expect(fieldValue(document, "#records-search")).toBe("");
+    expect(fieldValue(document, "#records-sort")).toBe("title");
+    expect(clear.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("opens a record from non-interactive row space and ignores interactive descendants", async () => {
+    const { document, window } = await mountRecords();
+    const row = grab(document, ".records-table tbody tr");
+    row.querySelector("td")?.dispatchEvent(
+      new window.MouseEvent("click", {
+        bubbles: true,
+        button: 0,
+      }) as unknown as Event,
+    );
+    await settle();
+    expect(window.location.pathname).toBe("/projects/proj-1/records/rec-1");
+
+    const modified = await mountRecords();
+    await waitFor(() => {
+      expect(
+        modified.document.querySelector(".records-table tbody tr a"),
+      ).not.toBeNull();
+    });
+    const modifiedRow = grab(modified.document, ".records-table tbody tr");
+    const control = modified.document.createElement("button");
+    control.type = "button";
+    modifiedRow.querySelector("td")?.appendChild(control);
+    control.dispatchEvent(
+      new modified.window.MouseEvent("click", {
+        bubbles: true,
+        button: 0,
+      }) as unknown as Event,
+    );
+    await settle();
+    expect(modified.window.location.pathname).toBe("/projects/proj-1/records");
+  });
+
+  it("falls back safely from invalid URL filter values", async () => {
+    const { document, window } = await mountRecords(
+      "/projects/proj-1/records?type=invalid&discipline=unknown&revisionStatus=bad",
+    );
+    expect(fieldValue(document, "#records-type")).toBe("all");
+    expect(fieldValue(document, "#records-discipline")).toBe("all");
+    expect(fieldValue(document, "#records-revision")).toBe("all");
+    expect(window.location.search).toBe("");
+    expect(rowIds(document)).toEqual(["rec-1", "rec-2"]);
   });
 
   it("shows a filtered empty state that retains filters and can be cleared", async () => {
@@ -340,6 +472,44 @@ describe("records register view", () => {
     grab(document, ".records-empty [data-clear-filters]").click();
     await settle();
     expect(rowIds(document)).toEqual(["rec-1", "rec-2"]);
+  });
+
+  it("renders true-empty guidance and preserves archived-only guidance", async () => {
+    const empty = await mountRecords("/projects/proj-1/records", {
+      routes: {
+        "GET /api/v2/projects/proj-1/records": () =>
+          ok({ records: [], capabilities: { createRecord: true } }),
+      },
+    });
+    expect(textOf(empty.document, ".records-empty h3")).toBe("No records yet");
+    expect(textOf(empty.document, ".records-empty")).toContain(
+      "tracking revisions and files",
+    );
+    expect(
+      empty.document.querySelector(".records-empty [data-create-record]"),
+    ).not.toBeNull();
+
+    const archivedRecord = record({
+      id: "rec-archived",
+      title: "Archived record",
+      status: "archived",
+    });
+    const archived = await mountRecords("/projects/proj-1/records", {
+      routes: {
+        "GET /api/v2/projects/proj-1/records": () =>
+          ok({
+            records: [archivedRecord],
+            capabilities: { createRecord: false },
+          }),
+      },
+    });
+    expect(textOf(archived.document, ".records-empty")).toContain(
+      "This project has archived records",
+    );
+    grab(archived.document, "[data-include-archived]").click();
+    await settle();
+    expect(rowIds(archived.document)).toEqual(["rec-archived"]);
+    expect(fieldValue(archived.document, "#records-archived")).toBe("all");
   });
 
   it("restores list state from the URL query string", async () => {
@@ -405,11 +575,19 @@ describe("records create authorization and dialog", () => {
     const { document } = await mountRecords();
     grab(document, ".records-heading [data-create-record]").click();
     expect(document.querySelector(".app-dialog")).not.toBeNull();
+    expect(document.activeElement?.id).toBe("rf-title-input");
+    expect(
+      document.querySelector('.app-dialog [aria-invalid="true"]'),
+    ).toBeNull();
+    expect(document.querySelector(".app-dialog .field")).toBeNull();
     fire(grab(document, ".app-dialog form"), "submit");
     await settle(1);
     expect(
       document.querySelector("#rf-title-error")?.hasAttribute("hidden"),
     ).toBe(false);
+    expect(grab(document, "#rf-title-input").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
   });
 
   it("navigates to the new record detail route after a successful creation", async () => {
