@@ -9,6 +9,7 @@ import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
 import { FileService } from "../../application/files/file-service";
 import { IssuanceService } from "../../application/issuances/issuance-service";
+import { TemplateService } from "../../application/templates/template-service";
 import {
   CloudflareAccessAuthenticationAdapter,
   CloudflareAccessJwtVerifier,
@@ -30,6 +31,7 @@ import { D1RecordRevisionSequencesRepository } from "../../infrastructure/db/d1/
 import { D1RevisionFilesRepository } from "../../infrastructure/db/d1/revision-files-repository";
 import { D1IssuancesRepository } from "../../infrastructure/db/d1/issuances-repository";
 import { D1ProjectIssuanceSequencesRepository } from "../../infrastructure/db/d1/project-issuance-sequences-repository";
+import { D1TemplatesRepository } from "../../infrastructure/db/d1/templates-repository";
 import { D1UsersRepository } from "../../infrastructure/db/d1/users-repository";
 import { R2FileStorage } from "../../infrastructure/storage/r2-file-storage";
 
@@ -50,6 +52,7 @@ export interface V2RouteDependencies {
   revisions?: RevisionService;
   files?: FileService;
   issuances?: IssuanceService;
+  templates?: TemplateService;
   dashboard?: DashboardReadModelService;
   projectOverview?: ProjectOverviewReadModelService;
 }
@@ -116,6 +119,7 @@ export function createV2RouteDependencies(
       users,
       storage,
     ),
+    templates: new TemplateService(new D1TemplatesRepository(environment.DB)),
     dashboard: new DashboardReadModelService(
       projects,
       new D1DashboardReadRepository(environment.DB),
