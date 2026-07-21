@@ -4,12 +4,12 @@ import { runInNewContext } from "node:vm";
 import { Window } from "happy-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Studio Stabilization (Issue #32, PR A) interaction coverage: block/field
-// CRUD, reorder, collapse/reopen, stable ids across label edits, explicit
-// input types, and last-valid-preview recovery. Builds on the same
-// vm-in-happy-dom harness as studio-toolbar.test.ts, but leaves the real
-// engine.js render() active (only paginate/updatePackageIndex are stubbed)
-// so the saved definition and preview HTML can be inspected directly.
+// Studio Workspace Redesign (Issue #32, PR B) coverage: the outline rail +
+// contextual inspector + Add Block drawer replace the old single scrolling
+// column of always-open editor cards. This builds on the same
+// vm-in-happy-dom harness as studio-toolbar.test.ts, with engine.js's real
+// render() left active (only paginate/updatePackageIndex stubbed) so the
+// saved definition and preview HTML can be inspected directly.
 
 const engineSource = readFileSync("public/engine.js", "utf8");
 const toastSource = readFileSync("public/studio-toast.js", "utf8");
@@ -27,11 +27,11 @@ function editorBody(): string {
 interface ElementLike {
   click(): void;
   hidden: boolean;
-  open: boolean;
   value: string;
   checked: boolean;
   textContent: string | null;
   innerHTML: string;
+  classList: { contains(token: string): boolean };
   dataset: Record<string, string>;
   dispatchEvent(event: unknown): boolean;
   querySelectorAll(selector: string): ElementLike[];
@@ -79,8 +79,10 @@ interface Studio {
   all(selector: string): ElementLike[];
   fireInput(target: ElementLike, value: string): void;
   fireChange(target: ElementLike, value: string): void;
-  addDocBlock(type: string): void;
-  addFormBlock(type: string): void;
+  openDrawer(noun: string, insertAt?: number): void;
+  insertViaDrawer(noun: string, type: string, insertAt?: number): void;
+  selectRow(noun: string, index: number): void;
+  clickPreview(noun: string, index: number): void;
   save(): Promise<RendererDefinition>;
   settle(): Promise<void>;
 }
@@ -157,11 +159,10 @@ async function loadStudio(
     URLSearchParams,
     Blob: globalThis.Blob,
     FileReader: window.FileReader,
-    // studio.js checks `details instanceof HTMLDetailsElement` in its native
-    // <details>/<summary> toggle handler -- that bare global must be present
-    // in this vm context or the check throws a ReferenceError (silently
-    // swallowed by DOM event dispatch), which would otherwise make every
-    // collapse/expand toggle silently no-op.
+    // studio.js checks `details instanceof HTMLDetailsElement` in the
+    // Document Settings panels' collapse/expand toggle handler -- that bare
+    // global must be present in this vm context or the check throws a
+    // ReferenceError (silently swallowed by DOM event dispatch).
     HTMLDetailsElement: (window as unknown as { HTMLDetailsElement: unknown })
       .HTMLDetailsElement,
     TextEncoder,
@@ -208,11 +209,31 @@ async function loadStudio(
     target.dispatchEvent(new window.Event("change", { bubbles: true }));
   };
 
-  const addDocBlock = (type: string) => {
-    el(`[data-add-block="${type}"]`).click();
+  const openDrawer = (noun: string, insertAt?: number) => {
+    const buttons = all(`[data-action="open-add-drawer"][data-noun="${noun}"]`);
+    const target =
+      insertAt == null
+        ? buttons[buttons.length - 1]
+        : buttons.find(
+            (button) => Number(button.dataset.insertAt) === insertAt,
+          );
+    if (!target)
+      throw new Error(`No insertion point for ${noun} at ${String(insertAt)}`);
+    target.click();
   };
-  const addFormBlock = (type: string) => {
-    el(`[data-add-form-block="${type}"]`).click();
+  const insertViaDrawer = (noun: string, type: string, insertAt?: number) => {
+    openDrawer(noun, insertAt);
+    el(`[data-action="insert-block"][data-type="${type}"]`).click();
+  };
+  const selectRow = (noun: string, index: number) => {
+    const rows = all(`[data-action="select-node"][data-noun="${noun}"]`);
+    const target = rows.find((row) => Number(row.dataset.index) === index);
+    if (!target)
+      throw new Error(`No outline row for ${noun}[${String(index)}]`);
+    target.click();
+  };
+  const clickPreview = (noun: string, index: number) => {
+    el(`#pv [data-preview-${noun}="${String(index)}"]`).click();
   };
 
   const settle = () =>
@@ -230,8 +251,8 @@ async function loadStudio(
 
   // initialize() (fired at the bottom of studio.js) awaits
   // BASE_LIBRARY.listFolders()/getDocument() before its first renderAll(), so
-  // #ed's dynamically generated content (block picker, field rows, ...)
-  // isn't present until that pending microtask chain flushes.
+  // the dynamically generated outline/inspector content isn't present until
+  // that pending microtask chain flushes.
   await settle();
 
   return {
@@ -243,8 +264,10 @@ async function loadStudio(
     all,
     fireInput,
     fireChange,
-    addDocBlock,
-    addFormBlock,
+    openDrawer,
+    insertViaDrawer,
+    selectRow,
+    clickPreview,
     save,
     settle,
   };
@@ -274,97 +297,150 @@ const ALL_BLOCK_TYPES = [
   "pagebreak",
 ];
 
-describe("Studio editor block round trip (Issue #32, PR A)", () => {
-  it("adds and removes every block type in a document without breaking the builder", async () => {
+describe("Studio workspace redesign (Issue #32, PR B)", () => {
+  it("shows Document Settings in the inspector by default", async () => {
+    const studio = await loadStudio("?new=form");
+    expect(studio.el("#inspectorTitle").textContent).toBe("Document Settings");
+    expect(studio.el("#inspector").innerHTML).toContain("Form No.");
+  });
+
+  it("adds every block type via the drawer in a document without breaking the builder", async () => {
     const studio = await loadStudio("?new=document");
-    const before = studio.all(".editor-card").length; // blankDoc() starts with one block
+    const before = studio.all(".outline-row").length; // blankDoc() starts with one block
 
     ALL_BLOCK_TYPES.forEach((type) => {
-      studio.addDocBlock(type);
+      studio.insertViaDrawer("block", type);
     });
-    expect(studio.all(".editor-card").length).toBe(
+    expect(studio.el("#addBlockDrawer").hidden).toBe(true);
+    expect(studio.all(".outline-row").length).toBe(
       before + ALL_BLOCK_TYPES.length,
     );
-    expect(studio.el("#ed").innerHTML.length).toBeGreaterThan(0);
     expect(studio.el("#pv").innerHTML.length).toBeGreaterThan(0);
 
-    // Delete every block one at a time (always index 0, since the list
-    // shifts down) -- this must never throw or leave the builder blank.
+    // Delete every block one at a time -- this must never throw or leave
+    // the builder blank.
     for (let i = 0; i < before + ALL_BLOCK_TYPES.length; i += 1) {
-      studio.el('[data-action="delete-item"][data-index="0"]').click();
+      studio.el('.outline-row [data-action="delete-item"]').click();
     }
-    expect(studio.all(".editor-card").length).toBe(0);
-    expect(studio.el("#ed").innerHTML.length).toBeGreaterThan(0);
+    expect(studio.all(".outline-row").length).toBe(0);
+    expect(studio.el("#inspectorTitle").textContent).toBe("Document Settings");
   });
 
-  it("adds every block type as a form section without breaking the builder", async () => {
+  it("adds every block type via the drawer as a form section without breaking the builder", async () => {
     const studio = await loadStudio("?new=form");
-    const before = studio.all(".editor-card").length;
+    const before = studio.all(".outline-row").length;
 
     ALL_BLOCK_TYPES.forEach((type) => {
-      studio.addFormBlock(type);
+      studio.insertViaDrawer("section", type);
     });
-    expect(studio.all(".editor-card").length).toBe(
+    expect(studio.all(".outline-row").length).toBe(
       before + ALL_BLOCK_TYPES.length,
     );
     expect(studio.el("#pv").innerHTML.length).toBeGreaterThan(0);
   });
 
-  it("reorders sections with move-up/move-down and preserves the change on save", async () => {
-    const studio = await loadStudio("?new=form");
-    studio.addFormBlock("prose");
-    studio.addFormBlock("note");
+  it("filters the Add Block drawer by search query", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.openDrawer("block");
+    const allButtons = studio.all('[data-action="insert-block"]');
+    expect(allButtons.length).toBe(ALL_BLOCK_TYPES.length);
 
-    const titles = () =>
-      studio.all(".editor-card-title").map((node) => node.textContent);
-    const before = titles();
-    expect(before[before.length - 2]).toBe("New Section");
-    expect(before[before.length - 1]).toBe("Note");
+    studio.fireInput(studio.el("#blockSearch"), "signature");
+    const filtered = studio.all('[data-action="insert-block"]');
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.length).toBeLessThan(allButtons.length);
+    // Matches label OR description, so "ack" (description mentions
+    // "signature") is expected alongside "signature" itself.
+    expect(filtered.map((button) => button.dataset.type)).toContain(
+      "signature",
+    );
 
-    // Move the last item ("Note") up one position.
+    studio.fireInput(studio.el("#blockSearch"), "nonexistent-xyz");
+    expect(studio.all('[data-action="insert-block"]').length).toBe(0);
+    expect(studio.el("#blockCatalog").textContent).toContain("No blocks match");
+  });
+
+  it("inserts a new block at a specific position via an inline insertion point", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "prose");
+    studio.insertViaDrawer("block", "note");
+    // Layout so far: [default prose, prose, note]. Insert a callout between
+    // the default prose (index 0) and the added prose (index 1).
+    studio.insertViaDrawer("block", "callout", 1);
+
+    const labels = studio.all(".outline-label").map((node) => node.textContent);
+    expect(labels[1]).toBe("Highlighted statement");
+    expect(labels[2]).toBe("New Section");
+    expect(labels[3]).toBe("Note");
+  });
+
+  it("selects an outline row and shows its settings in the inspector", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "note");
+    studio.selectRow("block", 1);
+
+    expect(studio.el("#inspectorTitle").textContent).toBe("Note");
+    expect(studio.el("#inspector").innerHTML).toContain("Note title");
+    expect(studio.all(".outline-row.selected").length).toBe(1);
+  });
+
+  it("selects the underlying item when the preview is clicked, and highlights the outline row", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "note");
+
+    studio.clickPreview("block", 1);
+
+    expect(studio.el("#inspectorTitle").textContent).toBe("Note");
+    expect(studio.all(".outline-row.selected").length).toBe(1);
+    const selectedButton = studio.el(
+      ".outline-row.selected [data-action='select-node']",
+    );
+    expect(selectedButton.dataset.index).toBe("1");
+    expect(studio.el("#pv .preview-selected")).toBeTruthy();
+  });
+
+  it("keeps selection on the same item by reference after it is reordered", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "prose");
+    studio.insertViaDrawer("block", "note");
+    studio.selectRow("block", 2); // the "Note" block, currently last
+
     const moveUpButtons = studio.all(
-      '[data-action="move-up"][data-noun="section"]',
+      '[data-action="move-up"][data-noun="block"]',
     );
     moveUpButtons[moveUpButtons.length - 1].click();
 
-    const after = titles();
-    expect(after[after.length - 2]).toBe("Note");
-    expect(after[after.length - 1]).toBe("New Section");
-
-    const saved = await studio.save();
-    const savedTitles = (saved.sections ?? []).map(
-      (s) => s.heading ?? s.name ?? s.title,
+    // The Note block moved from index 2 to index 1; selection should follow
+    // it (by reference), not stay pinned to index 2.
+    expect(studio.el("#inspectorTitle").textContent).toBe("Note");
+    const selectedButton = studio.el(
+      ".outline-row.selected [data-action='select-node']",
     );
-    expect(savedTitles[savedTitles.length - 2]).toBe("Note");
+    expect(selectedButton.dataset.index).toBe("1");
   });
 
-  it("keeps a card's collapsed/expanded state across a full editor re-render", async () => {
+  it("falls back to Document Settings when the selected item is deleted", async () => {
     const studio = await loadStudio("?new=document");
-    studio.addDocBlock("prose");
-    studio.addDocBlock("note");
+    studio.insertViaDrawer("block", "note");
+    studio.selectRow("block", 1);
+    expect(studio.el("#inspectorTitle").textContent).toBe("Note");
 
-    const cards = () => studio.all(".editor-card");
-    const summaries = () => studio.all(".editor-card .editor-card-summary");
-    const target = cards().length - 2; // the "prose" card just added, before "note"
-    expect(cards()[target].open).toBe(true); // newly added cards start open
-
-    // Collapse it by clicking its summary (native <details> toggle).
-    summaries()[target].click();
-    expect(cards()[target].open).toBe(false);
-
-    // A structural change elsewhere triggers a full renderEditor() rebuild;
-    // the collapsed state must survive it (tracked by object identity, not DOM).
-    studio.addDocBlock("callout");
-    expect(cards()[target].open).toBe(false);
-    expect(cards()[cards().length - 1].open).toBe(true); // the new callout card
+    studio.el('.outline-row.selected [data-action="delete-item"]').click();
+    expect(studio.el("#inspectorTitle").textContent).toBe("Document Settings");
   });
 
-  it("never changes a field's stored id when its label is edited (Issue #32)", async () => {
+  it("never changes a field's stored id when its label is edited via the inspector (Issue #32)", async () => {
     const studio = await loadStudio("?new=form");
-    studio.addFormBlock("fields");
+    studio.insertViaDrawer("section", "fields");
+    const sectionRows = studio.all(
+      '[data-action="select-node"][data-noun="section"]',
+    );
+    studio.selectRow(
+      "section",
+      Number(sectionRows[sectionRows.length - 1].dataset.index),
+    );
 
-    const addFieldButton = studio.all('[data-action="add-field"]').slice(-1)[0];
-    addFieldButton.click();
+    studio.el('#inspector [data-action="add-field"]').click();
 
     const firstSaved = await studio.save();
     const sections = firstSaved.sections ?? [];
@@ -373,7 +449,6 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
     const fieldId = fields[0].id;
     expect(fieldId).toBeTruthy();
 
-    // Rename the field's label via its data-path input.
     const labelInputs = studio.all(`[data-path$=".fields.0.label"]`);
     studio.fireInput(labelInputs[labelInputs.length - 1], "Renamed Label");
 
@@ -384,17 +459,21 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
     expect(renamedFields[0].label).toBe("Renamed Label");
     expect(renamedFields[0].id).toBe(fieldId);
 
-    // And the renderer keeps using that same id as the fill-mode answer key.
     const filled = studio.base.render(secondSaved, { fill: true });
     expect(filled).toContain(`name="${fieldId}"`);
   });
 
   it("treats input style as explicit -- a tall field stays single-line unless Multiline is chosen", async () => {
     const studio = await loadStudio("?new=form");
-    studio.addFormBlock("fields");
-
-    const addFieldButton = studio.all('[data-action="add-field"]').slice(-1)[0];
-    addFieldButton.click();
+    studio.insertViaDrawer("section", "fields");
+    const sectionRows = studio.all(
+      '[data-action="select-node"][data-noun="section"]',
+    );
+    studio.selectRow(
+      "section",
+      Number(sectionRows[sectionRows.length - 1].dataset.index),
+    );
+    studio.el('#inspector [data-action="add-field"]').click();
 
     const heightInputs = studio.all(`[data-path$=".fields.0.height"]`);
     studio.fireInput(heightInputs[heightInputs.length - 1], "90");
@@ -407,7 +486,6 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
       "<textarea",
     );
 
-    // Explicitly choosing Multiline (not height) is what makes it a textarea.
     const typeSelects = studio.all(`[data-path$=".fields.0.type"]`);
     studio.fireChange(typeSelects[typeSelects.length - 1], "multiline");
 
@@ -427,7 +505,7 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
       throw new Error("simulated render failure");
     };
 
-    studio.addFormBlock("prose");
+    studio.insertViaDrawer("section", "prose");
 
     expect(studio.el("#pv").innerHTML).toBe(goodPreview);
     expect(studio.el("#toastStack").textContent).toContain(
@@ -439,11 +517,15 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
 
   it("saves and reloads a document with the definition intact (save/reload round trip)", async () => {
     const created = await loadStudio("?new=form");
-    created.addFormBlock("fields");
-    const addFieldButton = created
-      .all('[data-action="add-field"]')
-      .slice(-1)[0];
-    addFieldButton.click();
+    created.insertViaDrawer("section", "fields");
+    const sectionRows = created.all(
+      '[data-action="select-node"][data-noun="section"]',
+    );
+    created.selectRow(
+      "section",
+      Number(sectionRows[sectionRows.length - 1].dataset.index),
+    );
+    created.el('#inspector [data-action="add-field"]').click();
     const labelInputs = created.all(`[data-path$=".fields.0.label"]`);
     created.fireInput(labelInputs[labelInputs.length - 1], "Reload Field");
 
@@ -460,15 +542,29 @@ describe("Studio editor block round trip (Issue #32, PR A)", () => {
         }),
       ),
     });
-    await reopened.settle();
 
     const reloadedTitles = reopened
-      .all(".editor-card-title")
+      .all(".outline-label")
       .map((node) => node.textContent);
     expect(reloadedTitles).toContain("Information");
     const reloadedLabelInputs = reopened.all(`[data-path$=".fields.0.label"]`);
-    expect(reloadedLabelInputs[reloadedLabelInputs.length - 1].value).toBe(
+    // The reloaded document defaults to Document Settings selected, so the
+    // field editor isn't mounted until the section is reselected.
+    reopened.selectRow(
+      "section",
+      Number(
+        reopened
+          .all('[data-action="select-node"][data-noun="section"]')
+          .slice(-1)[0].dataset.index,
+      ),
+    );
+    const reselectedLabelInputs = reopened.all(
+      `[data-path$=".fields.0.label"]`,
+    );
+    expect(reselectedLabelInputs.length).toBeGreaterThan(0);
+    expect(reselectedLabelInputs[reselectedLabelInputs.length - 1].value).toBe(
       "Reload Field",
     );
+    expect(reloadedLabelInputs.length).toBe(0);
   });
 });
