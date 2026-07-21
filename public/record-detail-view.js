@@ -76,7 +76,7 @@ export function createRecordDetailView({
     return `<article class="document-file-card${prominent ? " is-primary" : ""}">
       <div class="document-file-icon" aria-hidden="true">${file.mediaType === "application/pdf" ? "PDF" : "FILE"}</div>
       <div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType || "File")} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div>
-      <a class="${prominent ? "primary-button" : "secondary-button"}" href="${fileHref(revision.id, file.id)}" target="_blank" rel="noopener">Open / download</a>
+      <a class="${prominent ? "primary-button" : "secondary-button"}" href="${fileHref(revision.id, file.id)}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(file.originalFilename)}">Open file</a>
     </article>`;
   }
 
@@ -143,10 +143,10 @@ export function createRecordDetailView({
     );
     if (!revisions.length) return "";
     const row = (revision) =>
-      `<tr><th scope="row"><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a>${revision.isCurrent ? '<span class="document-current-note">Current</span>' : ""}</th><td>${escapeHtml(revisionStatusLabel(revision.status))}</td><td>${escapeHtml(revision.changeSummary || "—")}</td><td>${revision.fileCount}</td><td>${escapeHtml(formatDate(revision.createdAt) || "—")}</td><td>${revision.issuanceCount ? `${revision.issuanceCount} issuance${revision.issuanceCount === 1 ? "" : "s"}` : "Not issued"}</td><td><a href="${revisionHref(revision.id)}" data-app-link>Open</a></td></tr>`;
+      `<tr><th scope="row"><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a>${revision.isCurrent ? '<span class="document-current-note">Current</span>' : ""}</th><td><span class="revision-table-status is-${escapeHtml(revision.status)}">${escapeHtml(revisionStatusLabel(revision.status))}</span></td><td class="revision-summary-cell">${escapeHtml(revision.changeSummary || "—")}</td><td class="cell-files">${revision.fileCount}</td><td class="cell-date">${escapeHtml(formatDate(revision.createdAt) || "—")}</td><td class="revision-issued-cell">${revision.issuanceCount ? `${revision.issuanceCount} issuance${revision.issuanceCount === 1 ? "" : "s"}` : "Not issued"}</td><td class="cell-open"><a class="open-link" href="${revisionHref(revision.id)}" data-app-link>Open <span class="open-arrow" aria-hidden="true">→</span></a></td></tr>`;
     const card = (revision) =>
       `<li><div><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a><span>${escapeHtml(revisionStatusLabel(revision.status))}${revision.isCurrent ? " · Current" : ""}</span></div><p>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p><small>${revision.fileCount} file${revision.fileCount === 1 ? "" : "s"} · ${revision.issuanceCount ? `${revision.issuanceCount} issued` : "Not issued"} · ${escapeHtml(formatDate(revision.createdAt) || "—")}</small></li>`;
-    return `<section class="document-history" aria-labelledby="history-title"><div class="document-section-heading"><h3 id="history-title">Revision history</h3><span>${revisions.length} historical revision${revisions.length === 1 ? "" : "s"}</span></div>${revisions.length === 1 ? `<ul class="document-history-cards is-single">${card(revisions[0])}</ul>` : `<div class="document-history-table"><table><caption class="sr-only">Published and superseded revisions</caption><thead><tr><th>Revision</th><th>Status</th><th>Change summary</th><th>Files</th><th>Published / created</th><th>Issued</th><th><span class="sr-only">Open</span></th></tr></thead><tbody>${revisions.map(row).join("")}</tbody></table></div><ul class="document-history-cards">${revisions.map(card).join("")}</ul>`}</section>`;
+    return `<section class="document-history" aria-labelledby="history-title"><div class="document-section-heading"><h3 id="history-title">Revision history</h3><span>${revisions.length} historical revision${revisions.length === 1 ? "" : "s"}</span></div><div class="document-history-table records-table-wrap"><table class="records-table app-data-table document-revision-table"><caption class="sr-only">Published and superseded revisions</caption><thead><tr><th>Revision</th><th>Status</th><th>Change summary</th><th>Files</th><th>Published / created</th><th>Issued</th><th><span class="sr-only">Open</span></th></tr></thead><tbody>${revisions.map(row).join("")}</tbody></table></div><ul class="document-history-cards">${revisions.map(card).join("")}</ul></section>`;
   }
 
   function detailItem(label, value) {
@@ -170,7 +170,7 @@ export function createRecordDetailView({
     if (state.status === "loading")
       return '<div class="record-detail-skeleton" aria-busy="true" aria-label="Loading document"><span class="skeleton-line skeleton-short"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-medium"></span></div>';
     if (state.status === "missing")
-      return `<div class="route-state route-not-found"><h2 id="page-title" tabindex="-1">Document not found</h2><p>The requested document is unavailable or you do not have access to it.</p><a href="${documentsHref}" data-app-link>Back to Document Register</a></div>`;
+      return `<div class="route-state route-not-found"><h2 id="page-title" tabindex="-1">Document not found</h2><p>The requested document is unavailable or you do not have access to it.</p><a class="record-back-link" href="${documentsHref}" data-app-link>← Back to Document Register</a></div>`;
     if (state.status === "error")
       return `<div class="inline-error" role="alert"><h2 id="page-title" tabindex="-1">Document could not be loaded</h2><p>${escapeHtml(state.error?.message || "No changes were made. Check your connection and try again.")}</p>${state.error?.requestId ? `<p class="request-id">Request ID <code>${escapeHtml(state.error.requestId)}</code></p>` : ""}<button class="secondary-button" type="button" data-record-retry>Try again</button></div>`;
     return loaded(state.data);
@@ -242,7 +242,7 @@ export function createRecordDetailView({
   }
 
   function mount(container) {
-    container.innerHTML = `<section class="record-detail-view document-workspace app-container-register">${markup()}</section>`;
+    container.innerHTML = `<section class="record-detail-view document-workspace app-container-standard">${markup()}</section>`;
     container
       .querySelector("[data-record-retry]")
       ?.addEventListener("click", reload);

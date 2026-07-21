@@ -211,6 +211,14 @@ describe("record detail workspace", () => {
       "Second Floor Plan",
     );
     expect(
+      document
+        .querySelector(".record-detail-view")
+        ?.classList.contains("app-container-standard"),
+    ).toBe(true);
+    expect(document.querySelector(".record-back-link")?.textContent).toContain(
+      "Back to Document Register",
+    );
+    expect(
       document.querySelector(".document-work-panel")?.textContent,
     ).toContain("Revision B");
     expect(
@@ -222,6 +230,14 @@ describe("record detail workspace", () => {
     expect(
       document.querySelector(".document-history")?.textContent,
     ).not.toContain("Revision B");
+    expect(
+      document
+        .querySelector(".document-revision-table")
+        ?.classList.contains("records-table"),
+    ).toBe(true);
+    expect(
+      document.querySelector(".document-revision-table .open-link"),
+    ).not.toBeNull();
     expect(document.body.textContent.match(/Revision B/g)).toHaveLength(1);
     expect(document.body.textContent).not.toContain("Create draft");
     expect(

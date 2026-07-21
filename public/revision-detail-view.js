@@ -82,13 +82,13 @@ export function createRevisionDetailView({
   }
 
   function fileCard(file, primary = false) {
-    return `<article class="document-file-card${primary ? " is-primary" : ""}"><div class="document-file-icon" aria-hidden="true">${file.mediaType === "application/pdf" ? "PDF" : "FILE"}</div><div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType)} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div><a class="${primary ? "primary-button" : "secondary-button"}" href="${fileHref(file.id)}" target="_blank" rel="noopener">Open / download</a></article>`;
+    return `<article class="document-file-card${primary ? " is-primary" : ""}"><div class="document-file-icon" aria-hidden="true">${file.mediaType === "application/pdf" ? "PDF" : "FILE"}</div><div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType)} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div><a class="${primary ? "primary-button" : "secondary-button"}" href="${fileHref(file.id)}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(file.originalFilename)}">Open file</a></article>`;
   }
 
   function uploadMarkup(revision) {
     if (!revision.capabilities.uploadFile) return "";
     const selected = state.selectedFile;
-    return `<form class="revision-upload" data-upload-form><div><label for="revision-file">${revision.files.length ? "Add another file" : "Upload document"}</label><p>Files are stored privately and attached to this draft revision.</p></div><input id="revision-file" name="file" type="file"${state.uploading ? " disabled" : ""}><button class="primary-button" type="submit"${state.uploading || !selected ? " disabled" : ""}>${state.uploading ? "Uploading…" : selected ? `Upload ${escapeHtml(selected.name)}` : "Choose a file"}</button>${selected ? `<p class="revision-selected-file">Selected: ${escapeHtml(selected.name)} · ${escapeHtml(formatBytes(selected.size))}</p>` : ""}${state.uploadError ? `<p class="app-dialog-error" role="alert">${escapeHtml(state.uploadError.message || "The file could not be uploaded.")}${state.uploadError.requestId ? ` <span class="request-id">Request ID <code>${escapeHtml(state.uploadError.requestId)}</code></span>` : ""}</p>` : ""}</form>`;
+    return `<form class="revision-upload" data-upload-form><div><label for="revision-file">${revision.files.length ? "Add another file" : "Upload document"}</label><p>Files are stored privately and attached to this draft revision.</p></div><input id="revision-file" name="file" type="file"${state.uploading ? " disabled" : ""}><button class="primary-button" type="submit"${state.uploading || !selected ? " disabled" : ""}>${state.uploading ? "Uploading…" : selected ? `Upload ${escapeHtml(selected.name)}` : "Upload file"}</button>${selected ? `<p class="revision-selected-file">Selected: ${escapeHtml(selected.name)} · ${escapeHtml(formatBytes(selected.size))}</p>` : ""}${state.uploadError ? `<p class="app-dialog-error" role="alert">${escapeHtml(state.uploadError.message || "The file could not be uploaded.")}${state.uploadError.requestId ? ` <span class="request-id">Request ID <code>${escapeHtml(state.uploadError.requestId)}</code></span>` : ""}</p>` : ""}</form>`;
   }
 
   function loaded(data) {
@@ -109,7 +109,7 @@ export function createRevisionDetailView({
     if (state.status === "loading")
       return '<div class="record-detail-skeleton" aria-busy="true" aria-label="Loading revision"><span class="skeleton-line skeleton-short"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-medium"></span></div>';
     if (state.status === "missing")
-      return `<div class="route-state route-not-found"><h2 id="page-title" tabindex="-1">Revision not found</h2><p>The requested revision is unavailable or you do not have access to it.</p><a href="${documentHref}" data-app-link>Back to document</a></div>`;
+      return `<div class="route-state route-not-found"><h2 id="page-title" tabindex="-1">Revision not found</h2><p>The requested revision is unavailable or you do not have access to it.</p><a class="record-back-link" href="${documentHref}" data-app-link>← Back to document</a></div>`;
     if (state.status === "error")
       return `<div class="inline-error" role="alert"><h2 id="page-title" tabindex="-1">Revision could not be loaded</h2><p>${escapeHtml(state.error?.message || "Check your connection and try again.")}</p>${state.error?.requestId ? `<p class="request-id">Request ID <code>${escapeHtml(state.error.requestId)}</code></p>` : ""}<button class="secondary-button" type="button" data-revision-retry>Try again</button></div>`;
     return loaded(state.data);
@@ -174,7 +174,7 @@ export function createRevisionDetailView({
   }
 
   function mount(container) {
-    container.innerHTML = `<section class="revision-detail-view document-workspace app-container-register">${markup()}</section>`;
+    container.innerHTML = `<section class="revision-detail-view document-workspace app-container-standard">${markup()}</section>`;
     container.querySelectorAll("a[data-app-link]").forEach(bindLink);
     container
       .querySelector("[data-revision-retry]")

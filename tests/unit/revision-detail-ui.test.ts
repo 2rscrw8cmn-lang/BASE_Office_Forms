@@ -185,6 +185,14 @@ describe("revision document workspace", () => {
       "Revision B",
     );
     expect(
+      document
+        .querySelector(".revision-detail-view")
+        ?.classList.contains("app-container-standard"),
+    ).toBe(true);
+    expect(document.querySelector(".record-back-link")?.textContent).toContain(
+      "Back to Second Floor Plan",
+    );
+    expect(
       document.querySelector(".document-file-card")?.textContent,
     ).toContain("A-201-rev-B.pdf");
     expect(
