@@ -134,7 +134,7 @@
   <div class="command-group secondary"><button id="loadButton" title="Restore a portable document backup file">Import backup</button><button id="downloadButton" title="Download a portable JSON backup">Export backup</button></div>
   <div class="command-group">
     <button id="libraryButton">Controlled documents</button><button id="shareButton">Share</button><button id="aiButton" class="secondary">AI kit</button><button id="aiImportButton" class="secondary">Import AI</button>
-    <button id="printButton">Export PDF</button><button id="deleteButton" class="danger-command" title="Delete the current document from the shared library" hidden>Delete</button><button id="saveButton" class="accent" title="Save or update this document in the shared Cloudflare library">Save to library</button>
+    <button id="printButton">Export PDF</button><button id="deleteButton" class="danger-command" title="Delete the current document from the shared library" hidden>Delete</button><button id="updateTemplateButton" class="accent" title="Publish your changes as the new version of this template for everyone" hidden>Update template</button><button id="saveButton" class="accent" title="Save or update this document in the shared Cloudflare library">Save to library</button>
   </div>
 </div>
 <div class="app">
@@ -147,6 +147,7 @@
 <div class="modal" id="modal" hidden><div class="modal-backdrop"></div><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button data-action="close-modal" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
 <script src="engine.js"></script>
 <script src="library-api.js"></script>
+<script src="template-api.js"></script>
 <script src="global-search.js"></script>
 <script src="studio.js"></script>
 </body>

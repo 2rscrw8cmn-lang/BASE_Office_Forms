@@ -30,11 +30,17 @@ import {
 } from "../../domain/files/validation";
 import { AuthorizationError } from "../../domain/identity/authorization";
 import { ProjectAuthorizationError } from "../../domain/projects/authorization";
+import {
+  TemplateAuthorizationError,
+  TemplateNotFoundError,
+} from "../../domain/templates/errors";
+import { RendererDefinitionValidationError } from "../../rendering/renderer-definition";
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
 import type { Record } from "../../domain/records/record";
 import type { Revision } from "../../domain/revisions/revision";
 import type { RevisionFile } from "../../domain/files/file";
+import type { TemplateWithPublishedVersion } from "../../domain/templates/template";
 import type { FileDownload } from "../../application/files/file-service";
 import type { Issuance } from "../../domain/issuances/issuance";
 import type { IssuanceSummary } from "../../domain/issuances/issuance";
@@ -76,6 +82,7 @@ import {
 import { parseRevisionCreate } from "./revision-schemas";
 import { parseFileUpload } from "./file-schemas";
 import { parseIssuanceCreate } from "./issuance-schemas";
+import { parseTemplatePublish } from "./template-schemas";
 import {
   createOrganizationRequestContext,
   type OrganizationRequestContext,
@@ -143,6 +150,17 @@ export async function routeV2Request(
       decodeURIComponent(revisionIssuanceRoute[1]),
       decodeURIComponent(revisionIssuanceRoute[2]),
       decodeURIComponent(revisionIssuanceRoute[3]),
+    );
+  }
+  const templateRoute = pathname.match(
+    /^\/api\/v2\/templates(?:\/([^/]+))?$/,
+  );
+  if (templateRoute && dependencies) {
+    return handleTemplateRoute(
+      request,
+      context,
+      dependencies,
+      templateRoute[1] ? decodeURIComponent(templateRoute[1]) : undefined,
     );
   }
   const recordRoute = pathname.match(
@@ -644,6 +662,47 @@ async function handleRfiRoute(
   }
 }
 
+async function handleTemplateRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  key: string | undefined,
+): Promise<Response> {
+  const allowedMethods = key ? ["GET", "PUT"] : ["GET"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const templates = dependencies.templates;
+  if (!templates) return unavailable(context);
+  try {
+    if (!key) {
+      return apiSuccess(
+        context,
+        (await templates.list(authenticated.session)).map(serializeTemplate),
+      );
+    }
+    if (request.method === "GET") {
+      return apiSuccess(
+        context,
+        serializeTemplate(await templates.get(authenticated.session, key)),
+      );
+    }
+    const input = parseTemplatePublish(await parseJsonRequest(request), key);
+    const template = await templates.publish(authenticated.session, {
+      key,
+      ...input,
+      correlationId: context.requestId,
+    });
+    return apiSuccess(context, serializeTemplate(template));
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
 async function handleProjects(
   request: Request,
   context: ApiRequestContext,
@@ -984,6 +1043,22 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       "AUTHORIZATION_DENIED",
       "You are not allowed to access this resource.",
     );
+  if (error instanceof TemplateNotFoundError)
+    return apiError(
+      context,
+      404,
+      "TEMPLATE_NOT_FOUND",
+      "The requested template was not found.",
+    );
+  if (error instanceof TemplateAuthorizationError)
+    return apiError(
+      context,
+      403,
+      "AUTHORIZATION_DENIED",
+      "You are not allowed to access this resource.",
+    );
+  if (error instanceof RendererDefinitionValidationError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
   if (error instanceof RfiAuthorizationError)
     return apiError(
       context,
@@ -1187,6 +1262,24 @@ function serializeRecord(record: Record) {
     archivedAt: record.archivedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  };
+}
+function serializeTemplate(template: TemplateWithPublishedVersion) {
+  return {
+    id: template.id,
+    key: template.key,
+    name: template.name,
+    kind: template.kind,
+    createdBy: template.createdBy,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt,
+    publishedVersion: {
+      id: template.publishedVersion.id,
+      versionNumber: template.publishedVersion.versionNumber,
+      definition: template.publishedVersion.definition,
+      publishedAt: template.publishedVersion.publishedAt,
+      publishedBy: template.publishedVersion.publishedBy,
+    },
   };
 }
 function serializeRevision(revision: Revision) {
