@@ -138,6 +138,12 @@ describe("application shell", () => {
     expect(
       document.querySelector(".project-context-header h1")?.textContent,
     ).toBe("Operations Center");
+    const header = document.querySelector(".project-context-header");
+    expect(header?.textContent.match(/P-001/g)).toHaveLength(1);
+    expect(header?.querySelector(".project-context-number")?.textContent).toBe(
+      "P-001",
+    );
+    expect(header?.querySelector(".status-badge")?.textContent).toBe("active");
     expect(document.querySelectorAll(".project-tabs a")).toHaveLength(5);
     expect(
       document.querySelector('.project-tabs a[aria-current="page"]')
@@ -146,6 +152,58 @@ describe("application shell", () => {
     expect(document.querySelector("#page-title")?.textContent).toBe(
       "Revision detail",
     );
+  });
+
+  it("renders safe project context while project details are loading", async () => {
+    const window = new Window({
+      url: "https://base.test/projects/project-1/overview",
+    });
+    const document = window.document as unknown as Document;
+    document.body.innerHTML = '<div id="app"></div>';
+    let resolveProject!: (value: Response) => void;
+    const projectResponse = new Promise<Response>((resolve) => {
+      resolveProject = resolve;
+    });
+    const fetch = vi.fn((input: string | URL | Request) => {
+      const value =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const path = new URL(value, "https://base.test").pathname;
+      if (path === "/api/v2/session") {
+        return Promise.resolve(
+          response({
+            user: { id: "user-1" },
+            organization: { id: "org-1", name: "BASE Construction" },
+            membership: { role: "viewer" },
+            projectPermissions: [],
+          }),
+        );
+      }
+      if (path === "/api/v2/projects/project-1") return projectResponse;
+      return Promise.resolve(response(null, 404));
+    });
+    const shell = createAppShell({ window, document, fetch });
+    shells.push(shell);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const header = document.querySelector(".project-context-header");
+    expect(header?.getAttribute("aria-busy")).toBe("true");
+    expect(header?.textContent).toContain("project-1");
+    expect(header?.querySelector(".status-badge")?.textContent).toBe("Loading");
+    expect(document.querySelectorAll(".project-tabs a")).toHaveLength(5);
+
+    resolveProject(
+      response({
+        id: "project-1",
+        projectNumber: "P-001",
+        name: "Operations Center",
+        status: "active",
+      }),
+    );
+    await shell.ready;
   });
 
   it("keeps issuance details on the Issuances tab", async () => {

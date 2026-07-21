@@ -565,6 +565,10 @@ describe("projects view", () => {
     });
     grab(document, "[data-create-project]").click();
     expect(document.querySelector(".app-dialog")).not.toBeNull();
+    expect(document.activeElement?.id).toBe("pf-number");
+    expect(
+      document.querySelector('.app-dialog [aria-invalid="true"]'),
+    ).toBeNull();
     fire(grab(document, ".app-dialog form"), "submit");
     await settle(1);
     expect(
@@ -573,6 +577,9 @@ describe("projects view", () => {
     expect(
       document.querySelector("#pf-name-error")?.hasAttribute("hidden"),
     ).toBe(false);
+    expect(grab(document, "#pf-number").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
   });
 
   it("navigates to the new project overview after a successful creation", async () => {

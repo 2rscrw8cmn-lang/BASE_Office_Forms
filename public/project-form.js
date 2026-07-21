@@ -33,7 +33,6 @@ export function createProjectForm({
       <form novalidate>
         <div class="app-dialog-head">
           <div>
-            <p class="eyebrow">Projects</p>
             <h2 id="pf-title" tabindex="-1">Create project</h2>
             <p id="pf-desc">Add a new project to this organization. You can refine details later.</p>
           </div>
@@ -43,37 +42,37 @@ export function createProjectForm({
         </div>
         <p class="app-dialog-error" role="alert" hidden></p>
         <div class="app-dialog-body">
-          <div class="field-row">
-            <div class="field">
+          <div class="app-field-row">
+            <div class="app-field">
               <label for="pf-number">Project number <span aria-hidden="true">*</span></label>
               <input id="pf-number" name="projectNumber" type="text" required autocomplete="off"
                 aria-describedby="pf-number-error" />
-              <p class="field-error" id="pf-number-error" hidden></p>
+              <p class="app-field-error" id="pf-number-error" hidden></p>
             </div>
-            <div class="field">
+            <div class="app-field">
               <label for="pf-status">Status</label>
               <select id="pf-status" name="status">
                 ${STATUS_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
               </select>
             </div>
           </div>
-          <div class="field">
+          <div class="app-field">
             <label for="pf-name">Project name <span aria-hidden="true">*</span></label>
             <input id="pf-name" name="name" type="text" required autocomplete="off"
               aria-describedby="pf-name-error" />
-            <p class="field-error" id="pf-name-error" hidden></p>
+            <p class="app-field-error" id="pf-name-error" hidden></p>
           </div>
-          <div class="field-row">
-            <div class="field">
+          <div class="app-field-row">
+            <div class="app-field">
               <label for="pf-city">City</label>
               <input id="pf-city" name="city" type="text" autocomplete="off" />
             </div>
-            <div class="field">
+            <div class="app-field">
               <label for="pf-region">State / region</label>
               <input id="pf-region" name="region" type="text" autocomplete="off" />
             </div>
           </div>
-          <div class="field">
+          <div class="app-field">
             <label for="pf-description">Description</label>
             <textarea id="pf-description" name="description" rows="3"></textarea>
           </div>
@@ -116,7 +115,11 @@ export function createProjectForm({
   function validate() {
     let valid = true;
     if (!numberInput.value.trim()) {
-      setFieldError(numberInput, "pf-number-error", "Project number is required.");
+      setFieldError(
+        numberInput,
+        "pf-number-error",
+        "Project number is required.",
+      );
       valid = false;
     } else {
       setFieldError(numberInput, "pf-number-error", "");
@@ -220,7 +223,11 @@ export function createProjectForm({
     overlay.removeEventListener("keydown", onKeydown);
     overlay.remove();
     doc.body.classList.remove("app-dialog-open");
-    if (restoreFocus && previousFocus && typeof previousFocus.focus === "function") {
+    if (
+      restoreFocus &&
+      previousFocus &&
+      typeof previousFocus.focus === "function"
+    ) {
       previousFocus.focus();
     }
     onClose?.();

@@ -55,7 +55,13 @@ function attentionGroup(title, items, emptyMessage) {
     </section>`;
 }
 
-export function createDashboardView({ api, navigate, announce, requestRender, getSession }) {
+export function createDashboardView({
+  api,
+  navigate,
+  announce,
+  requestRender,
+  getSession,
+}) {
   let state = { status: "loading", data: null, error: null };
   let controller = null;
   let destroyed = false;
@@ -82,8 +88,8 @@ export function createDashboardView({ api, navigate, announce, requestRender, ge
     const session = getSession?.();
     const org =
       session?.status === "ready" ? session.data?.organization?.name : "";
-    return `<div class="page-heading"><div>
-        <p class="eyebrow">Workspace</p>
+    return `<div class="page-heading"><div class="app-container-standard">
+        <p class="app-eyebrow">Workspace</p>
         <h1 id="page-title" tabindex="-1">Work Dashboard</h1>
         <p>What needs your attention today across the projects you can access.</p>
         ${org ? `<p class="page-context">${escapeHtml(org)}</p>` : ""}
@@ -183,21 +189,21 @@ export function createDashboardView({ api, navigate, announce, requestRender, ge
 
   function body() {
     if (state.status === "loading") {
-      return `<div class="dashboard-body"><section class="route-state route-loading" aria-busy="true" aria-label="Loading dashboard">
+      return `<div class="dashboard-body app-container-standard"><section class="route-state route-loading" aria-busy="true" aria-label="Loading dashboard">
           <span class="skeleton-line skeleton-short"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-medium"></span>
         </section></div>`;
     }
     if (state.status === "error") {
       const requestId = state.error?.requestId;
-      return `<div class="dashboard-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unable to load</p>
+      return `<div class="dashboard-body app-container-standard"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unable to load</p>
           <p>The dashboard could not be loaded. No changes were made.</p>
           ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
           <div class="state-actions"><button class="secondary-button" type="button" data-dashboard-retry>Try again</button></div>
         </section></div>`;
     }
     const data = state.data;
-    return `<div class="dashboard-body">
+    return `<div class="dashboard-body app-container-standard">
         ${summaryStrip(data.summary)}
         ${needsAttention(data)}
         ${recentActivity(data)}
