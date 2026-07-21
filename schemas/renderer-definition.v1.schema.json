@@ -53,7 +53,8 @@
         "h": { "type": "number", "minimum": 0 },
         "type": { "type": "string" },
         "multiline": { "type": "boolean" },
-        "align": { "enum": ["top", "center", "bottom"] }
+        "align": { "enum": ["top", "center", "bottom"] },
+        "textHeight": { "type": "number", "exclusiveMinimum": 0 }
       },
       "additionalProperties": true
     },

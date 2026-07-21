@@ -286,6 +286,9 @@ p { margin: 0; text-wrap: pretty; }
   }
   .section, .sec-head, .field, .check-box { break-inside: avoid; }
   .screen-only { display: none !important; }
+  /* The design-time ghost placeholder is Studio-only; a static export or
+     print should look like blank paper, same as before this control existed. */
+  .fin-ghost { display: none; }
 }
 
 /* ============================================================
@@ -294,22 +297,32 @@ p { margin: 0; text-wrap: pretty; }
    so a filled form looks identical to a hand-written one.
    ============================================================ */
 .field { display: flex; flex-direction: column; }
-.fin {
+.fin, .ftx {
   width: 100%; border: 0; background: transparent; outline: 0;
   font: 600 12px/1.35 var(--sans); color: var(--ink);
   margin-top: 4px; padding: 0; resize: none;
 }
+.ftx { flex: 1; min-height: 34px; }
 .fin::placeholder { color: transparent; }        /* keep boxes clean when blank */
+.field:focus-within, .sign:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* Preview-only placeholder for the write-in box (Studio's static preview,
+   fill:false): same position and size as the real input, but not focusable,
+   so the box can be seen and designed without a live, typable form. */
+.fin-ghost { width: 100%; border: 1px dashed rgba(122, 30, 34, .4); background: rgba(122, 30, 34, .035); border-radius: 2px; margin-top: 4px; }
+.ghost-line { height: 20px; flex: none; }
+.ghost-area { flex: 1; min-height: 34px; }
+
 /* Default write-in position is directly under the label; these move the
    label+input pair as a group within a taller box (e.g. a stamp box). */
 .field.field-align-center { justify-content: center; }
 .field.field-align-bottom { justify-content: flex-end; }
 .sign { flex-direction: column; align-items: stretch; justify-content: space-between; }
-.sign .fin { margin-top: auto; }
+.sign .fin, .sign .fin-ghost { margin-top: auto; }
 .sign.sign-align-top { justify-content: flex-start; }
-.sign.sign-align-top .fin { margin-top: 4px; }
+.sign.sign-align-top .fin, .sign.sign-align-top .fin-ghost { margin-top: 4px; }
 .sign.sign-align-center { justify-content: center; }
-.sign.sign-align-center .fin { margin-top: 0; }
+.sign.sign-align-center .fin, .sign.sign-align-center .fin-ghost { margin-top: 0; }
 
 /* clickable check options */
 .check { cursor: pointer; user-select: none; }
@@ -488,19 +501,6 @@ p { margin: 0; text-wrap: pretty; }
   .template-grid a, .template-grid a:nth-child(3n) { border-right: 0; }
 }
 @media print { .app-topbar { display: none !important; } }
-
-/* ============================================================
-   FILL MODE  — real inputs, styled to match the paper form
-   ============================================================ */
-.field { display: flex; flex-direction: column; }
-.fin, .ftx {
-  width: 100%; border: 0; background: transparent; outline: none;
-  font: 600 12px/1.35 var(--sans); color: var(--ink);
-  margin-top: 5px; padding: 0; resize: none;
-}
-.ftx { flex: 1; min-height: 34px; }
-.field:focus-within, .sign:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.sign .fin { margin-top: 0; }
 
 /* interactive check / radio reuses the .box look */
 .check input { position: absolute; opacity: 0; width: 0; height: 0; }

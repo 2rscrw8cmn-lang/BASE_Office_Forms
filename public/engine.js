@@ -80,8 +80,27 @@
       // Where the write-in box sits when the field is taller than one line
       // (e.g. a stamp box). Renderers apply their own default when unset:
       // fieldsBlock defaults to "top", signBlock to "bottom".
-      align: ["top", "center", "bottom"].includes(source.align) ? source.align : undefined
+      align: ["top", "center", "bottom"].includes(source.align) ? source.align : undefined,
+      // Explicit height for the write-in box itself, independent of the
+      // outer field box (`height` above). Unset means the previous default:
+      // a textarea fills the box, a single-line input takes one line.
+      textHeight: Number(source.textHeight) > 0 ? Number(source.textHeight) : undefined
     };
+  }
+
+  // Renders the write-in control for a field. In fill mode this is the real,
+  // typable input/textarea. Otherwise (Studio's static preview) it is a
+  // visible but non-interactive placeholder in the same position and size,
+  // so the box's position and size can be seen and designed without turning
+  // the preview into a live form.
+  function writeBox(fill, isTextarea, name, textHeight) {
+    const sizeStyle = textHeight ? ` style="height:${textHeight}px;flex:none"` : "";
+    if (fill) {
+      return isTextarea
+        ? `<textarea class="ftx" name="${esc(name)}"${sizeStyle}></textarea>`
+        : `<input class="fin" name="${esc(name)}"${sizeStyle}>`;
+    }
+    return `<div class="fin-ghost ${isTextarea ? "ghost-area" : "ghost-line"}"${sizeStyle} aria-hidden="true"></div>`;
   }
 
   function prepareForm(form) {
@@ -117,11 +136,7 @@
     const template = normalized.map(field => `${field.w}fr`).join(" ");
     return `<div class="grid" style="--tpl:${template};">` + normalized.map(field => {
       const height = tall ? Math.max(76, field.height) : field.height;
-      const input = fill
-        ? ((field.multiline || height >= 70)
-          ? `<textarea class="ftx" name="${esc((namePrefix || "") + field.id)}"></textarea>`
-          : `<input class="fin" name="${esc((namePrefix || "") + field.id)}">`)
-        : "";
+      const input = writeBox(fill, field.multiline || height >= 70, (namePrefix || "") + field.id, field.textHeight);
       const align = field.align && field.align !== "top" ? ` field-align-${field.align}` : "";
       return `<div class="field${height >= 70 ? " field-tall" : ""}${align}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
     }).join("") + `</div>`;
@@ -151,7 +166,8 @@
     return rows.map(row => `<div class="sign-grid" style="--sign-tpl:${row.map(field => field.w + "fr").join(" ")};">` +
       row.map(field => {
         const align = field.align && field.align !== "bottom" ? ` sign-align-${field.align}` : "";
-        return `<div class="sign${align}" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${fill ? `<input class="fin" name="${esc((namePrefix || "") + field.id)}">` : ""}</div>`;
+        const input = writeBox(fill, false, (namePrefix || "") + field.id, field.textHeight);
+        return `<div class="sign${align}" style="min-height:${Math.max(54, field.height)}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
       }).join("") +
       `</div>`).join("");
   }

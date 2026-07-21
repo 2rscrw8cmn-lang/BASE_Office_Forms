@@ -335,4 +335,76 @@ describe("renderer engine", () => {
     });
     expect(result).toMatchObject({ valid: true });
   });
+
+  it("shows a non-interactive ghost placeholder for the write-in box in the static preview", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render(
+      {
+        kind: "form",
+        no: "GHOST-1",
+        title: "Ghost preview test",
+        sections: [
+          { name: "Details", fields: [{ label: "Field", w: 1, height: 50 }] },
+          { name: "Stamps", sign: [{ label: "Stamp", w: 1, height: 90 }] },
+        ],
+      },
+      { fill: false },
+    );
+
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("<textarea");
+    expect(html).toContain('class="fin-ghost ghost-line"');
+  });
+
+  it("sizes the write-in box independently of the outer field via textHeight", () => {
+    const renderer = loadRenderer();
+    const filled = renderer.render({
+      kind: "form",
+      no: "SIZE-1",
+      title: "Size test",
+      sections: [
+        {
+          name: "Stamps",
+          sign: [
+            {
+              label: "Stamp",
+              w: 1,
+              height: 90,
+              align: "bottom",
+              textHeight: 24,
+            },
+          ],
+        },
+      ],
+    });
+    expect(filled).toContain(
+      '<input class="fin" name="stamp" style="height:24px;flex:none">',
+    );
+
+    const preview = renderer.render(
+      {
+        kind: "form",
+        no: "SIZE-1",
+        title: "Size test",
+        sections: [
+          {
+            name: "Stamps",
+            sign: [
+              {
+                label: "Stamp",
+                w: 1,
+                height: 90,
+                align: "bottom",
+                textHeight: 24,
+              },
+            ],
+          },
+        ],
+      },
+      { fill: false },
+    );
+    expect(preview).toContain(
+      'class="fin-ghost ghost-line" style="height:24px;flex:none"',
+    );
+  });
 });

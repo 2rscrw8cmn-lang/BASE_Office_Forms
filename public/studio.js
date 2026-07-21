@@ -176,6 +176,7 @@
       <input class="in" data-path="${base}.${index}.label" value="${esc(field.label)}" placeholder="Label">
       <input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">
       <input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">
+      <input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">
       <label class="icon-toggle" title="Multiline"><input type="checkbox" data-path="${base}.${index}.multiline" data-value-type="bool"${field.multiline ? " checked" : ""}>↵</label>
       <select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
         <option value="top"${align === "top" ? " selected" : ""}>Top</option>
@@ -184,7 +185,7 @@
       </select>
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
-    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height controls the write-in area. Top/Middle/Bottom controls where the write-in box sits when the field is taller than one line.</div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. The preview shows a dashed outline where it will sit.</div>`;
   }
 
   function cardHead(type, index, noun) {
