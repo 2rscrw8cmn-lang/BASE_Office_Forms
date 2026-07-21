@@ -84,6 +84,109 @@ Request:
 { "organizationId": "org_uuid" }
 ```
 
+## 4b. Read models (implemented)
+
+These two read-only endpoints are implemented under `/api/v2` to back the
+Dashboard and Project Overview screens. They add no tables and do not change the
+schema version. Every response follows the standard success envelope and
+includes `meta.requestId`. Both scope data server-side to projects the
+authenticated user may access (org_admin and document_control_admin see all
+projects in the active organization; assigned project managers, contributors,
+and viewers see only their assigned projects); tenant isolation is mandatory.
+
+### `GET /api/v2/dashboard`
+
+Returns a concise cross-project "what needs my attention" model. Attention and
+recent lists are capped at 5 items each with deterministic ordering and no
+pagination.
+
+```json
+{
+  "data": {
+    "summary": {
+      "accessibleProjectCount": 0,
+      "draftRevisionCount": 0,
+      "readyToIssueCount": 0,
+      "activeRfiCount": 0
+    },
+    "draftRevisions": [
+      {
+        "revisionId": "uuid", "revisionNumber": 2, "revisionLabel": null,
+        "title": "…", "recordId": "uuid", "recordNumber": "R-001",
+        "recordTitle": "…", "projectId": "uuid", "projectNumber": "P-001",
+        "projectName": "…", "createdAt": "2026-07-20T10:00:00Z"
+      }
+    ],
+    "readyToIssue": [{ "…": "draft-revision fields", "fileCount": 3 }],
+    "activeRfis": [
+      {
+        "rfiId": "uuid", "rfiNumber": "RFI-014", "title": "…",
+        "status": "issued", "dueDate": "2026-07-27", "projectId": "uuid",
+        "projectNumber": "P-001", "projectName": "…", "createdAt": "…"
+      }
+    ],
+    "recentFiles": [
+      {
+        "fileId": "uuid", "originalFilename": "…", "uploadedAt": "…",
+        "revisionId": "uuid", "revisionNumber": 2, "recordId": "uuid",
+        "recordTitle": "…", "projectId": "uuid", "projectNumber": "P-001",
+        "projectName": "…"
+      }
+    ],
+    "recentIssuances": [
+      {
+        "issuanceId": "uuid", "issueNumber": "ISS-014",
+        "purpose": "for_construction", "issuedAt": "…",
+        "issuedByName": "…", "fileCount": 2, "recordId": "uuid",
+        "recordTitle": "…", "revisionId": "uuid", "projectId": "uuid",
+        "projectNumber": "P-001", "projectName": "…"
+      }
+    ]
+  }
+}
+```
+
+Definitions: a draft revision has status `draft` on a non-archived record; a
+ready-to-issue revision has status `published` on a non-archived record with at
+least one file and no existing issuance; an active RFI is `issued`
+(awaiting response) or `answered` (awaiting close). Storage keys and raw state
+JSON are never exposed.
+
+### `GET /api/v2/projects/{projectId}/overview`
+
+Reuses the same project-access authorization as project detail; an inaccessible
+or cross-tenant project returns `404 PROJECT_NOT_FOUND`. Attention lists are
+capped at 5 items and recent activity at 10, all deterministically ordered.
+
+```json
+{
+  "data": {
+    "project": { "…": "same shape as GET /api/v2/projects/{id}" },
+    "counts": {
+      "records": 0, "draftRevisions": 0, "publishedRevisions": 0,
+      "files": 0, "issuances": 0, "activeRfis": 0, "teamMembers": 0
+    },
+    "attention": {
+      "draftRevisions": [], "readyToIssue": [], "activeRfis": []
+    },
+    "recentActivity": [
+      {
+        "id": "uuid", "action": "revision.published",
+        "objectType": "revision", "objectId": "uuid",
+        "actorUserId": "uuid", "actorType": "user",
+        "actorDisplayName": "…", "occurredAt": "…"
+      }
+    ]
+  }
+}
+```
+
+Counts are project-scoped and use only values that can be computed accurately
+from existing tables. Attention definitions match the dashboard. Recent activity
+is project-scoped by joining each event's object to its owning row and exposes
+only safe public fields — never `prior_state_json`, `new_state_json`,
+`metadata_json`, or storage keys.
+
 ## 5. Projects
 
 ### `GET /projects`
