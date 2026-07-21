@@ -349,6 +349,8 @@
     if (button) button.hidden = !activeId || !BASE_LIBRARY.editKey(activeId) || Boolean(packageContext);
     const updateTemplate = $("#updateTemplateButton");
     if (updateTemplate) updateTemplate.hidden = !activeTemplateKey || Boolean(packageContext);
+    const divider = $("[data-conditional-divider]");
+    if (divider) divider.hidden = Boolean(button && button.hidden) && Boolean(updateTemplate && updateTemplate.hidden);
   }
 
   function jumpToPreview(collection, index) {
@@ -737,6 +739,76 @@
     }
   });
 
+  // Accessible, framework-free disclosure menus for the command toolbar.
+  // Each toggle carries [data-menu] + aria-controls pointing at a role="menu".
+  // Keyboard operable, Escape/outside-click close, only one open at a time,
+  // and the menu closes once an action item is chosen so the original
+  // per-button bindings keep firing unchanged.
+  function setupToolbarMenus() {
+    const menus = Array.prototype.slice.call(document.querySelectorAll(".studio-commandbar [data-menu]"))
+      .map(toggle => ({ toggle, menu: document.getElementById(toggle.getAttribute("aria-controls")) }))
+      .filter(entry => entry.menu);
+
+    const items = entry => Array.prototype.slice.call(entry.menu.querySelectorAll('[role="menuitem"]')).filter(item => !item.hidden);
+
+    function close(entry, focusToggle) {
+      if (entry.menu.hidden) return;
+      entry.menu.hidden = true;
+      entry.toggle.setAttribute("aria-expanded", "false");
+      if (focusToggle) entry.toggle.focus();
+    }
+    function closeAll(except) {
+      menus.forEach(entry => { if (entry !== except) close(entry, false); });
+    }
+    function open(entry, focusFirst) {
+      closeAll(entry);
+      entry.menu.hidden = false;
+      entry.toggle.setAttribute("aria-expanded", "true");
+      const list = items(entry);
+      if (focusFirst && list.length) list[0].focus();
+    }
+
+    menus.forEach(entry => {
+      entry.toggle.addEventListener("click", event => {
+        event.preventDefault();
+        if (entry.menu.hidden) open(entry, false); else close(entry, false);
+      });
+      entry.toggle.addEventListener("keydown", event => {
+        if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open(entry, true);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          open(entry, false);
+          const list = items(entry);
+          if (list.length) list[list.length - 1].focus();
+        }
+      });
+      entry.menu.addEventListener("keydown", event => {
+        const list = items(entry);
+        const index = list.indexOf(document.activeElement);
+        if (event.key === "Escape") { event.preventDefault(); close(entry, true); }
+        else if (event.key === "ArrowDown") { event.preventDefault(); (list[index + 1] || list[0] || entry.toggle).focus(); }
+        else if (event.key === "ArrowUp") { event.preventDefault(); (list[index - 1] || list[list.length - 1] || entry.toggle).focus(); }
+        else if (event.key === "Home") { event.preventDefault(); if (list[0]) list[0].focus(); }
+        else if (event.key === "End") { event.preventDefault(); if (list.length) list[list.length - 1].focus(); }
+      });
+      entry.menu.addEventListener("click", event => {
+        if (event.target.closest('[role="menuitem"]')) close(entry, false);
+      });
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      const openEntry = menus.find(entry => !entry.menu.hidden);
+      if (openEntry) { event.preventDefault(); close(openEntry, true); }
+    });
+    document.addEventListener("click", event => {
+      if (event.target.closest(".cmd-menu-wrap")) return;
+      closeAll(null);
+    });
+  }
+
   $("#newButton").addEventListener("click", () => {
     def = normalize(BASE.fromTemplate($("#templateSelect").value));
     activeId = null; activeVersion = null; activeFolderId = null; packageContext = null;
@@ -755,6 +827,7 @@
   $("#aiButton").addEventListener("click", copyAIKit);
   $("#aiImportButton").addEventListener("click", importAI);
   $("#printButton").addEventListener("click", () => { renderPreview(); setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140); });
+  setupToolbarMenus();
   window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
 
