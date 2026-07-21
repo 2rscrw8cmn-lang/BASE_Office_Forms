@@ -89,6 +89,56 @@ export function describeActivity(action) {
   return ACTIVITY_LABELS[action] || "Project activity";
 }
 
+// Records register labels. Record type and both status vocabularies come from
+// the controlled domain values; unknown values fall back to the raw string so
+// nothing is silently hidden.
+
+const RECORD_TYPE_LABELS = {
+  document: "Document",
+  drawing: "Drawing",
+  specification: "Specification",
+  schedule: "Schedule",
+  report: "Report",
+  correspondence: "Correspondence",
+  other: "Other",
+};
+
+export function recordTypeLabel(type) {
+  return RECORD_TYPE_LABELS[type] || type || "—";
+}
+
+const RECORD_STATUS_LABELS = {
+  active: "Active",
+  archived: "Archived",
+};
+
+export function recordStatusLabel(status) {
+  return RECORD_STATUS_LABELS[status] || status;
+}
+
+const REVISION_STATUS_LABELS = {
+  draft: "Draft",
+  published: "Published",
+  superseded: "Superseded",
+};
+
+export function revisionStatusLabel(status) {
+  return REVISION_STATUS_LABELS[status] || status;
+}
+
+// The current published revision, spoken as "Revision <label|number>" so the
+// revision identity is never confused with the record identity. Returns null
+// when the record has no current revision.
+export function currentRevisionText(currentRevision) {
+  if (!currentRevision) return null;
+  const name =
+    currentRevision.revisionLabel != null &&
+    String(currentRevision.revisionLabel).trim() !== ""
+      ? currentRevision.revisionLabel
+      : currentRevision.revisionNumber;
+  return `Revision ${name}`;
+}
+
 export function actorLabel(event) {
   if (event.actorType === "system") return "System";
   return event.actorDisplayName || "A team member";

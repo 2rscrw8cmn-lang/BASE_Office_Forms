@@ -1,6 +1,7 @@
 # Current Application Structure
 
-**Status:** Application Shell implementation inventory
+**Status:** Authenticated workspace inventory — application shell plus the
+Dashboard, Projects, Project Overview, and project Records register surfaces
 **Updated:** 2026-07-21
 
 ## Runtime shape
@@ -20,6 +21,8 @@ Browser
 ├── public/projects-view.js                    Projects directory feature module
 ├── public/project-form.js                     Create Project dialog
 ├── public/project-overview-view.js            Project Overview feature module
+├── public/records-view.js                     Project Records register feature module
+├── public/record-form.js                      Create Record dialog
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
@@ -184,14 +187,14 @@ success descendants keep Issuances selected. Tabs remain sticky beneath the
 project header on desktop and become a horizontally scrollable navigation row on
 mobile, with the selected link scrolled into view after route changes.
 
-## Dashboard, Projects, and Project Overview surfaces
+## Dashboard, Projects, Project Overview, and Records surfaces
 
-`/dashboard`, `/projects`, `/projects/:projectId`, and
-`/projects/:projectId/overview` are now real, authenticated, data-backed screens
-instead of placeholders. The `/projects/:projectId` → `.../overview`
-normalization is unchanged, and Records, revision, issuance, RFI, Team, and
-Administration destinations remain intentional placeholders reached through the
-same canonical routes.
+`/dashboard`, `/projects`, `/projects/:projectId`,
+`/projects/:projectId/overview`, and `/projects/:projectId/records` are now
+real, authenticated, data-backed screens instead of placeholders. The
+`/projects/:projectId` → `.../overview` normalization is unchanged, and record
+detail, revision, issuance, RFI, Team, and Administration destinations remain
+intentional placeholders reached through the same canonical routes.
 
 The **Work Dashboard** answers "what needs my attention today" across every
 project the user can access. It shows organization context, a compact summary
@@ -252,10 +255,59 @@ link to canonical routes when one exists. It loads its own read model and reuses
 the same project-access authorization as project detail, so a cross-tenant or
 unassigned project yields the same generic not-found surface.
 
-All four surfaces preserve logical reading order and are responsive: summary
-tiles wrap, attention groups and recent activity stack, the projects table
-becomes cards, the overview timeline becomes a readable list, and the dialog
-becomes a full-width sheet — without horizontal page overflow. Status is never
+The **Records** register (`/projects/:projectId/records`) replaces the records
+placeholder with the project document register. It reuses the shell's project
+header and tabs and loads a single list-summary read model
+(`GET /api/v2/projects/:projectId/records`) — the response is
+`{ records: [...], capabilities: { createRecord } }`, and each record carries
+`id`, `projectId`, `recordNumber` (nullable), `title`, `recordType`,
+`discipline` (nullable), record `status`, the authoritative `currentRevision`
+(`{ id, revisionNumber, revisionLabel, status, title }` or `null`),
+`hasDraftRevision`, `draftRevisionId` (present only when exactly one draft
+exists), `fileCount` (total files across every revision of the record),
+`createdAt`, `updatedAt`, and per-record `capabilities` (`update`, `archive`).
+`currentRevision` comes from the record's authoritative `current_revision_id`,
+never a highest-number or newest-created heuristic, so record identity, revision
+identity, and files never blur together. The whole summary is assembled in one
+D1 query per project (`D1ProjectRecordsReadRepository`) behind
+`ProjectRecordsReadModelService`, so the browser never fans out per record,
+revision, or file.
+
+The register renders a semantic desktop table (Record, Type, Discipline, Current
+revision, Revision status, Files, Created, Actions) and a mobile card list from
+the same data. The record title is the primary text with the record number as
+secondary metadata; drafts show a "Draft in progress" badge beside the record
+without masquerading as the current revision; the current revision reads as
+"Revision <label|number>" with a separate revision-status badge, or "No
+published revision" when absent; record status and revision status stay distinct.
+Archived records are excluded by default, clearly labelled when shown, and stay
+read-only. A cohesive toolbar provides case-insensitive search (title, record
+number, type label, discipline), Type / Discipline / Revision-status filters
+built only from controlled values present in the authorized response, an archived
+visibility control (Active only / Include archived / Archived only), sort (Created
+newest [default], Recently updated, Title A–Z, Record number, Type), an announced
+result count, and a clear-filters action. List state (`q`, `type`, `discipline`,
+`revisionStatus`, `archived`, `sort`, `direction`) is mirrored into the URL query
+string so refresh, copied links, and browser back/forward restore the same view;
+search, filter, and sort run in the browser over the already-authorized list and
+never act as an authorization boundary.
+
+The **Create Record** action appears only when the server-provided
+`capabilities.createRecord` is true (never inferred from a role string). Its
+dialog (`record-form.js`) mirrors Create Project — dialog semantics, focus trap,
+initial focus, Escape-to-close, focus restoration, labelled title and
+description, inline validation with a top-level summary, a submission loading
+state, and server error display with the request ID. It sends only fields the
+current create schema accepts (`recordType`, `title`, and the optional
+`recordNumber`, `discipline`, `description`) via the unchanged
+`POST /api/v2/projects/:projectId/records` route, never optimistically inserts a
+record, and on success announces, closes, and navigates to
+`/projects/:projectId/records/:recordId`.
+
+All five surfaces preserve logical reading order and are responsive: summary
+tiles wrap, attention groups and recent activity stack, the projects and records
+tables become cards, the overview timeline becomes a readable list, and dialogs
+become full-width sheets — without horizontal page overflow. Status is never
 communicated by color alone (badges carry text labels). After route changes the
 shell moves focus to the page heading and announces the new page through the
 existing live region.
@@ -335,6 +387,18 @@ snapshots. `tests/unit/dashboard-read-repository.test.ts` proves the dashboard
 read dispatches its eight reads through a single `database.batch()` and never
 launches eight independent concurrent statements.
 
+`tests/unit/records-ui.test.ts` mounts the shell against a stubbed API and
+covers the Records register: table and card structure, canonical record-detail
+links, the current-revision text, the no-published-revision state, draft
+presence, file count, active/archived labels and default archived exclusion,
+case-insensitive search across title and record number, Type / Discipline /
+Revision-status filters, the announced result count, clear filters, the filtered
+empty state, query-string restoration and mirroring, browser-back restoration,
+Create-record visibility by capability (shown when `createRecord` is true,
+hidden for read-only users who still see the list), create-form validation,
+successful creation navigating to the record detail route, failed creation
+preserving input with a request ID, and Escape-to-close.
+
 `tests/integration/read-models.test.ts` exercises the dashboard and overview
 read models end to end: organization isolation, assigned-project filtering,
 org_admin/document_control_admin visibility, the draft/ready-to-issue/active-RFI
@@ -342,6 +406,17 @@ definitions (ready-to-issue requires published status and at least one file and
 excludes already-issued revisions; archived records are excluded), project-
 scoped overview counts and activity, deterministic ordering and limits, and the
 absence of storage keys or raw state JSON in responses.
+`tests/integration/project-records-read-model.test.ts` proves the records
+list-summary read model: the authoritative current revision (a lower-numbered
+published revision wins over a higher-numbered draft), a null current revision
+when none is set, accurate draft presence with the draft id withheld when the
+one-draft invariant is violated, record-scoped file counts that never leak
+another project's files, archived exclusion/inclusion with archived records kept
+read-only, capabilities derived from the record policy (create/update/archive
+for managers, read-only for contributors and viewers), deterministic
+newest-first ordering, project and tenant isolation, and unassigned-user
+exclusion. `tests/integration/records.test.ts` additionally pins the
+list-summary envelope shape alongside the record create/update/archive lifecycle.
 
 ## Existing shared library
 

@@ -4,6 +4,7 @@ import {
   hasOrganizationWideProjectRead,
   requireProjectCreation,
 } from "../../domain/projects/authorization";
+import { hasOrganizationWideRecordManagement } from "../../domain/records/authorization";
 import { requireRfiManagement } from "../../domain/rfis/authorization";
 import type { RfiCapability } from "../../domain/rfis/errors";
 import { requireRecordManagement } from "../../domain/records/authorization";
@@ -166,6 +167,34 @@ export class ProjectService {
       ));
     requireRecordManagement(actor, capability, isAssignedProjectManager);
     return project;
+  }
+
+  /**
+   * Resolves read access to a project's Records register and, in the same pass,
+   * whether the actor may manage records there. Access uses the same
+   * authorization as project detail, so an inaccessible or cross-tenant project
+   * yields the generic not-found result. Management follows the authoritative
+   * record policy (organization-wide record admins or the assigned project
+   * manager) — the same rule the mutation services enforce — so the browser
+   * never infers capabilities from role strings alone.
+   */
+  async resolveRecordAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<{ project: Project; canManage: boolean }> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    return {
+      project,
+      canManage:
+        hasOrganizationWideRecordManagement(actor) || isAssignedProjectManager,
+    };
   }
 
   async requireRevisionAccess(

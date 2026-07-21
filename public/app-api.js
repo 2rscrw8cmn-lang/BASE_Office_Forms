@@ -80,5 +80,18 @@ export function createApiClient(options = {}) {
       request(`/api/v2/projects/${encodeURIComponent(projectId)}/overview`, opts),
     createProject: (input, opts) =>
       request("/api/v2/projects", { ...(opts || {}), method: "POST", body: input }),
+    getProjectRecords: (projectId, { includeArchived = false, ...opts } = {}) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records${
+          includeArchived ? "?includeArchived=true" : ""
+        }`,
+        opts,
+      ),
+    createRecord: (projectId, input, opts) =>
+      request(`/api/v2/projects/${encodeURIComponent(projectId)}/records`, {
+        ...(opts || {}),
+        method: "POST",
+        body: input,
+      }),
   };
 }

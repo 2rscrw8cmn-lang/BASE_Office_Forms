@@ -265,18 +265,72 @@ Request:
 
 ### `GET /projects/{projectId}/records`
 
-Filters:
+Returns the project's document records as a list summary. Query parameter:
 
-- `type=rfi|submittal`
-- `status`
-- `disposition`
-- `responsiblePartyId`
-- `overdue`
-- `search`
-- `sort`
-- `cursor`
+- `includeArchived=true|false` (default `false`) — include archived records.
 
-The dedicated RFI and submittal routes below are preferred for typed payloads.
+Text search, type / discipline / current-revision-status filtering, archived
+visibility, and sorting are applied in the browser over the authorized list;
+they are presentation only and never an authorization boundary. Access uses the
+same authorization as project detail, so an inaccessible or cross-tenant project
+returns the generic project not-found result.
+
+Response (`data`):
+
+```json
+{
+  "records": [
+    {
+      "id": "record_uuid",
+      "projectId": "project_uuid",
+      "recordNumber": "A-101",
+      "title": "Floor Plan",
+      "recordType": "drawing",
+      "discipline": "Architecture",
+      "status": "active",
+      "currentRevision": {
+        "id": "revision_uuid",
+        "revisionNumber": 1,
+        "revisionLabel": null,
+        "status": "published",
+        "title": "Published revision"
+      },
+      "hasDraftRevision": true,
+      "draftRevisionId": "revision_uuid",
+      "fileCount": 2,
+      "createdAt": "2026-07-05T00:00:00Z",
+      "updatedAt": "2026-07-06T00:00:00Z",
+      "capabilities": { "update": true, "archive": true }
+    }
+  ],
+  "capabilities": { "createRecord": true }
+}
+```
+
+Field meanings:
+
+- `currentRevision` is the record's authoritative current revision (from the
+  record's `currentRevisionId`), or `null` when no current published revision
+  exists. It is never derived from the highest revision number, newest
+  `createdAt`, or a filename.
+- `hasDraftRevision` reports whether any draft revision exists for the record.
+  `draftRevisionId` is present only when exactly one draft exists; when more than
+  one draft exists (an integrity violation) it is `null` and no draft is silently
+  chosen.
+- `fileCount` is the total number of files attached across every revision of the
+  record. It excludes immutable issuance snapshot files and never counts another
+  record's or project's files.
+- `updatedAt` is the record row's own last-modified time (record metadata), not
+  a cross-entity latest-activity timestamp; `createdAt` is the record's creation
+  time. The UI labels its date column "Created".
+- Response-level `capabilities.createRecord` and per-record `capabilities`
+  (`update`, `archive`) are derived server-side from the record policy
+  (organization-wide record admins or the assigned project manager). Per-record
+  `update`/`archive` are `true` only while the record's lifecycle still permits
+  them, so archived records report both as `false`.
+
+The response never exposes storage keys, R2 metadata, raw authorization
+internals, raw SQL fields, or activity JSON blobs.
 
 ## 8. RFIs
 
