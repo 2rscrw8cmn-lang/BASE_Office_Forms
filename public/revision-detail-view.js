@@ -2,13 +2,9 @@ import {
   escapeHtml,
   formatDate,
   recordTypeLabel,
+  revisionName,
   revisionStatusLabel,
 } from "./app-format.js";
-
-function revisionName(revision) {
-  const label = String(revision.revisionLabel ?? "").trim();
-  return label ? `Revision ${label}` : `Revision ${revision.revisionNumber}`;
-}
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
@@ -38,6 +34,7 @@ export function createRevisionDetailView({
   let controller = null;
   let destroyed = false;
   let sequence = 0;
+  const documentsHref = `/projects/${encodeURIComponent(projectId)}/records`;
   const documentHref = `/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}`;
   const fileHref = (fileId) =>
     `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions/${encodeURIComponent(revisionId)}/files/${encodeURIComponent(fileId)}/content`;
@@ -82,7 +79,7 @@ export function createRevisionDetailView({
   }
 
   function fileCard(file, primary = false) {
-    return `<article class="document-file-card${primary ? " is-primary" : ""}"><div class="document-file-icon" aria-hidden="true">${file.mediaType === "application/pdf" ? "PDF" : "FILE"}</div><div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType)} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div><a class="${primary ? "primary-button" : "secondary-button"}" href="${fileHref(file.id)}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(file.originalFilename)}">Open file</a></article>`;
+    return `<article class="document-file-card${primary ? " is-primary" : ""}"><div class="document-file-icon" aria-hidden="true"><svg class="app-icon" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V21H6z"></path><path d="M14 3.5V8h4M9 12h6M9 16h4"></path></svg></div><div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType)} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div><a class="secondary-button" href="${fileHref(file.id)}" target="_blank" rel="noopener" aria-label="View ${escapeHtml(file.originalFilename)}">View file</a></article>`;
   }
 
   function uploadMarkup(revision) {
@@ -95,7 +92,7 @@ export function createRevisionDetailView({
     const { record, revision } = data;
     const isDraft = revision.status === "draft";
     const isArchived = record.status === "archived";
-    return `<a class="record-back-link" href="${documentHref}" data-app-link>← Back to ${escapeHtml(record.title)}</a><header class="revision-identity"><div><p>${escapeHtml(record.recordNumber || "Unnumbered document")} · ${escapeHtml(recordTypeLabel(record.recordType))}</p><h2 id="page-title" tabindex="-1">${escapeHtml(revisionName(revision))}</h2><p>${escapeHtml(record.title)}</p></div><div class="revision-status-stack"><span class="status-badge status-${isDraft ? "attention" : revision.status === "published" ? "success" : "neutral"}">${escapeHtml(revisionStatusLabel(revision.status))}</span>${revision.isCurrent ? '<span class="document-current-note">Current published revision</span>' : ""}</div></header>${isArchived ? '<div class="document-read-only"><strong>Archived document</strong><span>This revision remains available but is read-only.</span></div>' : !isDraft ? '<div class="document-read-only"><strong>Read-only revision</strong><span>Published and superseded revisions cannot be changed from this workspace.</span></div>' : ""}<section class="revision-summary"><div><span>Change summary</span><p>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p></div><div><span>Created</span><p>${escapeHtml(formatDate(revision.createdAt) || "—")}</p></div><div><span>Files</span><p>${revision.fileCount}</p></div>${revision.issuanceCount ? `<div><span>Issued</span><p>${revision.issuanceCount} time${revision.issuanceCount === 1 ? "" : "s"}</p></div>` : ""}</section><section class="revision-document" aria-labelledby="revision-files-title"><div class="document-section-heading"><h3 id="revision-files-title">Revision files</h3>${revision.files.length ? `<span>${revision.files.length} file${revision.files.length === 1 ? "" : "s"}</span>` : ""}</div>${
+    return `<nav class="document-breadcrumbs" aria-label="Breadcrumb"><a href="${documentsHref}" data-app-link>Documents</a><span aria-hidden="true">/</span><a href="${documentHref}" data-app-link>${escapeHtml(record.title)}</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(revisionName(revision))}</span></nav><header class="revision-identity"><div><p>${escapeHtml(record.recordNumber || "Unnumbered document")} · ${escapeHtml(recordTypeLabel(record.recordType))}</p><h2 id="page-title" tabindex="-1">${escapeHtml(revisionName(revision))}</h2><p>${escapeHtml(record.title)}</p></div><div class="revision-status-stack"><span class="status-badge status-${isDraft ? "attention" : revision.status === "published" ? "success" : "neutral"}">${escapeHtml(revisionStatusLabel(revision.status))}</span>${revision.isCurrent ? '<span class="document-current-note">Current published revision</span>' : ""}</div></header>${isArchived ? '<div class="document-read-only"><strong>Archived document</strong><span>This revision remains available but is read-only.</span></div>' : !isDraft ? '<div class="document-read-only"><strong>Read-only revision</strong><span>Published and superseded revisions cannot be changed from this workspace.</span></div>' : ""}<section class="revision-summary"><div><span>Change summary</span><p>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p></div><div><span>Created</span><p>${escapeHtml(formatDate(revision.createdAt) || "—")}</p></div><div><span>Files</span><p>${revision.fileCount}</p></div><div><span>Issuance</span><p><span class="issuance-badge${revision.issuanceCount ? " is-issued" : ""}">${revision.issuanceCount ? `${revision.issuanceCount} issuance${revision.issuanceCount === 1 ? "" : "s"}` : "Not issued"}</span></p></div></section><section class="revision-document" aria-labelledby="revision-files-title"><div class="document-section-heading"><h3 id="revision-files-title">Revision files</h3>${revision.files.length ? `<span>${revision.files.length} file${revision.files.length === 1 ? "" : "s"}</span>` : ""}</div>${
       revision.files.length
         ? `<div class="document-files">${fileCard(revision.files[0], true)}${revision.files
             .slice(1)
@@ -174,7 +171,7 @@ export function createRevisionDetailView({
   }
 
   function mount(container) {
-    container.innerHTML = `<section class="revision-detail-view document-workspace app-container-standard">${markup()}</section>`;
+    container.innerHTML = `<section class="revision-detail-view document-workspace app-container-register">${markup()}</section>`;
     container.querySelectorAll("a[data-app-link]").forEach(bindLink);
     container
       .querySelector("[data-revision-retry]")

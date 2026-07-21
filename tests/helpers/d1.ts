@@ -38,6 +38,7 @@ export async function resetIdentityFoundation(): Promise<void> {
     env.DB.prepare("DELETE FROM revision_files"),
     env.DB.prepare("DELETE FROM record_revisions"),
     env.DB.prepare("DELETE FROM record_revision_sequences"),
+    env.DB.prepare("DELETE FROM project_record_sequences"),
     env.DB.prepare("DELETE FROM records"),
     env.DB.prepare("DELETE FROM rfi_responses"),
     env.DB.prepare("DELETE FROM rfi_records"),

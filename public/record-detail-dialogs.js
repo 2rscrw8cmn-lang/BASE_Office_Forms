@@ -1,7 +1,17 @@
 import { escapeHtml, recordTypeLabel } from "./app-format.js";
+import {
+  DISCIPLINE_OPTIONS,
+  isControlledDiscipline,
+} from "./record-options.js";
 
 const FOCUSABLE =
-  "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href]";
+  "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href]";
+
+function disciplineOptions(current) {
+  const value = String(current ?? "");
+  const legacy = value && !isControlledDiscipline(value);
+  return `<option value=""${value ? "" : " selected"}>No discipline</option>${legacy ? `<option value="${escapeHtml(value)}" selected>Legacy: ${escapeHtml(value)} — choose a replacement</option>` : ""}${DISCIPLINE_OPTIONS.map(({ value: optionValue, label }) => `<option value="${optionValue}"${optionValue === value ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}`;
+}
 
 function createDialog({
   document: doc,
@@ -121,11 +131,11 @@ export function createEditRecordDialog({
   return createDialog({
     document,
     title: "Edit document details",
-    description: `${recordTypeLabel(record.recordType)} record metadata`,
+    description: `${record.recordNumber ? `Document ${record.recordNumber} · ` : ""}${recordTypeLabel(record.recordType)} metadata`,
     submitLabel: "Save changes",
     onClose,
     body: `<div class="app-field"><label for="rd-title">Title <span aria-hidden="true">*</span></label><input id="rd-title" name="title" value="${value(record.title)}" aria-describedby="rd-title-error" required><p class="app-field-error" id="rd-title-error" hidden></p></div>
-      <div class="app-field-row"><div class="app-field"><label for="rd-number">Record number</label><input id="rd-number" name="recordNumber" value="${value(record.recordNumber)}"></div><div class="app-field"><label for="rd-discipline">Discipline</label><input id="rd-discipline" name="discipline" value="${value(record.discipline)}"></div></div>
+      <div class="app-field"><label for="rd-discipline">Discipline</label><select id="rd-discipline" name="discipline">${disciplineOptions(record.discipline)}</select></div>
       <div class="app-field"><label for="rd-description">Description</label><textarea id="rd-description" name="description" rows="3">${value(record.description)}</textarea></div><div class="app-field"><label for="rd-source">Source</label><input id="rd-source" name="source" value="${value(record.source)}"></div>`,
     onSubmit: async ({ overlay, fieldError }) => {
       const title = inputValue(overlay, "title");
@@ -137,7 +147,6 @@ export function createEditRecordDialog({
       }
       await api.updateRecord(projectId, record.id, {
         title,
-        recordNumber: inputValue(overlay, "recordNumber") || null,
         description: inputValue(overlay, "description") || null,
         discipline: inputValue(overlay, "discipline") || null,
         source: inputValue(overlay, "source") || null,

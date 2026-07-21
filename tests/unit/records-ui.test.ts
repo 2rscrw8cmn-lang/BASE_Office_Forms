@@ -141,7 +141,11 @@ function defaultHandler(key: string, pathname: string, role: Role): Response {
   if (key === "POST /api/v2/projects/proj-1/records")
     return json(
       {
-        data: record({ id: "rec-new", title: "New Record" }),
+        data: record({
+          id: "rec-new",
+          recordNumber: "0004",
+          title: "New Record",
+        }),
         meta: { requestId: "req-new" },
       },
       201,
@@ -608,17 +612,29 @@ describe("records create authorization and dialog", () => {
   });
 
   it("navigates to the new record detail route after a successful creation", async () => {
-    const { document, window } = await mountRecords();
+    const { document, window, fetch } = await mountRecords();
     grab(document, ".records-heading [data-create-record]").click();
     grab(document, "[data-mode='empty']").click();
+    expect(document.querySelector("#add-number")).toBeNull();
+    expect(document.querySelector("#add-discipline")?.tagName).toBe("SELECT");
     setFieldValue(document, "#add-title", "New Document");
     (grab(document, "#add-type") as HTMLInputElement).value = "drawing";
+    setFieldValue(document, "#add-discipline", "architectural");
     fire(grab(document, ".app-dialog form"), "submit");
     await waitFor(() => {
       expect(window.location.pathname).toBe(
         "/projects/proj-1/records/rec-new/revisions/rev-new",
       );
     });
+    const call = fetch.mock.calls.find(([, init]) => init?.method === "POST");
+    const body = call?.[1]?.body;
+    if (typeof body !== "string") throw new Error("Expected JSON body");
+    expect(JSON.parse(body)).toMatchObject({
+      recordType: "drawing",
+      discipline: "architectural",
+      title: "New Document",
+    });
+    expect(JSON.parse(body)).not.toHaveProperty("recordNumber");
     expect(document.querySelector(".app-dialog")).toBeNull();
   });
 

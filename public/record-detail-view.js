@@ -1,8 +1,10 @@
 import {
   escapeHtml,
   formatDate,
+  disciplineLabel,
   recordStatusLabel,
   recordTypeLabel,
+  revisionName,
   revisionStatusLabel,
 } from "./app-format.js";
 import {
@@ -10,11 +12,6 @@ import {
   createEditRecordDialog,
   createRevisionDialog,
 } from "./record-detail-dialogs.js";
-
-function revisionName(revision) {
-  const label = String(revision.revisionLabel ?? "").trim();
-  return label ? `Revision ${label}` : `Revision ${revision.revisionNumber}`;
-}
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
@@ -74,9 +71,9 @@ export function createRecordDetailView({
 
   function fileCard(file, revision, prominent = false) {
     return `<article class="document-file-card${prominent ? " is-primary" : ""}">
-      <div class="document-file-icon" aria-hidden="true">${file.mediaType === "application/pdf" ? "PDF" : "FILE"}</div>
+      <div class="document-file-icon" aria-hidden="true"><svg class="app-icon" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V21H6z"></path><path d="M14 3.5V8h4M9 12h6M9 16h4"></path></svg></div>
       <div class="document-file-copy"><strong>${escapeHtml(file.originalFilename)}</strong><span>${escapeHtml(file.mediaType || "File")} · ${escapeHtml(formatBytes(file.byteSize))} · Uploaded ${escapeHtml(formatDate(file.uploadedAt) || "—")}</span></div>
-      <a class="${prominent ? "primary-button" : "secondary-button"}" href="${fileHref(revision.id, file.id)}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(file.originalFilename)}">Open file</a>
+      <a class="secondary-button" href="${fileHref(revision.id, file.id)}" target="_blank" rel="noopener" aria-label="View ${escapeHtml(file.originalFilename)}">View file</a>
     </article>`;
   }
 
@@ -107,21 +104,29 @@ export function createRecordDetailView({
     if (!isPublished && files.length > 0) {
       return `<div class="document-action-row"><a class="primary-button" href="${revisionHref(revision.id)}" data-app-link>Open draft</a>${revision.capabilities?.publishRevision ? `<button class="secondary-button" type="button" data-publish-revision="${escapeHtml(revision.id)}"${publishingId === revision.id ? ' disabled aria-busy="true"' : ""}>${publishingId === revision.id ? "Publishing…" : "Publish revision"}</button>` : ""}</div>`;
     }
-    if (isPublished && files.length > 0) {
-      return `<div class="document-action-row"><a class="primary-button" href="${fileHref(revision.id, files[0].id)}" target="_blank" rel="noopener">Open current document</a>${state.data.capabilities.createRevision ? '<button class="secondary-button" type="button" data-create-revision>Create new revision</button>' : ""}</div>`;
-    }
-    if (isPublished && state.data.capabilities.createRevision) {
-      return '<button class="primary-button document-primary-action" type="button" data-create-revision>Create new revision</button>';
-    }
+    if (isPublished) return "";
     return `<a class="secondary-button" href="${revisionHref(revision.id)}" data-app-link>Open revision</a>`;
   }
 
+  function issuanceText(revision) {
+    const count = Number(revision?.issuanceCount) || 0;
+    return count
+      ? `${count} issuance${count === 1 ? "" : "s"}`
+      : "Not issued";
+  }
+
+  function revisionTone(status) {
+    if (status === "published") return "success";
+    if (status === "draft") return "attention";
+    return "neutral";
+  }
+
   function singleWorkPanel(revision, { draft = false } = {}) {
-    return `<section class="document-work-panel" aria-labelledby="work-title">
-      <div class="document-work-head"><div><p>${draft ? "Current work" : "Current published document"}</p><h3 id="work-title">${escapeHtml(revisionName(revision))}</h3><span class="status-badge status-${draft ? "attention" : "success"}">${escapeHtml(revisionStatusLabel(revision.status))}</span></div><div class="document-work-meta"><span>${revision.fileCount} file${revision.fileCount === 1 ? "" : "s"}</span><span>${escapeHtml(formatDate(revision.createdAt) || "—")}</span></div></div>
-      <p class="document-change-summary"><strong>What changed</strong>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p>
+    return `<section class="document-work-panel is-${escapeHtml(revision.status)}" aria-labelledby="work-title">
+      <div class="document-work-head"><div><p class="document-section-label">${draft ? "Current work" : "Current revision"}</p><div class="document-work-title"><h3 id="work-title">${escapeHtml(revisionName(revision))}</h3><span class="status-badge status-${revisionTone(revision.status)}">${escapeHtml(revisionStatusLabel(revision.status))}</span></div><div class="document-change-summary"><span>Change summary</span><strong>${escapeHtml(revision.changeSummary || "No change summary provided.")}</strong></div></div><dl class="document-work-facts"><div><dt>Created</dt><dd>${escapeHtml(formatDate(revision.createdAt) || "—")}</dd></div><div><dt>Issuance</dt><dd><span class="issuance-badge${revision.issuanceCount ? " is-issued" : ""}">${escapeHtml(issuanceText(revision))}</span></dd></div></dl></div>
+      <div class="document-files-heading"><h4>Files</h4><span>${revision.fileCount}</span></div>
       ${revision.files.length ? filesMarkup(revision) : `<div class="document-upload-empty"><div><strong>No document file yet</strong><p>Add the document file to this draft before it is published.</p></div>${workActions(revision)}</div>`}
-      ${revision.files.length ? workActions(revision, !draft) : ""}
+      ${revision.files.length && draft ? workActions(revision) : ""}
     </section>`;
   }
 
@@ -131,22 +136,22 @@ export function createRecordDetailView({
     );
     if (drafts.length === 1) return singleWorkPanel(drafts[0], { draft: true });
     if (drafts.length > 1) {
-      return `<section class="document-work-panel" aria-labelledby="work-title"><div class="document-work-head"><div><p>Current work</p><h3 id="work-title">${drafts.length} drafts in progress</h3></div></div><p>Choose a draft to continue its files or publishing workflow.</p><ul class="document-draft-list">${drafts.map((draft) => `<li><div><a href="${revisionHref(draft.id)}" data-app-link>${escapeHtml(revisionName(draft))}</a><span class="status-badge status-attention">Draft</span><p>${escapeHtml(draft.changeSummary)}</p></div><span>${draft.fileCount} file${draft.fileCount === 1 ? "" : "s"}</span></li>`).join("")}</ul></section>`;
+      return `<section class="document-work-panel is-draft" aria-labelledby="work-title"><div class="document-work-head"><div><p class="document-section-label">Current work</p><h3 id="work-title">${drafts.length} drafts in progress</h3></div></div><p>Choose a draft to continue its files or publishing workflow.</p><ul class="document-draft-list">${drafts.map((draft) => `<li><div><a href="${revisionHref(draft.id)}" data-app-link>${escapeHtml(revisionName(draft))}</a><span class="status-badge status-attention">Draft</span><p>${escapeHtml(draft.changeSummary)}</p></div><span>${draft.fileCount} file${draft.fileCount === 1 ? "" : "s"}</span></li>`).join("")}</ul></section>`;
     }
     if (data.currentRevision) return singleWorkPanel(data.currentRevision);
-    return `<section class="document-work-panel document-empty-work" aria-labelledby="work-title"><div><p>Current work</p><h3 id="work-title">No revision yet</h3><p>Create the first revision to add the working document and begin its history.</p></div>${data.capabilities.createRevision ? '<button class="primary-button document-primary-action" type="button" data-create-revision>Create first revision</button>' : ""}</section>`;
+    return `<section class="document-work-panel document-empty-work" aria-labelledby="work-title"><div><p class="document-section-label">Current work</p><h3 id="work-title">No revision yet</h3><p>Create a revision to add the working document and begin its history.</p></div>${data.capabilities.createRevision ? '<button class="primary-button document-primary-action" type="button" data-create-revision>Create revision</button>' : ""}</section>`;
   }
 
   function history(data) {
     const revisions = data.revisions.filter(
-      (revision) => revision.status !== "draft",
+      (revision) => revision.status !== "draft" && !revision.isCurrent,
     );
     if (!revisions.length) return "";
     const row = (revision) =>
-      `<tr><th scope="row"><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a>${revision.isCurrent ? '<span class="document-current-note">Current</span>' : ""}</th><td><span class="revision-table-status is-${escapeHtml(revision.status)}">${escapeHtml(revisionStatusLabel(revision.status))}</span></td><td class="revision-summary-cell">${escapeHtml(revision.changeSummary || "—")}</td><td class="cell-files">${revision.fileCount}</td><td class="cell-date">${escapeHtml(formatDate(revision.createdAt) || "—")}</td><td class="revision-issued-cell">${revision.issuanceCount ? `${revision.issuanceCount} issuance${revision.issuanceCount === 1 ? "" : "s"}` : "Not issued"}</td><td class="cell-open"><a class="open-link" href="${revisionHref(revision.id)}" data-app-link>Open <span class="open-arrow" aria-hidden="true">→</span></a></td></tr>`;
+      `<tr><th scope="row"><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a></th><td><span class="status-badge status-${revisionTone(revision.status)}">${escapeHtml(revisionStatusLabel(revision.status))}</span></td><td class="revision-summary-cell">${escapeHtml(revision.changeSummary || "—")}</td><td class="cell-files">${revision.fileCount}</td><td class="cell-date">${escapeHtml(formatDate(revision.createdAt) || "—")}</td><td class="revision-issued-cell"><span class="issuance-badge${revision.issuanceCount ? " is-issued" : ""}">${escapeHtml(issuanceText(revision))}</span></td><td class="cell-open"><a class="open-link" href="${revisionHref(revision.id)}" data-app-link aria-label="Open ${escapeHtml(revisionName(revision))}">Open <span class="open-arrow" aria-hidden="true">→</span></a></td></tr>`;
     const card = (revision) =>
-      `<li><div><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a><span>${escapeHtml(revisionStatusLabel(revision.status))}${revision.isCurrent ? " · Current" : ""}</span></div><p>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p><small>${revision.fileCount} file${revision.fileCount === 1 ? "" : "s"} · ${revision.issuanceCount ? `${revision.issuanceCount} issued` : "Not issued"} · ${escapeHtml(formatDate(revision.createdAt) || "—")}</small></li>`;
-    return `<section class="document-history" aria-labelledby="history-title"><div class="document-section-heading"><h3 id="history-title">Revision history</h3><span>${revisions.length} historical revision${revisions.length === 1 ? "" : "s"}</span></div><div class="document-history-table records-table-wrap"><table class="records-table app-data-table document-revision-table"><caption class="sr-only">Published and superseded revisions</caption><thead><tr><th>Revision</th><th>Status</th><th>Change summary</th><th>Files</th><th>Published / created</th><th>Issued</th><th><span class="sr-only">Open</span></th></tr></thead><tbody>${revisions.map(row).join("")}</tbody></table></div><ul class="document-history-cards">${revisions.map(card).join("")}</ul></section>`;
+      `<li><div><a href="${revisionHref(revision.id)}" data-app-link>${escapeHtml(revisionName(revision))}</a><span class="status-badge status-${revisionTone(revision.status)}">${escapeHtml(revisionStatusLabel(revision.status))}</span></div><p>${escapeHtml(revision.changeSummary || "No change summary provided.")}</p><small>${revision.fileCount} file${revision.fileCount === 1 ? "" : "s"} · ${issuanceText(revision)} · Created ${escapeHtml(formatDate(revision.createdAt) || "—")}</small></li>`;
+    return `<section class="document-history" aria-labelledby="history-title"><div class="document-section-heading"><h3 id="history-title">Previous revisions</h3><span>${revisions.length}</span></div><div class="document-history-table records-table-wrap"><table class="records-table app-data-table document-revision-table"><caption class="sr-only">Previous published and superseded revisions</caption><thead><tr><th>Revision</th><th>Status</th><th>Change summary</th><th>Files</th><th>Created</th><th>Issuance</th><th><span class="sr-only">Open</span></th></tr></thead><tbody>${revisions.map(row).join("")}</tbody></table></div><ul class="document-history-cards">${revisions.map(card).join("")}</ul></section>`;
   }
 
   function detailItem(label, value) {
@@ -155,7 +160,36 @@ export function createRecordDetailView({
 
   function details(data) {
     const record = data.record;
-    return `<details class="document-details"><summary>Document details</summary><dl>${detailItem("Document type", recordTypeLabel(record.recordType))}${detailItem("Document number", record.recordNumber)}${detailItem("Discipline", record.discipline)}${detailItem("Description", record.description)}${record.source ? detailItem("Source", record.source) : ""}${detailItem("Created", formatDate(record.createdAt))}${detailItem("Updated", formatDate(record.updatedAt))}${record.archivedAt ? detailItem("Archived", formatDate(record.archivedAt)) : ""}${detailItem("Total files", String(data.totalFileCount))}</dl></details>`;
+    return `<details class="document-details"><summary><span>Document details</span></summary><dl>${detailItem("Discipline", disciplineLabel(record.discipline))}${detailItem("Document type", recordTypeLabel(record.recordType))}${detailItem("Description", record.description)}${record.source ? detailItem("Source", record.source) : ""}${detailItem("Created", formatDate(record.createdAt))}${detailItem("Updated", formatDate(record.updatedAt))}${record.archivedAt ? detailItem("Archived", formatDate(record.archivedAt)) : ""}${detailItem("Total files", String(data.totalFileCount))}</dl></details>`;
+  }
+
+  function optionsMarkup(data) {
+    if (
+      data.record.status !== "active" ||
+      (!data.capabilities.updateRecord && !data.capabilities.archiveRecord)
+    )
+      return "";
+    return `<details class="document-options"><summary aria-label="Document options">…</summary><div>${data.capabilities.updateRecord ? '<button type="button" data-edit-record>Edit document details</button>' : ""}${data.capabilities.archiveRecord ? '<button class="is-destructive" type="button" data-archive-record>Archive document</button>' : ""}</div></details>`;
+  }
+
+  function headerActions(data, drafts) {
+    let primary = "";
+    let secondary = "";
+    if (drafts.length === 1) {
+      const draft = drafts[0];
+      primary = `<a class="primary-button" href="${revisionHref(draft.id)}" data-app-link>${draft.files.length ? "Open draft" : "Upload document"}</a>`;
+    } else if (data.currentRevision) {
+      primary = `<a class="primary-button" href="${revisionHref(data.currentRevision.id)}" data-app-link>View current revision</a>`;
+      if (data.capabilities.createRevision) {
+        secondary = '<button class="secondary-button" type="button" data-create-revision>Create revision</button>';
+      }
+    } else if (data.capabilities.createRevision) {
+      primary = '<button class="primary-button" type="button" data-create-revision>Create revision</button>';
+    }
+    const options = optionsMarkup(data);
+    return primary || secondary || options
+      ? `<div class="document-header-actions">${primary}${secondary}${options}</div>`
+      : "";
   }
 
   function loaded(data) {
@@ -163,7 +197,8 @@ export function createRecordDetailView({
     const drafts = data.revisions.filter(
       (revision) => revision.status === "draft",
     );
-    return `<a class="record-back-link" href="${documentsHref}" data-app-link>← Back to Document Register</a><header class="document-identity"><div><p class="record-detail-number">${escapeHtml(record.recordNumber || "Unnumbered document")}</p><h2 id="page-title" tabindex="-1">${escapeHtml(record.title)}</h2><p>${escapeHtml(recordTypeLabel(record.recordType))}${record.discipline ? ` · ${escapeHtml(record.discipline)}` : ""}${data.currentRevision ? ` · ${escapeHtml(revisionName(data.currentRevision))}` : ""}</p></div><div class="document-identity-status"><span class="status-badge status-${record.status === "active" ? "success" : "neutral"}">${escapeHtml(recordStatusLabel(record.status))}</span>${record.status === "active" && (data.capabilities.updateRecord || data.capabilities.archiveRecord) ? `<details class="document-options"><summary aria-label="Document options">Options</summary><div>${data.capabilities.updateRecord ? '<button type="button" data-edit-record>Edit document details</button>' : ""}${data.capabilities.archiveRecord ? '<button class="is-destructive" type="button" data-archive-record>Archive document</button>' : ""}</div></details>` : ""}</div></header>${record.status === "archived" ? `<div class="document-read-only"><strong>Archived document</strong><span>This document is read-only${record.archivedAt ? ` · Archived ${escapeHtml(formatDate(record.archivedAt))}` : ""}.</span></div>` : ""}${drafts.length && data.currentRevision ? `<p class="document-published-context">Published baseline: <a href="${revisionHref(data.currentRevision.id)}" data-app-link>${escapeHtml(revisionName(data.currentRevision))}</a></p>` : ""}${currentWork(data)}${history(data)}${details(data)}`;
+    const focusRevision = drafts.length === 1 ? drafts[0] : data.currentRevision;
+    return `<nav class="document-breadcrumbs" aria-label="Breadcrumb"><a href="${documentsHref}" data-app-link>Documents</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(record.title)}</span></nav><header class="document-identity"><div class="document-title-row"><h2 id="page-title" tabindex="-1">${escapeHtml(record.title)}</h2><span class="status-badge status-${record.status === "active" ? "success" : "neutral"}">${escapeHtml(recordStatusLabel(record.status))}</span></div>${headerActions(data, drafts)}</header><div class="document-header-facts"><span><small>Document no.</small><strong>${escapeHtml(record.recordNumber || "Unnumbered")}</strong></span><span><small>Type</small><strong>${escapeHtml(recordTypeLabel(record.recordType))}</strong></span><span><small>Discipline</small><strong>${escapeHtml(disciplineLabel(record.discipline))}</strong></span><span><small>${focusRevision?.status === "draft" ? "Working revision" : "Current revision"}</small><strong>${focusRevision ? escapeHtml(revisionName(focusRevision)) : "—"}</strong></span>${focusRevision ? `<span><small>Status</small><strong><span class="status-badge status-${revisionTone(focusRevision.status)}">${escapeHtml(revisionStatusLabel(focusRevision.status))}</span></strong></span><span><small>Issuance</small><strong><span class="issuance-badge${focusRevision.issuanceCount ? " is-issued" : ""}">${escapeHtml(issuanceText(focusRevision))}</span></strong></span>` : ""}</div>${record.status === "archived" ? `<div class="document-read-only"><strong>Archived document</strong><span>This document is read-only${record.archivedAt ? ` · Archived ${escapeHtml(formatDate(record.archivedAt))}` : ""}.</span></div>` : ""}${currentWork(data)}${history(data)}${details(data)}`;
   }
 
   function markup() {
@@ -242,7 +277,7 @@ export function createRecordDetailView({
   }
 
   function mount(container) {
-    container.innerHTML = `<section class="record-detail-view document-workspace app-container-standard">${markup()}</section>`;
+    container.innerHTML = `<section class="record-detail-view document-workspace app-container-register">${markup()}</section>`;
     container
       .querySelector("[data-record-retry]")
       ?.addEventListener("click", reload);

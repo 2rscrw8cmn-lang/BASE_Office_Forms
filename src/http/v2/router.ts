@@ -342,7 +342,7 @@ async function handleRecordRoute(
       {
         ...parseRecordUpdate(
           await parseJsonRequest(request),
-          toRecordWriteInput(current),
+          toRecordMetadataInput(current),
         ),
         correlationId: context.requestId,
       },
@@ -1555,10 +1555,9 @@ function toRfiWriteInput(rfi: Rfi) {
     scheduleImpact: rfi.scheduleImpact,
   };
 }
-function toRecordWriteInput(record: Record) {
+function toRecordMetadataInput(record: Record) {
   return {
     recordType: record.recordType,
-    recordNumber: record.recordNumber,
     title: record.title,
     description: record.description,
     discipline: record.discipline,

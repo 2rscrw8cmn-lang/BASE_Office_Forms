@@ -182,16 +182,16 @@ describe("revision document workspace", () => {
         () => response(workspace(withFile)),
     });
     expect(document.querySelector("#page-title")?.textContent).toBe(
-      "Revision B",
+      "Rev 2 · B",
     );
     expect(
       document
         .querySelector(".revision-detail-view")
-        ?.classList.contains("app-container-standard"),
+        ?.classList.contains("app-container-register"),
     ).toBe(true);
-    expect(document.querySelector(".record-back-link")?.textContent).toContain(
-      "Back to Second Floor Plan",
-    );
+    expect(
+      document.querySelector(".document-breadcrumbs")?.textContent,
+    ).toContain("Documents/Second Floor Plan/Rev 2 · B");
     expect(
       document.querySelector(".document-file-card")?.textContent,
     ).toContain("A-201-rev-B.pdf");
@@ -199,6 +199,12 @@ describe("revision document workspace", () => {
       document.querySelector(".document-file-card a")?.getAttribute("href"),
     ).toBe(
       "/api/v2/projects/proj-1/records/rec-1/revisions/rev-2/files/file-1/content",
+    );
+    expect(document.querySelector(".document-file-card a")?.textContent).toBe(
+      "View file",
+    );
+    expect(document.querySelector(".revision-summary")?.textContent).toContain(
+      "Not issued",
     );
     expect(
       fetch.mock.calls.filter(([input]) => {

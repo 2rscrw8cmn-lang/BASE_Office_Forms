@@ -26,6 +26,7 @@ import { D1ProjectsRepository } from "../../infrastructure/db/d1/projects-reposi
 import { D1DashboardReadRepository } from "../../infrastructure/db/d1/dashboard-read-repository";
 import { D1ProjectOverviewReadRepository } from "../../infrastructure/db/d1/project-overview-read-repository";
 import { D1ProjectRecordsReadRepository } from "../../infrastructure/db/d1/project-records-read-repository";
+import { D1ProjectRecordSequencesRepository } from "../../infrastructure/db/d1/project-record-sequences-repository";
 import { D1RecordWorkspaceReadRepository } from "../../infrastructure/db/d1/record-workspace-read-repository";
 import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
@@ -79,7 +80,10 @@ export function createV2RouteDependencies(
   const recordRevisionSequences = new D1RecordRevisionSequencesRepository(
     environment.DB,
   );
-  const records = new D1RecordsRepository(environment.DB);
+  const records = new D1RecordsRepository(
+    environment.DB,
+    new D1ProjectRecordSequencesRepository(environment.DB),
+  );
   const revisions = new D1RecordRevisionsRepository(
     environment.DB,
     recordRevisionSequences,

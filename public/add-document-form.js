@@ -1,4 +1,5 @@
 import { escapeHtml } from "./app-format.js";
+import { DISCIPLINE_OPTIONS } from "./record-options.js";
 
 const FOCUSABLE =
   "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]";
@@ -35,7 +36,7 @@ export function createAddDocumentForm({
 
   function formMarkup() {
     const uploading = mode === "upload";
-    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><form novalidate><div class="app-dialog-head"><div><button class="text-link add-document-back" type="button" data-back>← Choose another option</button><h2 id="add-document-title" tabindex="-1">${uploading ? "Upload a document" : "Create an empty document"}</h2><p id="add-document-desc">${uploading ? "Add document details and the first file. A draft revision will be created automatically." : "Reserve the identity now. An empty draft will be ready for upload."}</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><p class="app-dialog-error" role="alert" hidden></p><div class="app-dialog-body"><div class="app-field-row"><div class="app-field"><label for="add-type">Document type</label><select id="add-type" name="recordType">${TYPE_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></div><div class="app-field"><label for="add-number">Document number</label><input id="add-number" name="recordNumber" autocomplete="off"></div></div><div class="app-field"><label for="add-title">Title <span aria-hidden="true">*</span></label><input id="add-title" name="title" required autocomplete="off" aria-describedby="add-title-error"><p class="app-field-error" id="add-title-error" hidden></p></div><div class="app-field"><label for="add-discipline">Discipline</label><input id="add-discipline" name="discipline" autocomplete="off"></div><div class="app-field"><label for="add-description">Description</label><textarea id="add-description" name="description" rows="2"></textarea></div><div class="app-field"><label for="add-summary">Initial change summary <span aria-hidden="true">*</span></label><textarea id="add-summary" name="changeSummary" rows="2" required aria-describedby="add-summary-error">Initial document</textarea><p class="app-field-error" id="add-summary-error" hidden></p></div>${uploading ? '<div class="app-field add-document-file"><label for="add-file">Document file <span aria-hidden="true">*</span></label><input id="add-file" name="file" type="file" required aria-describedby="add-file-error"><p class="app-field-error" id="add-file-error" hidden></p></div>' : ""}<div class="add-document-recovery" hidden></div></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button" data-submit>${uploading ? "Create document and upload" : "Create document"}</button></div></form></div>`;
+    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><form novalidate><div class="app-dialog-head"><div><button class="text-link add-document-back" type="button" data-back>← Choose another option</button><h2 id="add-document-title" tabindex="-1">${uploading ? "Upload a document" : "Create an empty document"}</h2><p id="add-document-desc">${uploading ? "Add document details and the first file. A draft revision will be created automatically." : "Reserve the identity now. An empty draft will be ready for upload."}</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><p class="app-dialog-error" role="alert" hidden></p><div class="app-dialog-body"><div class="app-field-row"><div class="app-field"><label for="add-type">Document type</label><select id="add-type" name="recordType">${TYPE_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></div><div class="app-field"><label for="add-discipline">Discipline</label><select id="add-discipline" name="discipline"><option value="">Select discipline</option>${DISCIPLINE_OPTIONS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("")}</select></div></div><div class="app-field"><label for="add-title">Title <span aria-hidden="true">*</span></label><input id="add-title" name="title" required autocomplete="off" aria-describedby="add-title-error"><p class="app-field-error" id="add-title-error" hidden></p></div><div class="app-field"><label for="add-description">Description</label><textarea id="add-description" name="description" rows="2"></textarea></div><div class="app-field"><label for="add-summary">Initial change summary <span aria-hidden="true">*</span></label><textarea id="add-summary" name="changeSummary" rows="2" required aria-describedby="add-summary-error">Initial document</textarea><p class="app-field-error" id="add-summary-error" hidden></p></div>${uploading ? '<div class="app-field add-document-file"><label for="add-file">Document file <span aria-hidden="true">*</span></label><input id="add-file" name="file" type="file" required aria-describedby="add-file-error"><p class="app-field-error" id="add-file-error" hidden></p></div>' : ""}<div class="add-document-recovery" hidden></div></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button" data-submit>${uploading ? "Create document and upload" : "Create document"}</button></div></form></div>`;
   }
 
   function renderChoice() {
@@ -108,7 +109,7 @@ export function createAddDocumentForm({
     banner.hidden = false;
     const recovery = overlay.querySelector(".add-document-recovery");
     if (recoveryHref) {
-      recovery.innerHTML = `<p>Your completed work is safe.</p><a href="${recoveryHref}" data-recovery>${escapeHtml(recoveryLabel)}</a>`;
+      recovery.innerHTML = `<p>Your completed work is safe.${createdRecord?.recordNumber ? ` Document ${escapeHtml(createdRecord.recordNumber)} was created.` : ""}</p><a href="${recoveryHref}" data-recovery>${escapeHtml(recoveryLabel)}</a>`;
       recovery.hidden = false;
       recovery.querySelector("a")?.addEventListener("click", (event) => {
         event.preventDefault();
@@ -143,7 +144,6 @@ export function createAddDocumentForm({
     const recordInput = {
       recordType: value("recordType"),
       title: value("title"),
-      ...(value("recordNumber") ? { recordNumber: value("recordNumber") } : {}),
       ...(value("discipline") ? { discipline: value("discipline") } : {}),
       ...(value("description") ? { description: value("description") } : {}),
     };
@@ -170,8 +170,8 @@ export function createAddDocumentForm({
       if (closed) return;
       announce?.(
         mode === "upload"
-          ? "Document created and uploaded."
-          : "Document and draft created.",
+          ? `Document ${createdRecord.recordNumber} created and uploaded.`
+          : `Document ${createdRecord.recordNumber} and draft created.`,
       );
       close({ restoreFocus: false });
       onSuccess?.({ record: createdRecord, revision: createdRevision });

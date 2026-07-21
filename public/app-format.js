@@ -2,6 +2,7 @@
 // modules. Human-readable labels for statuses, purposes, attention reasons, and
 // activity descriptions live here in one consistent layer so no two views
 // derive conflicting text.
+export { disciplineLabel } from "./record-options.js";
 
 export function escapeHtml(value) {
   return String(value == null ? "" : value)
@@ -126,17 +127,17 @@ export function revisionStatusLabel(status) {
   return REVISION_STATUS_LABELS[status] || status;
 }
 
-// The current published revision, spoken as "Revision <label|number>" so the
-// revision identity is never confused with the record identity. Returns null
-// when the record has no current revision.
+export function revisionName(revision) {
+  if (!revision) return "";
+  const number = Number(revision.revisionNumber);
+  const label = String(revision.revisionLabel ?? "").trim();
+  const numbered = Number.isFinite(number) ? `Rev ${number}` : "Revision";
+  return label ? `${numbered} · ${label}` : numbered;
+}
+
 export function currentRevisionText(currentRevision) {
   if (!currentRevision) return null;
-  const name =
-    currentRevision.revisionLabel != null &&
-    String(currentRevision.revisionLabel).trim() !== ""
-      ? currentRevision.revisionLabel
-      : currentRevision.revisionNumber;
-  return `Revision ${name}`;
+  return revisionName(currentRevision);
 }
 
 export function actorLabel(event) {

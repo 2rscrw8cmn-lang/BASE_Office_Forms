@@ -123,6 +123,23 @@ const workspace = {
       isCurrent: true,
       capabilities: { uploadFile: false, publishRevision: false },
     },
+    {
+      id: "rev-0",
+      revisionNumber: 0,
+      revisionLabel: "PRELIMINARY",
+      title: "Second Floor Plan",
+      description: null,
+      discipline: "ARCH",
+      source: null,
+      changeSummary: "Preliminary coordination",
+      status: "superseded",
+      createdAt: "2026-06-28T00:00:00Z",
+      fileCount: 1,
+      files: [],
+      issuanceCount: 0,
+      isCurrent: false,
+      capabilities: { uploadFile: false, publishRevision: false },
+    },
   ],
   totalFileCount: 3,
   capabilities: {
@@ -213,23 +230,26 @@ describe("record detail workspace", () => {
     expect(
       document
         .querySelector(".record-detail-view")
-        ?.classList.contains("app-container-standard"),
+        ?.classList.contains("app-container-register"),
     ).toBe(true);
-    expect(document.querySelector(".record-back-link")?.textContent).toContain(
-      "Back to Document Register",
-    );
+    expect(
+      document.querySelector(".document-breadcrumbs")?.textContent,
+    ).toContain("Documents");
     expect(
       document.querySelector(".document-work-panel")?.textContent,
-    ).toContain("Revision B");
+    ).toContain("Rev 2 · B");
     expect(
       document.querySelector(".document-work-panel")?.textContent,
     ).toContain("A-201-coordination.pdf");
     expect(document.querySelector(".document-history")?.textContent).toContain(
-      "Revision A",
+      "Rev 0 · PRELIMINARY",
     );
     expect(
       document.querySelector(".document-history")?.textContent,
-    ).not.toContain("Revision B");
+    ).not.toContain("Rev 2 · B");
+    expect(
+      document.querySelector(".document-history")?.textContent,
+    ).not.toContain("Rev 1 · A");
     expect(
       document
         .querySelector(".document-revision-table")
@@ -238,8 +258,15 @@ describe("record detail workspace", () => {
     expect(
       document.querySelector(".document-revision-table .open-link"),
     ).not.toBeNull();
-    expect(document.body.textContent.match(/Revision B/g)).toHaveLength(1);
+    expect(document.body.textContent.match(/Rev 2 · B/g)).toHaveLength(2);
     expect(document.body.textContent).not.toContain("Create draft");
+    expect(document.body.textContent).not.toContain("Issue revision");
+    expect(
+      document.querySelector(".document-history thead")?.textContent,
+    ).toContain("Created");
+    expect(
+      document.querySelector(".document-history thead")?.textContent,
+    ).not.toContain("Published");
     expect(
       document.querySelector(
         'a[href="/projects/proj-1/records/rec-1/revisions/rev-2"]',
@@ -290,6 +317,10 @@ describe("record detail workspace", () => {
       "PATCH /api/v2/projects/proj-1/records/rec-1": () => ok({}),
     });
     click(document, "[data-edit-record]");
+    expect(document.querySelector('[name="recordNumber"]')).toBeNull();
+    expect(document.querySelector('[name="discipline"]')?.tagName).toBe(
+      "SELECT",
+    );
     (document.querySelector('[name="title"]') as HTMLInputElement).value =
       "Updated plan";
     submit(document);
@@ -303,6 +334,7 @@ describe("record detail workspace", () => {
     if (typeof patchBody !== "string") throw new Error("Expected JSON body");
     expect(JSON.parse(patchBody)).toMatchObject({ title: "Updated plan" });
     expect(JSON.parse(patchBody)).not.toHaveProperty("recordType");
+    expect(JSON.parse(patchBody)).not.toHaveProperty("recordNumber");
     await waitFor(() => {
       expect(
         fetch.mock.calls.filter(([input]) => {
@@ -316,6 +348,31 @@ describe("record detail workspace", () => {
         }),
       ).toHaveLength(2);
     });
+  });
+
+  it("routes the header action to the revision workspace and file action to content", async () => {
+    const publishedOnly = {
+      ...workspace,
+      revisions: workspace.revisions.slice(1),
+      totalFileCount: 3,
+    };
+    const { document } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok(publishedOnly),
+    });
+    expect(
+      document
+        .querySelector(".document-header-actions .primary-button")
+        ?.getAttribute("href"),
+    ).toBe("/projects/proj-1/records/rec-1/revisions/rev-1");
+    expect(
+      document.querySelector(".document-file-card a")?.getAttribute("href"),
+    ).toBe(
+      "/api/v2/projects/proj-1/records/rec-1/revisions/rev-1/files/file-current/content",
+    );
+    expect(document.querySelector(".document-file-card a")?.textContent).toBe(
+      "View file",
+    );
   });
 
   it("creates a new revision only when no draft exists and sends no revision number", async () => {

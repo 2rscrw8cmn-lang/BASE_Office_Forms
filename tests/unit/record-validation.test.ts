@@ -22,24 +22,21 @@ describe("record domain validation", () => {
     expect(
       validateRecordMetadata({
         recordType: "drawing",
-        recordNumber: "  A-101  ",
         title: "  Floor plan  ",
         description: "   ",
-        discipline: " Architecture ",
+        discipline: " architectural ",
         source: null,
       }),
     ).toEqual({
       recordType: "drawing",
-      recordNumber: "A-101",
       title: "Floor plan",
       description: null,
-      discipline: "Architecture",
+      discipline: "architectural",
       source: null,
     });
     expect(() =>
       validateRecordMetadata({
         recordType: "rfi",
-        recordNumber: null,
         title: "Valid title",
         description: null,
         discipline: null,
@@ -49,7 +46,6 @@ describe("record domain validation", () => {
     expect(() =>
       validateRecordMetadata({
         recordType: "document",
-        recordNumber: null,
         title: "  ",
         description: null,
         discipline: null,
@@ -59,12 +55,38 @@ describe("record domain validation", () => {
     expect(() =>
       validateRecordMetadata({
         recordType: "document",
-        recordNumber: "  ",
         title: "Valid title",
         description: null,
-        discipline: null,
+        discipline: "Architecture",
         source: null,
       }),
+    ).toThrow(RecordValidationError);
+  });
+
+  it("allows an existing legacy discipline only when it remains unchanged", () => {
+    expect(
+      validateRecordMetadata(
+        {
+          recordType: "document",
+          title: "Legacy document",
+          description: null,
+          discipline: "ARCH",
+          source: null,
+        },
+        { existingDiscipline: "ARCH" },
+      ).discipline,
+    ).toBe("ARCH");
+    expect(() =>
+      validateRecordMetadata(
+        {
+          recordType: "document",
+          title: "Legacy document",
+          description: null,
+          discipline: "Different legacy value",
+          source: null,
+        },
+        { existingDiscipline: "ARCH" },
+      ),
     ).toThrow(RecordValidationError);
   });
 });

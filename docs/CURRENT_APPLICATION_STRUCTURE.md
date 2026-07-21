@@ -25,6 +25,7 @@ Browser
 ├── public/add-document-form.js                Guided Add Document workflow
 ├── public/record-detail-view.js               Document-first Record workspace
 ├── public/revision-detail-view.js             Revision file/publish workspace
+├── public/record-options.js                    Shared controlled discipline vocabulary
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
@@ -43,6 +44,7 @@ Storage
 │   ├── folders
 │   ├── documents
 │   ├── records
+│   ├── project_record_sequences
 │   ├── record_revisions
 │   ├── record_revision_sequences
 │   ├── revision_files
@@ -274,13 +276,14 @@ D1 query per project (`D1ProjectRecordsReadRepository`) behind
 `ProjectRecordsReadModelService`, so the browser never fans out per record,
 revision, or file.
 
-The register renders a semantic desktop table (Record, Type, Discipline, Current
-revision, Revision status, Files, Created, Actions) and a mobile card list from
+The register renders a semantic desktop table (Record, Type, Discipline,
+Revision, Files, Updated) and a mobile card list from
 the same data. The record title is the primary text with the record number as
 secondary metadata; drafts show a "Draft in progress" badge beside the record
 without masquerading as the current revision; the current revision reads as
-"Revision <label|number>" with a separate revision-status badge, or "No
-published revision" when absent; record status and revision status stay distinct.
+`Rev <number> · <optional label>` with a separate revision-status label, or "No
+revision" when absent; record status and revision status stay distinct. Revision
+numbers are always shown even when a human label exists.
 Archived records are excluded by default, clearly labelled when shown, and stay
 read-only. A cohesive toolbar provides case-insensitive search (title, record
 number, type label, discipline), Type / Discipline / Revision-status filters
@@ -304,6 +307,24 @@ recoverable: if draft creation fails, the already-created document can be
 opened; if upload fails, the dialog reports the request ID and links directly to
 the usable empty draft for retry.
 
+Document disciplines use one shared controlled vocabulary from
+`public/record-options.js` in both the browser and server validation layer:
+General, Civil, Landscape, Structural, Architectural, Interiors, Fire
+Protection, Plumbing, Mechanical, Electrical, Technology / Low Voltage,
+Equipment, Survey, Contractor, Owner, and Other. Create and edit surfaces use a
+select. Unknown legacy values remain readable and may be submitted unchanged,
+but replacing one requires a controlled value; new arbitrary values are
+rejected.
+
+Record numbers are server-generated, immutable, organization/project-scoped
+sequences formatted with a minimum of four digits (`0001`, `0002`, ...). The
+create and update contracts reject client-supplied `recordNumber`. Migration
+`0012_project_record_sequences.sql` adds the concurrency-safe
+`project_record_sequences` table and advances the schema to version 10. A
+project's sequence is lazily bootstrapped from its highest all-numeric legacy
+record number, ignores nonnumeric legacy identifiers, and never reuses a number
+after archive.
+
 The **Record Detail** workspace loads one additive read model from
 `GET /api/v2/projects/:projectId/records/:recordId/workspace`; the existing
 record-detail GET contract is unchanged. The safe response contains record
@@ -318,20 +339,24 @@ and counts files without browser fan-out or per-revision queries. Both
 current. Storage keys, organization IDs, creator IDs, raw state, and
 authorization rationale are not returned.
 
-The full-width workspace presents a compact document identity and makes the
-actual current-work or published files the visual focus. A single draft appears
-only in Current work and is excluded from adjacent history; multiple drafts are
-listed without inventing an authoritative one. Empty drafts lead with Upload
-document, drafts with files lead into their file/publish workflow, and a
-published document offers its current file plus the next-revision action.
-Published and superseded history includes file and issuance counts and becomes
-cards on mobile. Metadata is collapsed below the document content. Edit and
-Archive sit in a restrained options menu. Archived documents retain files and
-history but expose no mutation controls.
+The full-width workspace presents a compact two-row document header: breadcrumb,
+title/status/actions, then number, type, discipline, authoritative revision,
+revision status, and factual issuance status. The current work/revision panel
+makes files the visual focus. A single draft appears only in Current work and is
+excluded from adjacent history; multiple drafts are listed without inventing an
+authoritative one. Empty drafts lead with Upload document, drafts with files
+lead into their file/publish workflow, and a published document links **View
+current revision** to the Revision workspace while each **View file** link uses
+the scoped content route. Previous Revisions excludes the current revision and
+uses `Created` for `createdAt`; it never relabels that timestamp as Published.
+Issuance is factual status only and the workspace does not offer an Issue action.
+Metadata is collapsed below the document content. Edit and Archive sit in a
+restrained overflow menu. Archived documents retain files and history but expose
+no mutation controls.
 
 The canonical Revision route is now a real authenticated workspace backed by
 `GET /api/v2/projects/:projectId/records/:recordId/revisions/:revisionId/workspace`.
-It shows parent document identity, revision label/number, status, current marker,
+It shows parent document identity, `Rev <number> · <optional label>`, status, current marker,
 change summary, date, issuance count, and every file with a scoped content URL.
 Editable drafts expose multipart upload and publish actions only through
 server-derived capabilities. Upload failures retain the selected file name and
