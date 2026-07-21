@@ -38,13 +38,18 @@ export function createApiClient(options = {}) {
   if (!fetchImpl)
     throw new Error("An API client requires a fetch implementation.");
 
-  async function request(path, { method = "GET", body, signal, headers } = {}) {
+  async function request(
+    path,
+    { method = "GET", body, rawBody, signal, headers } = {},
+  ) {
     const finalHeaders = { Accept: "application/json", ...(headers || {}) };
     const init = { method, headers: finalHeaders };
     if (signal) init.signal = signal;
     if (body !== undefined) {
       finalHeaders["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
+    } else if (rawBody !== undefined) {
+      init.body = rawBody;
     }
 
     let response;
@@ -134,6 +139,24 @@ export function createApiClient(options = {}) {
       request(
         `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions`,
         { ...(opts || {}), method: "POST", body: input },
+      ),
+    getRevisionWorkspace: (projectId, recordId, revisionId, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions/${encodeURIComponent(revisionId)}/workspace`,
+        opts,
+      ),
+    uploadRevisionFile: (projectId, recordId, revisionId, file, opts) => {
+      const form = new FormData();
+      form.append("file", file);
+      return request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions/${encodeURIComponent(revisionId)}/files`,
+        { ...(opts || {}), method: "POST", rawBody: form },
+      );
+    },
+    publishRevision: (projectId, recordId, revisionId, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions/${encodeURIComponent(revisionId)}/publish`,
+        { ...(opts || {}), method: "POST" },
       ),
   };
 }

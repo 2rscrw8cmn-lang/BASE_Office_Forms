@@ -16,6 +16,7 @@ import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repo
 import { D1ProjectRecordsReadRepository } from "../../src/infrastructure/db/d1/project-records-read-repository";
 import { ProjectRecordsReadModelService } from "../../src/application/read-models/project-records-service";
 import { RecordWorkspaceReadModelService } from "../../src/application/read-models/record-workspace-service";
+import { RevisionWorkspaceReadModelService } from "../../src/application/read-models/revision-workspace-service";
 import { D1RecordWorkspaceReadRepository } from "../../src/infrastructure/db/d1/record-workspace-read-repository";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 import { invokeV2Api } from "../helpers/api";
@@ -71,6 +72,10 @@ function dependencies(): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
+  const recordWorkspace = new RecordWorkspaceReadModelService(
+    projects,
+    new D1RecordWorkspaceReadRepository(database),
+  );
   return {
     authenticationAdapter: new FixtureAuthenticationAdapter(),
     organizations: new OrganizationService(
@@ -83,10 +88,8 @@ function dependencies(): V2RouteDependencies {
       projects,
       new D1ProjectRecordsReadRepository(database),
     ),
-    recordWorkspace: new RecordWorkspaceReadModelService(
-      projects,
-      new D1RecordWorkspaceReadRepository(database),
-    ),
+    recordWorkspace,
+    revisionWorkspace: new RevisionWorkspaceReadModelService(recordWorkspace),
   };
 }
 
@@ -276,6 +279,8 @@ describe("records foundation API", () => {
           status: "draft",
           fileCount: 1,
           isCurrent: false,
+          files: [{ id: "file-draft", originalFilename: "draft.pdf" }],
+          capabilities: { uploadFile: true, publishRevision: true },
         },
         {
           id: "rev-current",
@@ -283,6 +288,8 @@ describe("records foundation API", () => {
           status: "published",
           fileCount: 1,
           isCurrent: true,
+          files: [{ id: "file-current", originalFilename: "current.pdf" }],
+          capabilities: { uploadFile: false, publishRevision: false },
         },
       ],
       totalFileCount: 2,
@@ -295,6 +302,24 @@ describe("records foundation API", () => {
     expect(JSON.stringify(model)).not.toContain("organizationId");
     expect(JSON.stringify(model)).not.toContain("storage_key");
     expect(JSON.stringify(model)).not.toContain("private/current.pdf");
+
+    const revisionWorkspace = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/revisions/rev-draft/workspace`,
+      request("admin"),
+      dependencies(),
+    );
+    expect(revisionWorkspace.status).toBe(200);
+    await expect(revisionWorkspace.json()).resolves.toMatchObject({
+      data: {
+        record: { id: record.id },
+        revision: {
+          id: "rev-draft",
+          files: [{ id: "file-draft", originalFilename: "draft.pdf" }],
+          capabilities: { uploadFile: true, publishRevision: true },
+        },
+        currentRevisionId: "rev-current",
+      },
+    });
 
     const wrongProject = await invokeV2Api(
       `/api/v2/projects/not-${project.id}/records/${record.id}/workspace`,

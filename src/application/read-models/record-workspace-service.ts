@@ -16,6 +16,11 @@ export interface RecordWorkspaceReadModel extends RecordWorkspaceData {
   };
 }
 
+export interface RecordWorkspaceRevisionCapabilities {
+  uploadFile: boolean;
+  publishRevision: boolean;
+}
+
 export class RecordWorkspaceReadModelService {
   constructor(
     private readonly projects: ProjectService,
@@ -35,6 +40,7 @@ export class RecordWorkspaceReadModelService {
       actor,
       projectId,
     );
+    const fileAccess = await this.projects.resolveFileAccess(actor, projectId);
     const data = await this.reads.find(
       actor.organizationId,
       recordAccess.project.id,
@@ -42,10 +48,19 @@ export class RecordWorkspaceReadModelService {
     );
     if (!data) throw new RecordNotFoundError();
     const active = data.record.status === "active";
+    const revisions = data.revisions.map((revision) => ({
+      ...revision,
+      capabilities: {
+        uploadFile:
+          active && revision.status === "draft" && fileAccess.canManage,
+        publishRevision:
+          active && revision.status === "draft" && revisionAccess.canManage,
+      } satisfies RecordWorkspaceRevisionCapabilities,
+    }));
     return {
       ...data,
-      currentRevision:
-        data.revisions.find((revision) => revision.isCurrent) ?? null,
+      revisions,
+      currentRevision: revisions.find((revision) => revision.isCurrent) ?? null,
       capabilities: {
         updateRecord: active && recordAccess.canManage,
         archiveRecord: active && recordAccess.canManage,

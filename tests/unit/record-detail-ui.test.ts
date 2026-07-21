@@ -45,7 +45,25 @@ const workspace = {
     status: "published",
     createdAt: "2026-07-01T00:00:00Z",
     fileCount: 2,
+    files: [
+      {
+        id: "file-current",
+        originalFilename: "A-201-current.pdf",
+        mediaType: "application/pdf",
+        byteSize: 2048,
+        uploadedAt: "2026-07-01T00:00:00Z",
+      },
+      {
+        id: "file-current-2",
+        originalFilename: "A-201-notes.txt",
+        mediaType: "text/plain",
+        byteSize: 128,
+        uploadedAt: "2026-07-01T00:00:00Z",
+      },
+    ],
+    issuanceCount: 1,
     isCurrent: true,
+    capabilities: { uploadFile: false, publishRevision: false },
   },
   revisions: [
     {
@@ -60,7 +78,18 @@ const workspace = {
       status: "draft",
       createdAt: "2026-07-02T00:00:00Z",
       fileCount: 1,
+      files: [
+        {
+          id: "file-draft",
+          originalFilename: "A-201-coordination.pdf",
+          mediaType: "application/pdf",
+          byteSize: 4096,
+          uploadedAt: "2026-07-02T00:00:00Z",
+        },
+      ],
+      issuanceCount: 0,
       isCurrent: false,
+      capabilities: { uploadFile: true, publishRevision: true },
     },
     {
       id: "rev-1",
@@ -74,7 +103,25 @@ const workspace = {
       status: "published",
       createdAt: "2026-07-01T00:00:00Z",
       fileCount: 2,
+      files: [
+        {
+          id: "file-current",
+          originalFilename: "A-201-current.pdf",
+          mediaType: "application/pdf",
+          byteSize: 2048,
+          uploadedAt: "2026-07-01T00:00:00Z",
+        },
+        {
+          id: "file-current-2",
+          originalFilename: "A-201-notes.txt",
+          mediaType: "text/plain",
+          byteSize: 128,
+          uploadedAt: "2026-07-01T00:00:00Z",
+        },
+      ],
+      issuanceCount: 1,
       isCurrent: true,
+      capabilities: { uploadFile: false, publishRevision: false },
     },
   ],
   totalFileCount: 3,
@@ -136,7 +183,7 @@ async function mount(overrides: Partial<Record<string, () => Response>> = {}) {
   shells.push(shell);
   await shell.ready;
   await waitFor(() => {
-    expect(document.querySelector(".record-detail-header")).not.toBeNull();
+    expect(document.querySelector(".document-identity")).not.toBeNull();
   });
   return { window, document, fetch };
 }
@@ -158,19 +205,25 @@ function submit(document: Document) {
 }
 
 describe("record detail workspace", () => {
-  it("loads one workspace endpoint and renders authoritative current, drafts, semantic history, and metadata", async () => {
+  it("loads one workspace endpoint and presents draft work without duplicating it in history", async () => {
     const { document, fetch } = await mount();
     expect(document.querySelector("#page-title")?.textContent).toBe(
       "Second Floor Plan",
     );
-    expect(document.querySelector(".record-current")?.textContent).toContain(
-      "Rev A",
+    expect(
+      document.querySelector(".document-work-panel")?.textContent,
+    ).toContain("Revision B");
+    expect(
+      document.querySelector(".document-work-panel")?.textContent,
+    ).toContain("A-201-coordination.pdf");
+    expect(document.querySelector(".document-history")?.textContent).toContain(
+      "Revision A",
     );
-    expect(document.querySelector(".record-drafts")?.textContent).toContain(
-      "Rev B",
-    );
-    expect(document.querySelector(".record-history table")).not.toBeNull();
-    expect(document.querySelector(".record-history-cards")).not.toBeNull();
+    expect(
+      document.querySelector(".document-history")?.textContent,
+    ).not.toContain("Revision B");
+    expect(document.body.textContent.match(/Revision B/g)).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("Create draft");
     expect(
       document.querySelector(
         'a[href="/projects/proj-1/records/rec-1/revisions/rev-2"]',
@@ -185,6 +238,35 @@ describe("record detail workspace", () => {
     );
     expect(urls.filter((url) => url.includes("/workspace"))).toHaveLength(1);
     expect(urls.some((url) => /\/revisions$/.test(url))).toBe(false);
+  });
+
+  it("shows one upload-first action for an empty draft", async () => {
+    const emptyDraft = {
+      ...workspace,
+      revisions: [
+        {
+          ...workspace.revisions[0],
+          fileCount: 0,
+          files: [],
+        },
+        workspace.revisions[1],
+      ],
+      totalFileCount: 2,
+    };
+    const { document } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok(emptyDraft),
+    });
+    expect(
+      document.querySelector(".document-upload-empty")?.textContent,
+    ).toContain("No document file yet");
+    expect(document.querySelectorAll(".document-primary-action")).toHaveLength(
+      1,
+    );
+    expect(
+      document.querySelector(".document-primary-action")?.textContent,
+    ).toBe("Upload document");
+    expect(document.querySelector("[data-create-revision]")).toBeNull();
   });
 
   it("edits only mutable fields and reloads after server confirmation", async () => {
@@ -220,12 +302,19 @@ describe("record detail workspace", () => {
     });
   });
 
-  it("creates a draft without a revision number and navigates to its canonical route", async () => {
+  it("creates a new revision only when no draft exists and sends no revision number", async () => {
+    const publishedOnly = {
+      ...workspace,
+      revisions: [workspace.revisions[1]],
+      totalFileCount: 2,
+    };
     const { document, window, fetch } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok(publishedOnly),
       "POST /api/v2/projects/proj-1/records/rec-1/revisions": () =>
         ok({ id: "rev-3" }, 201),
     });
-    click(document, ".record-detail-actions [data-create-revision]");
+    click(document, "[data-create-revision]");
     (
       document.querySelector('[name="changeSummary"]') as HTMLTextAreaElement
     ).value = "New coordination";
@@ -262,13 +351,14 @@ describe("record detail workspace", () => {
       "GET /api/v2/projects/proj-1/records/rec-1/workspace": () => ok(archived),
     });
     expect(
-      document.querySelector(".record-archived-note")?.textContent,
+      document.querySelector(".document-read-only")?.textContent,
     ).toContain("read-only");
     expect(
       document.querySelector(
         "[data-edit-record], [data-archive-record], [data-create-revision]",
       ),
     ).toBeNull();
-    expect(document.querySelector(".record-history a")).not.toBeNull();
+    expect(document.querySelector(".document-history a")).not.toBeNull();
+    expect(document.querySelector(".document-file-card a")).not.toBeNull();
   });
 });

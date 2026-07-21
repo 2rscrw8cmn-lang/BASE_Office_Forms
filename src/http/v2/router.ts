@@ -190,7 +190,7 @@ export async function routeV2Request(
     );
   }
   const revisionRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions(?:\/([^/]+)(?:\/(publish))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions(?:\/([^/]+)(?:\/(publish|workspace))?)?$/,
   );
   if (revisionRoute && dependencies) {
     return handleRevisionRoute(
@@ -431,7 +431,9 @@ async function handleRevisionRoute(
   action: string | undefined,
 ): Promise<Response> {
   const allowedMethods = action
-    ? ["POST"]
+    ? action === "workspace"
+      ? ["GET"]
+      : ["POST"]
     : revisionId
       ? ["GET"]
       : ["GET", "POST"];
@@ -442,6 +444,24 @@ async function handleRevisionRoute(
     allowedMethods,
   );
   if (authenticated instanceof Response) return authenticated;
+  if (action === "workspace") {
+    if (!revisionId) return projectError(context, new RevisionNotFoundError());
+    const workspace = dependencies.revisionWorkspace;
+    if (!workspace) return unavailable(context);
+    try {
+      return apiSuccess(
+        context,
+        await workspace.load(
+          authenticated.session,
+          projectId,
+          recordId,
+          revisionId,
+        ),
+      );
+    } catch (error) {
+      return projectError(context, error);
+    }
+  }
   const revisions = dependencies.revisions;
   const records = dependencies.records;
   if (!revisions || !records) return unavailable(context);

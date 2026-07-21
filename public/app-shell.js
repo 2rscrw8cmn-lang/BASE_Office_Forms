@@ -10,6 +10,7 @@ import { createProjectsView } from "./projects-view.js";
 import { createProjectOverviewView } from "./project-overview-view.js";
 import { createRecordsView } from "./records-view.js";
 import { createRecordDetailView } from "./record-detail-view.js";
+import { createRevisionDetailView } from "./revision-detail-view.js";
 
 const iconPaths = {
   dashboard:
@@ -287,7 +288,9 @@ export function createAppShell(options = {}) {
             ? `<div class="feature-view" data-feature="records"></div>`
             : route.id === "record-detail"
               ? `<div class="feature-view" data-feature="record-detail"></div>`
-              : renderPlaceholder(route);
+              : route.id === "revision-detail"
+                ? `<div class="feature-view" data-feature="revision-detail"></div>`
+                : renderPlaceholder(route);
       return `${renderProjectHeader(route)}${renderProjectTabs(route)}<div class="project-route-content">${inner}</div>`;
     }
     return renderPlaceholder(route);
@@ -320,6 +323,16 @@ export function createAppShell(options = {}) {
         recordId,
       };
     }
+    if (route.id === "revision-detail") {
+      const { projectId, recordId, revisionId } = route.params || {};
+      return {
+        key: `revision-detail:${projectId}:${recordId}:${revisionId}`,
+        kind: "revision-detail",
+        projectId,
+        recordId,
+        revisionId,
+      };
+    }
     return null;
   }
 
@@ -346,6 +359,13 @@ export function createAppShell(options = {}) {
         ...shared,
         projectId: descriptor.projectId,
         recordId: descriptor.recordId,
+      });
+    if (descriptor.kind === "revision-detail")
+      return createRevisionDetailView({
+        ...shared,
+        projectId: descriptor.projectId,
+        recordId: descriptor.recordId,
+        revisionId: descriptor.revisionId,
       });
     return createProjectOverviewView({
       ...shared,

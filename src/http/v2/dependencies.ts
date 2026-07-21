@@ -6,6 +6,7 @@ import { DashboardReadModelService } from "../../application/read-models/dashboa
 import { ProjectOverviewReadModelService } from "../../application/read-models/project-overview-service";
 import { ProjectRecordsReadModelService } from "../../application/read-models/project-records-service";
 import { RecordWorkspaceReadModelService } from "../../application/read-models/record-workspace-service";
+import { RevisionWorkspaceReadModelService } from "../../application/read-models/revision-workspace-service";
 import { RfiService } from "../../application/rfis/rfi-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
@@ -61,6 +62,7 @@ export interface V2RouteDependencies {
   projectOverview?: ProjectOverviewReadModelService;
   projectRecords?: ProjectRecordsReadModelService;
   recordWorkspace?: RecordWorkspaceReadModelService;
+  revisionWorkspace?: RevisionWorkspaceReadModelService;
 }
 
 export function createV2RouteDependencies(
@@ -90,6 +92,10 @@ export function createV2RouteDependencies(
     audience: environment.CF_ACCESS_AUD,
   };
 
+  const recordWorkspace = new RecordWorkspaceReadModelService(
+    projects,
+    new D1RecordWorkspaceReadRepository(environment.DB),
+  );
   return {
     authenticationAdapter: new CloudflareAccessAuthenticationAdapter(
       sessions,
@@ -138,9 +144,7 @@ export function createV2RouteDependencies(
       projects,
       new D1ProjectRecordsReadRepository(environment.DB),
     ),
-    recordWorkspace: new RecordWorkspaceReadModelService(
-      projects,
-      new D1RecordWorkspaceReadRepository(environment.DB),
-    ),
+    recordWorkspace,
+    revisionWorkspace: new RevisionWorkspaceReadModelService(recordWorkspace),
   };
 }

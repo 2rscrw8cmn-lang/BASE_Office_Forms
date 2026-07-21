@@ -120,7 +120,7 @@ export function createEditRecordDialog({
   const value = (item) => escapeHtml(item ?? "");
   return createDialog({
     document,
-    title: "Edit record",
+    title: "Edit document details",
     description: `${recordTypeLabel(record.recordType)} record metadata`,
     submitLabel: "Save changes",
     onClose,
@@ -142,7 +142,7 @@ export function createEditRecordDialog({
         discipline: inputValue(overlay, "discipline") || null,
         source: inputValue(overlay, "source") || null,
       });
-      announce?.("Record updated.");
+      announce?.("Document details updated.");
       onSuccess?.();
     },
   });
@@ -159,16 +159,16 @@ export function createArchiveRecordDialog({
 }) {
   return createDialog({
     document,
-    title: "Archive record?",
+    title: "Archive document?",
     description:
-      "This record and its revision history will remain available, but the record will become read-only and new revisions cannot be created.",
-    body: `<p>Archive <strong>${escapeHtml(record.title)}</strong>?</p>`,
-    submitLabel: "Archive record",
+      "This document and its revision history will remain available, but it will become read-only and no new revisions can be created.",
+    body: `<p><strong>${escapeHtml(record.recordNumber || "Unnumbered document")} · ${escapeHtml(record.title)}</strong></p>`,
+    submitLabel: "Archive document",
     destructive: true,
     onClose,
     onSubmit: async () => {
       await api.archiveRecord(projectId, record.id);
-      announce?.("Record archived.");
+      announce?.("Document archived.");
       onSuccess?.();
     },
   });

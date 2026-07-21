@@ -28,7 +28,17 @@ export interface RecordWorkspaceRevision {
   status: RevisionStatus;
   createdAt: string;
   fileCount: number;
+  files: RecordWorkspaceFile[];
+  issuanceCount: number;
   isCurrent: boolean;
+}
+
+export interface RecordWorkspaceFile {
+  id: string;
+  originalFilename: string;
+  mediaType: string;
+  byteSize: number;
+  uploadedAt: string;
 }
 
 export interface RecordWorkspaceData {
@@ -61,7 +71,12 @@ interface WorkspaceRow {
   change_summary: string | null;
   revision_status: RevisionStatus | null;
   revision_created_at: string | null;
-  file_count: number;
+  file_id: string | null;
+  original_filename: string | null;
+  media_type: string | null;
+  byte_size: number | null;
+  uploaded_at: string | null;
+  issuance_count: number;
 }
 
 /** One scoped query returns the record, every revision, and aggregate file counts. */
@@ -85,7 +100,13 @@ export class D1RecordWorkspaceReadRepository {
            rev.description AS revision_description,
            rev.discipline AS revision_discipline, rev.source AS revision_source,
            rev.change_summary, rev.status AS revision_status,
-           rev.created_at AS revision_created_at, COUNT(f.id) AS file_count
+           rev.created_at AS revision_created_at,
+           f.id AS file_id, f.original_filename, f.media_type, f.byte_size,
+           f.uploaded_at,
+           (SELECT COUNT(*) FROM issuances i
+              WHERE i.organization_id = r.organization_id
+                AND i.project_id = r.project_id AND i.record_id = r.id
+                AND i.revision_id = rev.id) AS issuance_count
          FROM records r
          LEFT JOIN record_revisions rev
            ON rev.organization_id = r.organization_id
@@ -95,36 +116,60 @@ export class D1RecordWorkspaceReadRepository {
           AND f.project_id = r.project_id AND f.record_id = r.id
           AND f.revision_id = rev.id
          WHERE r.organization_id = ?1 AND r.project_id = ?2 AND r.id = ?3
-         GROUP BY r.id, rev.id
-         ORDER BY rev.revision_number DESC, rev.id ASC`,
+         ORDER BY rev.revision_number DESC, rev.id ASC,
+                  f.uploaded_at ASC, f.id ASC`,
       )
       .bind(organizationId, projectId, recordId)
       .all<WorkspaceRow>();
     if (!result.results.length) return null;
     const first = result.results[0];
-    const revisions = result.results.flatMap((row) =>
-      row.revision_id === null ||
-      row.revision_number === null ||
-      row.revision_status === null ||
-      row.revision_created_at === null
-        ? []
-        : [
-            {
-              id: row.revision_id,
-              revisionNumber: row.revision_number,
-              revisionLabel: row.revision_label,
-              title: row.revision_title ?? "",
-              description: row.revision_description,
-              discipline: row.revision_discipline,
-              source: row.revision_source,
-              changeSummary: row.change_summary ?? "",
-              status: row.revision_status,
-              createdAt: row.revision_created_at,
-              fileCount: row.file_count,
-              isCurrent: row.revision_id === row.current_revision_id,
-            },
-          ],
-    );
+    const revisionsById = new Map<string, RecordWorkspaceRevision>();
+    for (const row of result.results) {
+      if (
+        row.revision_id === null ||
+        row.revision_number === null ||
+        row.revision_status === null ||
+        row.revision_created_at === null
+      )
+        continue;
+      let revision = revisionsById.get(row.revision_id);
+      if (!revision) {
+        revision = {
+          id: row.revision_id,
+          revisionNumber: row.revision_number,
+          revisionLabel: row.revision_label,
+          title: row.revision_title ?? "",
+          description: row.revision_description,
+          discipline: row.revision_discipline,
+          source: row.revision_source,
+          changeSummary: row.change_summary ?? "",
+          status: row.revision_status,
+          createdAt: row.revision_created_at,
+          fileCount: 0,
+          files: [],
+          issuanceCount: row.issuance_count,
+          isCurrent: row.revision_id === row.current_revision_id,
+        };
+        revisionsById.set(row.revision_id, revision);
+      }
+      if (
+        row.file_id !== null &&
+        row.original_filename !== null &&
+        row.media_type !== null &&
+        row.byte_size !== null &&
+        row.uploaded_at !== null
+      ) {
+        revision.files.push({
+          id: row.file_id,
+          originalFilename: row.original_filename,
+          mediaType: row.media_type,
+          byteSize: row.byte_size,
+          uploadedAt: row.uploaded_at,
+        });
+        revision.fileCount += 1;
+      }
+    }
+    const revisions = [...revisionsById.values()];
     return {
       record: {
         id: first.record_id,

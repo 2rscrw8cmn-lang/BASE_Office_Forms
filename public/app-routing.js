@@ -43,10 +43,9 @@ const routes = [
   {
     pattern: /^\/projects\/([^/]+)\/records\/([^/]+)\/revisions\/([^/]+)$/,
     id: "revision-detail",
-    title: "Revision detail",
+    title: "Document revision",
     eyebrow: "Records",
-    description:
-      "Revision metadata and files will be implemented in the revisions milestone.",
+    description: "Revision files and publishing workspace.",
     globalSection: "projects",
     projectTab: "records",
     params: ["projectId", "recordId", "revisionId"],
@@ -64,7 +63,7 @@ const routes = [
   {
     pattern: /^\/projects\/([^/]+)\/records$/,
     id: "project-records",
-    title: "Records",
+    title: "Document Register",
     eyebrow: "Project documents",
     description:
       "The project record register will be implemented in the records milestone.",
@@ -201,7 +200,7 @@ export function projectTabHref(projectId, tab) {
 
 export const PROJECT_TABS = Object.freeze([
   { id: "overview", label: "Overview" },
-  { id: "records", label: "Records" },
+  { id: "records", label: "Documents" },
   { id: "issuances", label: "Issuances" },
   { id: "rfis", label: "RFIs" },
   { id: "team", label: "Team" },
