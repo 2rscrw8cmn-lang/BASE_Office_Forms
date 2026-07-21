@@ -12,6 +12,8 @@
   .usebar select { min-width:150px; text-transform:none; }
   .usebar .spacer { flex:1; } .usebar .accent { background:var(--accent); border-color:var(--accent); color:#fff; }
   #notice { width:8.5in; max-width:calc(100% - 24px); margin:0 auto 10px; color:#777; font:500 9px/1.4 var(--code); }
+  .fill-status { padding:4px 8px; border-radius:10px; font:600 8px/1 var(--sans); text-transform:uppercase; letter-spacing:.04em; background:#eeece8; color:#6b6870; }
+  .fill-status[data-state="filled"] { background:#e7f0e9; color:#2f6b45; }
   @media (max-width:620px) { .usebar { top:126px; } }
   @media print { .usebar,#notice,.app-topbar { display:none; } }
 </style>
@@ -28,48 +30,52 @@
   <a href="builder.html">Studio</a>
   <select id="librarySelect"><option value="">Shared form library</option></select><button id="openSaved">Open</button>
   <button id="loadDefinition">Import form backup</button><span class="spacer"></span>
-  <button id="loadAnswers">Import answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Export answers</button><button class="accent" onclick="window.print()">Export PDF</button>
+  <button id="loadAnswers">Import answers</button><button id="resetAnswers" hidden>Reset answers</button><button id="copySpec">Copy AI fill spec</button><button id="downloadAnswers">Export answers</button><button class="accent" onclick="window.print()">Export PDF</button>
+  <span id="fillStatus" class="fill-status" hidden></span>
 </div>
 <div id="notice">Load any form definition created in the studio, then fill it here or import an AI answer file.</div>
 <main id="root"></main>
 <script src="engine.js"></script>
+<script src="form-fill.js"></script>
 <script src="library-api.js"></script>
 <script src="global-search.js"></script>
 <script>
 (function () {
   let definition = BASE.fromTemplate("authorization");
+  let fill = null;
 
   function clean(value) { const copy = BASE.clone(value); delete copy._ready; delete copy._schema; return copy; }
+  function storageKeyFor(def) { return `formgen:${def.no || "draft"}`; }
+  function updateFillStatus() {
+    const status = document.getElementById("fillStatus");
+    if (!fill) { status.hidden = true; return; }
+    status.hidden = false;
+    const filled = !fill.isEmpty();
+    status.dataset.state = filled ? "filled" : "empty";
+    status.textContent = filled ? "Answers saved" : "Not yet filled";
+  }
   function render() {
-    if (definition.kind !== "form") {
-      document.getElementById("root").innerHTML = BASE.render(definition);
-      requestAnimationFrame(() => { BASE.paginate(document.getElementById("root")); BASE.updatePackageIndex(document.getElementById("root")); });
+    const root = document.getElementById("root");
+    if (fill) { fill.detach(); fill = null; }
+    root.innerHTML = BASE.render(definition);
+    requestAnimationFrame(() => { BASE.paginate(root); BASE.updatePackageIndex(root); });
+    const targets = BASE.formFillTargets(definition);
+    const resetAnswers = document.getElementById("resetAnswers");
+    if (targets.length) {
+      document.getElementById("notice").textContent = definition.kind === "form"
+        ? `${definition.no || "Form"} — fields can be typed here or populated from an AI answer JSON file.`
+        : `${definition.no || "Package"} — the fillable forms inside this package can be typed here or populated from an AI answer JSON file.`;
+      fill = BASE_FILL.attach(root, definition, storageKeyFor(definition));
+      resetAnswers.hidden = false;
+      root.addEventListener("input", updateFillStatus);
+      root.addEventListener("change", updateFillStatus);
+    } else {
       document.getElementById("notice").textContent = "This is not a fillable form, but it can be reviewed and exported as PDF.";
-      return;
+      resetAnswers.hidden = true;
     }
-    document.getElementById("root").innerHTML = BASE.render(definition, { fill: true });
-    requestAnimationFrame(() => BASE.paginate(document.getElementById("root")));
-    document.getElementById("notice").textContent = `${definition.no || "Form"} — fields can be typed here or populated from an AI answer JSON file.`;
+    updateFillStatus();
   }
   function prepared() { return BASE.prepareForm(definition); }
-  function values() {
-    const result = {};
-    prepared()._schema.forEach(field => {
-      if (field.type === "text") { const input = document.querySelector(`[name="${field.id}"]`); result[field.id] = input ? input.value : ""; }
-      else if (field.type === "choose_one") { const input = document.querySelector(`[name="${field.id}"]:checked`); result[field.id] = input ? input.value : ""; }
-      else result[field.id] = [...document.querySelectorAll(`[name="${field.id}"]:checked`)].map(input => input.value);
-    });
-    return result;
-  }
-  function applyValues(input) {
-    if (definition.kind !== "form") return;
-    const data = input.answers || input;
-    prepared()._schema.forEach(field => {
-      const value = data[field.id]; if (value == null) return;
-      if (field.type === "text") { const element = document.querySelector(`[name="${field.id}"]`); if (element) element.value = value; }
-      else { const wanted = Array.isArray(value) ? value : [value]; document.querySelectorAll(`[name="${field.id}"]`).forEach(element => element.checked = wanted.includes(element.value)); }
-    });
-  }
   function filePicker(callback) {
     const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
     input.onchange = () => { const reader = new FileReader(); reader.onload = () => { try { callback(JSON.parse(reader.result)); } catch (error) { alert(`Could not read JSON: ${error.message}`); } }; reader.readAsText(input.files[0]); };
@@ -91,8 +97,18 @@
     catch (error) { document.getElementById("notice").textContent = `Could not open form: ${error.message}`; }
   };
   document.getElementById("loadDefinition").onclick = () => filePicker(data => { definition = data.definition || data; render(); });
-  document.getElementById("loadAnswers").onclick = () => filePicker(applyValues);
-  document.getElementById("downloadAnswers").onclick = () => download(`${definition.no || "form"}-answers.json`, { form: definition.no || "", answers: definition.kind === "form" ? values() : {} });
+  document.getElementById("loadAnswers").onclick = () => filePicker(data => {
+    BASE_FILL.apply(document.getElementById("root"), definition, data);
+    if (fill) fill.flush();
+    updateFillStatus();
+  });
+  document.getElementById("downloadAnswers").onclick = () => download(`${definition.no || "form"}-answers.json`, fill ? fill.flush() : BASE_FILL.collect(document.getElementById("root"), definition));
+  document.getElementById("resetAnswers").onclick = () => {
+    if (!fill) return;
+    if (!window.confirm("Clear all answers in this form? This cannot be undone.")) return;
+    fill.reset();
+    updateFillStatus();
+  };
   document.getElementById("copySpec").onclick = async () => {
     if (definition.kind !== "form") return alert("Load a form definition first.");
     const fields = prepared()._schema;
