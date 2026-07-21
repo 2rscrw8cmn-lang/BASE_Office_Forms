@@ -39,7 +39,6 @@
     value.control = value.control || {};
     value.controlVisibility = value.controlVisibility || {};
     value.appearance = value.appearance || {};
-    value.org = value.org || "Office Process & Compliance Division";
     if (value.kind === "form") {
       value.sections = value.sections || [];
       value.sections.forEach(section => {
@@ -140,7 +139,7 @@
       <div class="two">${textInput(isPackage ? "Package No." : (def.kind === "form" ? "Form No." : "Document No."), "no", def.no)}${textInput("Type", "documentType", def.documentType)}</div>
       ${textInput("Title", "title", def.title)}
       ${textInput(isDoc ? "Subtitle" : "Supporting line", isDoc || isPackage ? "subtitle" : "sub", isDoc || isPackage ? def.subtitle : def.sub)}
-      <div class="two">${textInput("Division / Organization", "org", def.org)}${textInput("Header notice", "headerNote", def.headerNote === undefined ? "Controlled Document — Do Not Reproduce" : def.headerNote)}</div>
+      <p class="micro">Branded header — BASE Construction LLC, 1601 Minnesota Ave, Winter Park, FL 32789 — is fixed and can't be changed per document. Toggle it on or off under Appearance &amp; page setup.</p>
       ${def.kind === "form" ? textInput("Display label", "typeLabel", def.typeLabel || "Form") + textArea("Footnotes — one per line", "footnotes", (def.footnotes || []).join("\n"), "lines") : ""}
       ${isDoc || isPackage ? textInput("Cover tag", "tag", def.tag) : ""}
       ${isDoc ? textArea("Summary / standard", "standard", def.standard) + textArea("Issuing authority", "authority", def.authority) : ""}
@@ -238,7 +237,7 @@
     return `<details class="block-picker" data-panel-key="block-picker"${openAttribute("block-picker", true)}><summary>Add a block</summary><div class="addmenu">
       ${pickerGroup("Write & organize", [
         pickerButton(attribute, "prose", "Text section", "Narrative with an optional numbered heading."),
-        pickerButton(attribute, "header", "Header", "The BASE logo alongside your company's contact information."),
+        pickerButton(attribute, "header", "Header", "The BASE logo alongside a company name and contact details you enter."),
         pickerButton(attribute, "list", "List", "Ordered steps or a simple bulleted list."),
         pickerButton(attribute, "table", "Table", "Repeated records arranged in columns and rows."),
         pickerButton(attribute, "keyvalue", "Key / value", "Compact label-and-value document facts.")
@@ -411,7 +410,7 @@
       revisions: { type, heading: "Revision History", columns: ["Revision", "Date", "Author", "Description"], rows: [["1.0", "", "", "Initial issue"]] },
       evidence: { type, heading: "Evidence / Photo Log", columns: ["Photo / File Ref.", "Caption", "Date", "Location"], rows: [["", "", "", ""], ["", "", "", ""]] },
       signatory: { type, name: "Name", role: "Title" },
-      header: { type, companyName: def.org || "", address: "", phone: "", email: "" },
+      header: { type, companyName: "", address: "", phone: "", email: "" },
       pagebreak: { type }
     };
     return BASE.clone(templates[type] || templates.prose);
