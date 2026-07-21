@@ -10,14 +10,15 @@ describe("application routing", () => {
     expect(resolveRoute("/")).toEqual({ redirectTo: "/dashboard" });
   });
 
-  it("resolves global and legacy tool adapter routes", () => {
+  it("resolves the global routes", () => {
     expect(resolveRoute("/dashboard")?.id).toBe("dashboard");
     expect(resolveRoute("/projects")?.id).toBe("projects");
-    expect(resolveRoute("/tools/forms")?.surface).toBe("forms-tool");
-    expect(resolveRoute("/tools/library")?.surface).toBe("library-tool");
-    expect(resolveRoute("/tools/document-library")?.surface).toBe(
-      "library-tool",
-    );
+  });
+
+  it("no longer resolves the retired tools hub routes", () => {
+    expect(resolveRoute("/tools")?.surface).toBe("not-found");
+    expect(resolveRoute("/tools/forms")?.surface).toBe("not-found");
+    expect(resolveRoute("/tools/library")?.surface).toBe("not-found");
   });
 
   it("keeps record descendants on Records", () => {

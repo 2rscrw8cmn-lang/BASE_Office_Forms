@@ -19,35 +19,6 @@ const routes = [
     globalSection: "projects",
   },
   {
-    pattern: /^\/tools$/,
-    id: "tools",
-    title: "Tools",
-    eyebrow: "Existing workspace tools",
-    description: "Open the established Forms and Document Library experiences.",
-    globalSection: "tools",
-    surface: "tools",
-  },
-  {
-    pattern: /^\/tools\/forms$/,
-    id: "tools-forms",
-    title: "Forms",
-    eyebrow: "Tools",
-    description:
-      "Create and maintain BASE forms in the existing Document Studio.",
-    globalSection: "tools",
-    surface: "forms-tool",
-  },
-  {
-    pattern: /^\/tools\/(?:library|document-library)$/,
-    id: "tools-library",
-    title: "Document Library",
-    eyebrow: "Tools",
-    description:
-      "Open the preserved shared library for forms, documents, and packages.",
-    globalSection: "tools",
-    surface: "library-tool",
-  },
-  {
     pattern: /^\/admin$/,
     id: "admin",
     title: "Administration",

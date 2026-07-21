@@ -111,7 +111,7 @@ function createFakeMediaQuery(initialMatches: boolean): {
 }
 
 describe("application shell", () => {
-  it("renders global navigation and both Tools destinations", async () => {
+  it("renders global navigation with Studio and Document Library as top-level destinations", async () => {
     const { document } = await mount("/dashboard");
     const labels = [
       ...document.querySelectorAll(".app-navigation-desktop a"),
@@ -120,8 +120,7 @@ describe("application shell", () => {
       expect.arrayContaining([
         "Dashboard",
         "Projects",
-        "Tools overview",
-        "Forms",
+        "Studio",
         "Document Library",
       ]),
     );
@@ -233,12 +232,12 @@ describe("application shell", () => {
     );
     document
       .querySelector<HTMLAnchorElement>(
-        '.app-navigation-mobile a[href="/tools/forms"]',
+        '.app-navigation-mobile a[href="/projects"]',
       )
       ?.click();
     await Promise.resolve();
     expect(shell.getState().drawerOpen).toBe(false);
-    expect(window.location.pathname).toBe("/tools/forms");
+    expect(window.location.pathname).toBe("/projects");
   });
 
   it("restores the interactive desktop shell when the viewport leaves mobile mode", async () => {
@@ -280,18 +279,24 @@ describe("application shell", () => {
     );
   });
 
-  it("keeps the existing Forms and Document Library entries accessible", async () => {
-    const forms = await mount("/tools/forms");
+  it("keeps Studio and Document Library reachable as top-level nav links, not a nested Tools submenu", async () => {
+    const { document } = await mount("/dashboard");
+    const studioLink = document.querySelector<HTMLAnchorElement>(
+      '.app-navigation-desktop a[href="/builder.html"]',
+    );
+    const libraryLink = document.querySelector<HTMLAnchorElement>(
+      '.app-navigation-desktop a[href="/library"]',
+    );
+    expect(studioLink?.textContent).toContain("Studio");
+    expect(libraryLink?.textContent).toContain("Document Library");
+    // These are the preserved, pre-existing pages living outside the SPA --
+    // no data-app-link, so clicking performs a real navigation rather than
+    // being intercepted by the client-side router.
+    expect(studioLink?.hasAttribute("data-app-link")).toBe(false);
+    expect(libraryLink?.hasAttribute("data-app-link")).toBe(false);
     expect(
-      forms.document.querySelector<HTMLAnchorElement>(
-        'a[href="/builder.html?new=form"]',
-      )?.textContent,
-    ).toContain("Open Document Studio");
-
-    const library = await mount("/tools/library");
-    expect(
-      library.document.querySelector<HTMLAnchorElement>('a[href="/library"]')
-        ?.textContent,
-    ).toContain("Open Document Library");
+      document.querySelector<HTMLAnchorElement>('a[href="/tools"]'),
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain("Tools overview");
   });
 });

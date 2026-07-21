@@ -106,8 +106,8 @@ The shell extends rather than replaces the existing `base.css` visual system:
   direction. It does not add a separate application palette or gradients.
 - **Controls:** quiet white bordered controls, the existing maroon primary
   treatment, 3-5 px radii, and the established subtle maroon focus ring continue.
-- **Cards and panels:** shell placeholders and Tools adapters are white panels
-  with thin warm-gray borders and minimal shadow/color decoration.
+- **Cards and panels:** shell placeholders are white panels with thin
+  warm-gray borders and minimal shadow/color decoration.
 - **Icons:** navigation uses one small inline SVG line-icon family with
   `currentColor`, rounded lines, and decorative icons hidden from assistive
   technology.
@@ -134,10 +134,6 @@ New route handling covers:
 / → /dashboard
 /dashboard
 /projects
-/tools
-/tools/forms
-/tools/library
-/tools/document-library                   compatibility alias
 /admin                                    organization administrators only
 /projects/:projectId → .../overview
 /projects/:projectId/overview
@@ -162,8 +158,10 @@ take precedence for `/api/*`, so the legacy API and `/api/v2` remain independent
 ## Global and mobile navigation
 
 Desktop and tablet show persistent global navigation with Dashboard, Projects,
-Tools, Forms, and Document Library. The selected destination has text weight,
-border/edge treatment, and `aria-current`, so selection does not depend on color.
+Studio, and Document Library as flat, top-level destinations. The selected
+destination has text weight, border/edge treatment, and `aria-current` (Studio
+and Document Library are plain links to the pre-existing pages outside the
+SPA, so they never carry `aria-current`); selection does not depend on color.
 
 At 620 px and below a compact BASE header opens an off-canvas drawer. Opening the
 drawer moves focus inside it, makes the main/sidebar inert, and prevents document
@@ -338,29 +336,36 @@ and unavailable sessions do not see it. Direct unauthorized `/admin` navigation
 uses the generic not-found surface. This is navigation behavior only and does not
 replace backend authorization.
 
-## Legacy Tools integration
+## Legacy Studio and Document Library integration
 
 Forms remains at `builder.html`, with `form-generator.html` and `viewer.html`
-still available at their direct URLs. `/tools/forms` is a shell adapter that links
-to the unchanged Document Studio.
+still available at their direct URLs. The Studio and Document Library are
+promoted directly in the global sidebar, at the same level as Dashboard and
+Projects, rather than sitting behind a "Tools" hub. Both nav entries are plain
+links (no `data-app-link`) straight to `builder.html` and `library.html`,
+since those pages live entirely outside the SPA and its client-side router;
+there is no `/tools`, `/tools/forms`, or `/tools/library` route anymore --
+navigating to any of those now resolves to the shared not-found surface.
 
-The former root shared-library markup is preserved at `library.html`, continuing
-to load `engine.js`, `library-api.js`, `global-search.js`, and `home.js` unchanged.
-`/tools/library` is the stable shell adapter; `/tools/document-library` is also
-accepted for compatibility with the product-spec route name. The unavoidable
-legacy limitation is that `/` now resolves to the required application Dashboard,
-so bookmarks that previously relied on the root for the library must use
-`/library` (`library.html` remains accepted and redirects to the extensionless
-canonical URL). Document records are not merged with project Records.
+The former root shared-library markup is preserved at `library.html`,
+continuing to load `engine.js`, `library-api.js`, `global-search.js`, and
+`home.js` unchanged; its title, breadcrumb, and heading now consistently read
+"Document Library" to match the nav label. The unavoidable legacy limitation
+is that `/` now resolves to the required application Dashboard, so bookmarks
+that previously relied on the root for the library must use `/library`
+(`library.html` remains accepted and redirects to the extensionless canonical
+URL). Document records are not merged with project Records.
 
 ## Frontend test structure
 
 `tests/unit/app-routing.test.ts` covers route resolution, nested-tab selection,
-Administration role policy, unknown paths, tool adapters, and API/static bypass.
-`tests/unit/app-shell.test.ts` mounts the real browser modules in Happy DOM and
-covers navigation content/active state, authenticated project tabs, role-aware
-Administration visibility, the mobile drawer and Escape behavior, close-on-route
-selection, not found, direct nested routes, and legacy Forms/Library links.
+Administration role policy, unknown paths (including the retired tools hub
+routes), and API/static bypass. `tests/unit/app-shell.test.ts` mounts the real
+browser modules in Happy DOM and covers navigation content/active state
+(including the top-level Studio and Document Library links), authenticated
+project tabs, role-aware Administration visibility, the mobile drawer and
+Escape behavior, close-on-route selection, not found, and direct nested
+routes.
 `tests/unit/dashboard-projects-ui.test.ts` mounts the shell against a stubbed
 API and covers the dashboard (summary values, each attention reason, canonical
 destination links, empty state, error/retry, semantic structure, and stale-

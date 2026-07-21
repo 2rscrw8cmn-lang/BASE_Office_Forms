@@ -15,15 +15,12 @@ const iconPaths = {
     '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
   projects:
     '<path d="M3 7h7l2 2h9v11H3z"></path><path d="M3 7V5h7l2 2"></path>',
-  tools:
-    '<path d="m14.7 6.3 3-3a4.2 4.2 0 0 1-5.4 5.4l-7.8 7.8a2.1 2.1 0 0 0 3 3l7.8-7.8a4.2 4.2 0 0 0 5.4-5.4l-3 3z"></path>',
   form: '<path d="M6 3.5h8l4 4V21H6z"></path><path d="M14 3.5V8h4M9 12h6M9 16h4"></path>',
   library: '<path d="M4 5.5h5v14H4zM10 5.5h5v14h-5zM16 7h4v12.5h-4z"></path>',
   admin:
     '<circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 20a6.5 6.5 0 0 1 13 0"></path>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"></path>',
   close: '<path d="m6 6 12 12M18 6 6 18"></path>',
-  arrow: '<path d="M5 12h14M14 7l5 5-5 5"></path>',
 };
 
 function icon(name) {
@@ -85,13 +82,19 @@ export function createAppShell(options = {}) {
 
   function activeAttribute(section) {
     const active = state.route?.globalSection === section;
-    const toolsChild = section === "tools" && state.route?.id !== "tools";
-    return active && !toolsChild ? ' aria-current="page"' : "";
+    return active ? ' aria-current="page"' : "";
   }
 
   function navLink(href, label, iconName, section, extraClass = "") {
     const active = state.route?.globalSection === section;
     return `<a class="app-nav-link ${extraClass}${active ? " is-active" : ""}" href="${href}" data-app-link${activeAttribute(section)}>${icon(iconName)}<span>${label}</span></a>`;
+  }
+
+  // Studio and Document Library are the preserved, pre-existing experiences
+  // (builder.html / library.html) living outside the SPA entirely, so these
+  // are plain links -- no data-app-link, no SPA "active" state to track.
+  function externalNavLink(href, label, iconName) {
+    return `<a class="app-nav-link" href="${href}">${icon(iconName)}<span>${label}</span></a>`;
   }
 
   function renderNavigation(variant) {
@@ -102,14 +105,8 @@ export function createAppShell(options = {}) {
       <div class="app-nav-primary">
         ${navLink("/dashboard", "Dashboard", "dashboard", "dashboard")}
         ${navLink("/projects", "Projects", "projects", "projects")}
-      </div>
-      <div class="app-nav-group">
-        <p class="app-nav-label">Tools</p>
-        ${navLink("/tools", "Tools overview", "tools", "tools")}
-        <div class="app-nav-children">
-          <a class="app-nav-child${state.route?.id === "tools-forms" ? " is-active" : ""}" href="/tools/forms" data-app-link${state.route?.id === "tools-forms" ? ' aria-current="page"' : ""}>Forms</a>
-          <a class="app-nav-child${state.route?.id === "tools-library" ? " is-active" : ""}" href="/tools/library" data-app-link${state.route?.id === "tools-library" ? ' aria-current="page"' : ""}>Document Library</a>
-        </div>
+        ${externalNavLink("/builder.html", "Studio", "form")}
+        ${externalNavLink("/library", "Document Library", "library")}
       </div>
       ${showAdministration ? `<div class="app-nav-group app-nav-admin"><p class="app-nav-label">Administrative</p>${navLink("/admin", "Administration", "admin", "admin")}</div>` : ""}
     </nav>`;
@@ -225,30 +222,6 @@ export function createAppShell(options = {}) {
     </section>`;
   }
 
-  function renderToolCard(title, description, href, iconName) {
-    return `<article class="tool-card">${icon(iconName)}<div><h2>${title}</h2><p>${description}</p></div><a href="${href}" data-app-link>Open ${title} ${icon("arrow")}</a></article>`;
-  }
-
-  function renderTools(route) {
-    return `<section class="route-placeholder tools-route" aria-labelledby="page-title">
-      <div class="page-heading"><div><p class="eyebrow">${escapeHtml(route.eyebrow)}</p><h1 id="page-title" tabindex="-1">${escapeHtml(route.title)}</h1><p>${escapeHtml(route.description)}</p></div></div>
-      <div class="tool-grid">
-        ${renderToolCard("Forms", "Create forms, documents, and packages in the existing Document Studio.", "/tools/forms", "form")}
-        ${renderToolCard("Document Library", "Browse the preserved shared library and its controlled documents.", "/tools/library", "library")}
-      </div>
-    </section>`;
-  }
-
-  function renderToolAdapter(route, kind) {
-    const forms = kind === "forms-tool";
-    const href = forms ? "/builder.html?new=form" : "/library";
-    const label = forms ? "Open Document Studio" : "Open Document Library";
-    return `<section class="route-placeholder tool-adapter" aria-labelledby="page-title">
-      <div class="page-heading"><div><p class="eyebrow">${escapeHtml(route.eyebrow)}</p><h1 id="page-title" tabindex="-1">${escapeHtml(route.title)}</h1><p>${escapeHtml(route.description)}</p></div></div>
-      <div class="tool-adapter-panel">${icon(forms ? "form" : "library")}<div><p class="placeholder-label">Preserved experience</p><h2>${escapeHtml(route.title)}</h2><p>This tool remains separate from the new project workspace so its existing behavior and renderer stay unchanged.</p></div><a class="primary-button" href="${href}">${label} ${icon("arrow")}</a></div>
-    </section>`;
-  }
-
   // Data-backed surfaces (Dashboard, Projects, Project Overview, and the
   // project context header) must resolve the session before requesting their
   // own data. Session-first: while the session is loading show a loading state,
@@ -273,9 +246,6 @@ export function createAppShell(options = {}) {
     }
     if (route.surface === "not-found")
       return renderNotFound(route.title, route.description);
-    if (route.surface === "tools") return renderTools(route);
-    if (route.surface === "forms-tool" || route.surface === "library-tool")
-      return renderToolAdapter(route, route.surface);
     if (route.id === "dashboard")
       return (
         sessionGate("Loading dashboard") ||
