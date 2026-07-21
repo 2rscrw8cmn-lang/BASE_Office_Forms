@@ -217,7 +217,9 @@ describe("templates foundation API", () => {
   });
 
   it("republishing bumps the version number and retires the prior version", async () => {
-    const first = await jsonData<ApiTemplate>(await publishTemplate("submittal"));
+    const first = await jsonData<ApiTemplate>(
+      await publishTemplate("submittal"),
+    );
     expect(first.publishedVersion.versionNumber).toBe(1);
 
     const revisedDefinition = {
@@ -266,10 +268,12 @@ describe("templates foundation API", () => {
   });
 
   it("allows org_admin and document_control_admin to publish, denies other roles", async () => {
-    expect((await publishTemplate("submittal", {}, "documentControl")).status).toBe(
-      200,
+    expect(
+      (await publishTemplate("submittal", {}, "documentControl")).status,
+    ).toBe(200);
+    expect((await publishTemplate("submittal", {}, "manager")).status).toBe(
+      403,
     );
-    expect((await publishTemplate("submittal", {}, "manager")).status).toBe(403);
     expect((await publishTemplate("submittal", {}, "contributor")).status).toBe(
       403,
     );

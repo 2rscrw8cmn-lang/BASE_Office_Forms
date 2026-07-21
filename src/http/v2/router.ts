@@ -166,9 +166,7 @@ export async function routeV2Request(
       decodeURIComponent(revisionIssuanceRoute[3]),
     );
   }
-  const templateRoute = pathname.match(
-    /^\/api\/v2\/templates(?:\/([^/]+))?$/,
-  );
+  const templateRoute = pathname.match(/^\/api\/v2\/templates(?:\/([^/]+))?$/);
   if (templateRoute && dependencies) {
     return handleTemplateRoute(
       request,
