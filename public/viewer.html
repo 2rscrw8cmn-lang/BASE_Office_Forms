@@ -15,6 +15,9 @@
   .fill-status[data-state="filled"] { background:#e7f0e9; color:#2f6b45; }
   #root { padding-top:20px; }
   .error { width:min(620px,calc(100% - 32px)); margin:60px auto; padding:24px; background:#fff; box-shadow:0 2px 26px rgba(0,0,0,.13); }
+  .legacy-shell-return { grid-column:6; min-height:40px; display:inline-flex; align-items:center; padding:0 14px; color:var(--accent); border:1px solid #d9d5d1; border-radius:4px; text-decoration:none; font:600 9px/1 var(--sans); white-space:nowrap; }
+  .legacy-shell-return:hover { border-color:var(--accent); }
+  @media (max-width:950px) { .legacy-shell-return { grid-column:4; } }
   @media (max-width:620px) { .viewerbar { top:126px; overflow-x:auto; } }
   @media print { .viewerbar,.app-topbar { display:none; } #root { padding:0; } }
 </style>
@@ -23,9 +26,9 @@
 <header class="app-topbar">
   <a class="app-brand" href="/dashboard" aria-label="Return to BASE workspace"><img src="assets/base-logo.svg?v=20260718" alt="BASE"></a>
   <span class="app-divider" aria-hidden="true"></span>
-  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Documents</a><i>/</i><span>Controlled record</span></nav>
+  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Document Library</a><i>/</i><span>Shared document</span></nav>
   <form class="global-search" action="/library" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><label class="sr-only" for="viewerSearch">Search the document workspace</label><input id="viewerSearch" name="q" type="search" placeholder="Search documents, templates, or records"></form>
-  <button class="user-placeholder" type="button" title="User sign in will be added later">User</button>
+  <a class="legacy-shell-return" href="/dashboard">Back to app</a>
 </header>
 <div class="viewerbar"><strong id="label">Shared BASE document</strong><span id="fillStatus" class="fill-status" hidden></span><a id="editLink" href="builder.html">Edit a copy</a><button id="resetAnswers" hidden>Reset answers</button><button id="answers" hidden>Export answers</button><button id="download">Export backup</button><button class="accent" onclick="window.print()">Export PDF</button></div>
 <main id="root"></main>

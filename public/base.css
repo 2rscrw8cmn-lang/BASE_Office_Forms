@@ -59,7 +59,7 @@ p { margin: 0; text-wrap: pretty; }
   justify-content: space-between;
   align-items: flex-start;
 }
-.doc-logo { height: 42px; display: block; width: auto; }
+.doc-logo { height: 50px; display: block; width: auto; }
 .doc-org {
   text-align: right;
   font: 500 8.5px/1.5 var(--code);
@@ -83,7 +83,7 @@ p { margin: 0; text-wrap: pretty; }
   padding-bottom: 10px;
   border-bottom: 1px solid var(--divider);
 }
-.header-block-logo { height: 42px; display: block; width: auto; }
+.header-block-logo { height: 50px; display: block; width: auto; }
 .header-block-contact {
   text-align: right;
   font: 500 9px/1.5 var(--code);
@@ -367,8 +367,8 @@ p { margin: 0; text-wrap: pretty; }
   align-items: center; gap: 20px; background: rgba(255,255,255,.97); border-bottom: 1px solid #e4e2df;
   color: #27262a; position: sticky; top: 0; z-index: 50;
 }
-.app-brand { display: grid; place-items: center; width: 82px; height: 42px; overflow: hidden; }
-.app-brand img { width: 82px; height: 38px; object-fit: contain; display: block; }
+.app-brand { display: grid; place-items: center; width: 98px; height: 50px; overflow: hidden; }
+.app-brand img { width: 98px; height: 46px; object-fit: contain; display: block; }
 .app-divider { width: 1px; height: 28px; background: #dedbd7; }
 .app-crumbs { display: flex; align-items: center; gap: 9px; min-width: 0; font: 500 12px/1.2 var(--sans); color: #6f6d70; }
 .app-crumbs a { color: inherit; text-decoration: none; }
@@ -487,7 +487,7 @@ p { margin: 0; text-wrap: pretty; }
 }
 @media (max-width: 620px) {
   .app-topbar { min-height: 126px; grid-template-columns: auto auto 1fr auto; grid-template-rows: 64px 48px; gap: 0 12px; }
-  .app-brand { width: 66px; } .app-brand img { width: 66px; } .app-divider { height: 24px; }
+  .app-brand { width: 78px; } .app-brand img { width: 78px; } .app-divider { height: 24px; }
   .global-search { grid-column: 1 / -1; grid-row: 2; width: 100%; }
   .workspace-shell { width: min(100% - 28px, 1240px); padding-top: 38px; }
   .primary-card { padding: 24px; }

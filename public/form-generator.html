@@ -14,6 +14,9 @@
   #notice { width:8.5in; max-width:calc(100% - 24px); margin:0 auto 10px; color:#777; font:500 9px/1.4 var(--code); }
   .fill-status { padding:4px 8px; border-radius:10px; font:600 8px/1 var(--sans); text-transform:uppercase; letter-spacing:.04em; background:#eeece8; color:#6b6870; }
   .fill-status[data-state="filled"] { background:#e7f0e9; color:#2f6b45; }
+  .legacy-shell-return { grid-column:6; min-height:40px; display:inline-flex; align-items:center; padding:0 14px; color:var(--accent); border:1px solid #d9d5d1; border-radius:4px; text-decoration:none; font:600 9px/1 var(--sans); white-space:nowrap; }
+  .legacy-shell-return:hover { border-color:var(--accent); }
+  @media (max-width:950px) { .legacy-shell-return { grid-column:4; } }
   @media (max-width:620px) { .usebar { top:126px; } }
   @media print { .usebar,#notice,.app-topbar { display:none; } }
 </style>
@@ -22,9 +25,9 @@
 <header class="app-topbar">
   <a class="app-brand" href="/dashboard" aria-label="Return to BASE workspace"><img src="assets/base-logo.svg?v=20260718" alt="BASE"></a>
   <span class="app-divider" aria-hidden="true"></span>
-  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Documents</a><i>/</i><span>Fill &amp; Export</span></nav>
+  <nav class="app-crumbs" aria-label="Breadcrumb"><a href="/library">Document Library</a><i>/</i><span>Fill &amp; Export</span></nav>
   <form class="global-search" action="/library" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><label class="sr-only" for="fillSearch">Search the document workspace</label><input id="fillSearch" name="q" type="search" placeholder="Search documents, templates, or records"></form>
-  <button class="user-placeholder" type="button" title="User sign in will be added later">User</button>
+  <a class="legacy-shell-return" href="/dashboard">Back to app</a>
 </header>
 <div class="usebar">
   <a href="builder.html">Studio</a>

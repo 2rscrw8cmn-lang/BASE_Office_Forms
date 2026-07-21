@@ -105,7 +105,7 @@ export function createAppShell(options = {}) {
       <div class="app-nav-primary">
         ${navLink("/dashboard", "Dashboard", "dashboard", "dashboard")}
         ${navLink("/projects", "Projects", "projects", "projects")}
-        ${externalNavLink("/builder.html", "Studio", "form")}
+        ${externalNavLink("/builder", "Studio", "form")}
         ${externalNavLink("/library", "Document Library", "library")}
       </div>
       ${showAdministration ? `<div class="app-nav-group app-nav-admin"><p class="app-nav-label">Administrative</p>${navLink("/admin", "Administration", "admin", "admin")}</div>` : ""}

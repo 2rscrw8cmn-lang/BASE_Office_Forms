@@ -27,10 +27,17 @@ describe("legacy shell navigation", () => {
         expect(html).not.toContain("index.html");
       });
 
-      it("points the Documents breadcrumb at /library", () => {
+      it("points the Document Library breadcrumb at /library", () => {
         expect(html).toMatch(
-          /<nav class="app-crumbs"[^>]*>\s*<a href="\/library">Documents<\/a>/,
+          /<nav class="app-crumbs"[^>]*>\s*<a href="\/library">Document Library<\/a>/,
         );
+      });
+
+      it("offers the shared Back to app return link instead of the retired user placeholder", () => {
+        expect(html).toMatch(
+          /<a class="legacy-shell-return" href="\/dashboard">Back to app<\/a>/,
+        );
+        expect(html).not.toContain("user-placeholder");
       });
 
       it("targets /library for the search-form fallback action", () => {

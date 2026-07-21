@@ -342,10 +342,26 @@ Forms remains at `builder.html`, with `form-generator.html` and `viewer.html`
 still available at their direct URLs. The Studio and Document Library are
 promoted directly in the global sidebar, at the same level as Dashboard and
 Projects, rather than sitting behind a "Tools" hub. Both nav entries are plain
-links (no `data-app-link`) straight to `builder.html` and `library.html`,
+links (no `data-app-link`) to the extensionless `/builder` and `/library`
+URLs (Cloudflare Pages serves `builder.html` and `library.html` for them),
 since those pages live entirely outside the SPA and its client-side router;
 there is no `/tools`, `/tools/forms`, or `/tools/library` route anymore --
 navigating to any of those now resolves to the shared not-found surface.
+
+Every legacy page shares one consistent top-bar contract: the BASE brand links
+to `/dashboard`, the breadcrumb parent is labelled "Document Library" and
+links to `/library`, and a "Back to app" link on the right returns to
+`/dashboard`. The pre-authentication "User" placeholder button was removed
+from Studio, Fill & Export, and the viewer now that the application has
+real Cloudflare Access sessions; the viewer's breadcrumb leaf reads "Shared
+document" so the legacy library vocabulary never collides with the project
+Records register.
+
+`form-generator.html` (Fill & Export) is intentionally unlinked: no page
+navigates to it, and the viewer now carries the same fill, answer
+import/export, and PDF-export capabilities. It remains reachable at its
+direct URL for existing bookmarks, but it is a candidate for retirement in a
+future cleanup rather than a destination to surface in navigation.
 
 The former root shared-library markup is preserved at `library.html`,
 continuing to load `engine.js`, `library-api.js`, `global-search.js`, and
