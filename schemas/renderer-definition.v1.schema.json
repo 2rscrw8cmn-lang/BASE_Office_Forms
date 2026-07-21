@@ -52,7 +52,8 @@
         "height": { "type": "number", "minimum": 0 },
         "h": { "type": "number", "minimum": 0 },
         "type": { "type": "string" },
-        "multiline": { "type": "boolean" }
+        "multiline": { "type": "boolean" },
+        "align": { "enum": ["top", "center", "bottom"] }
       },
       "additionalProperties": true
     },
@@ -124,6 +125,7 @@
             "callout",
             "note",
             "signatory",
+            "header",
             "table",
             "list",
             "checklist",
@@ -151,6 +153,10 @@
         "attribution": { "type": "string" },
         "name": { "type": "string" },
         "role": { "type": "string" },
+        "companyName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
         "columns": { "$ref": "#/$defs/stringArray" },
         "rows": { "$ref": "#/$defs/rows" },
         "items": { "type": "array" },

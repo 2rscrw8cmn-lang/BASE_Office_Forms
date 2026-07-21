@@ -74,6 +74,29 @@ p { margin: 0; text-wrap: pretty; }
   background: var(--ink); margin-top: 3px;
 }
 
+/* ---- In-body header block (logo + contact information) ---- */
+.header-block {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--divider);
+}
+.header-block-logo { height: 42px; display: block; width: auto; }
+.header-block-contact {
+  text-align: right;
+  font: 500 9px/1.5 var(--code);
+  color: var(--mono);
+}
+.header-block-contact strong {
+  display: block;
+  font: 700 12px/1.3 var(--sans);
+  color: var(--ink);
+  letter-spacing: 0;
+  margin-bottom: 2px;
+}
+
 .form-tag {
   font: 600 10px/1 var(--code);
   color: var(--accent);
@@ -277,8 +300,16 @@ p { margin: 0; text-wrap: pretty; }
   margin-top: 4px; padding: 0; resize: none;
 }
 .fin::placeholder { color: transparent; }        /* keep boxes clean when blank */
+/* Default write-in position is directly under the label; these move the
+   label+input pair as a group within a taller box (e.g. a stamp box). */
+.field.field-align-center { justify-content: center; }
+.field.field-align-bottom { justify-content: flex-end; }
 .sign { flex-direction: column; align-items: stretch; justify-content: space-between; }
 .sign .fin { margin-top: auto; }
+.sign.sign-align-top { justify-content: flex-start; }
+.sign.sign-align-top .fin { margin-top: 4px; }
+.sign.sign-align-center { justify-content: center; }
+.sign.sign-align-center .fin { margin-top: 0; }
 
 /* clickable check options */
 .check { cursor: pointer; user-select: none; }

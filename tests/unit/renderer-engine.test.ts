@@ -247,4 +247,92 @@ describe("renderer engine", () => {
     });
     expect(documentTargets).toHaveLength(0);
   });
+
+  it("defaults a field's write-in box to the top of its box and moves it on align", () => {
+    // Height stays below the 70px threshold so the field renders as a
+    // single-line input rather than a textarea -- a textarea fills its box
+    // via flex:1 regardless of alignment, so align only has a visible effect
+    // below that threshold (or for sign fields, which never use a textarea).
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "ALIGN-1",
+      title: "Align test",
+      sections: [
+        {
+          name: "Details",
+          fields: [
+            { label: "Default", w: 1, height: 50 },
+            { label: "Centered", w: 1, height: 50, align: "center" },
+            { label: "Bottomed", w: 1, height: 50, align: "bottom" },
+          ],
+        },
+      ],
+    });
+
+    expect(html).toContain(
+      '<div class="field" style="--fh:50px"><div class="field-label">Default',
+    );
+    expect(html).toContain(
+      '<div class="field field-align-center" style="--fh:50px">',
+    );
+    expect(html).toContain(
+      '<div class="field field-align-bottom" style="--fh:50px">',
+    );
+  });
+
+  it("defaults a sign field's write-in box to the bottom and moves it on align", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "ALIGN-2",
+      title: "Sign align test",
+      sections: [
+        {
+          name: "Stamps",
+          sign: [
+            { label: "Contractor's Stamp", w: 2, height: 90 },
+            { label: "Architect's Stamp", w: 2, height: 90, align: "top" },
+          ],
+        },
+      ],
+    });
+
+    expect(html).toMatch(/<div class="sign" style="min-height:90px">/);
+    expect(html).toContain('<div class="sign sign-align-top"');
+  });
+
+  it("renders a header block with the BASE logo and contact information", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "document",
+      no: "HDR-1",
+      title: "Header block test",
+      layout: { cover: false },
+      blocks: [
+        {
+          type: "header",
+          companyName: "Acme Construction",
+          address: "123 Main St",
+          phone: "555-0100",
+          email: "hello@acme.test",
+        },
+      ],
+    });
+
+    expect(html).toContain('class="header-block-logo"');
+    expect(html).toContain("Acme Construction");
+    expect(html).toContain("123 Main St");
+    expect(html).toContain("555-0100");
+    expect(html).toContain("hello@acme.test");
+  });
+
+  it("keeps the header block schema-compatible even with no contact fields set", () => {
+    const result = validateRendererDefinition({
+      kind: "document",
+      title: "Blank header",
+      blocks: [{ type: "header" }],
+    });
+    expect(result).toMatchObject({ valid: true });
+  });
 });
