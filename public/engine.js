@@ -293,10 +293,16 @@
     return output;
   }
 
+  // Nested packages are not rendered as package items; index numbering (and
+  // therefore each item's namePrefix) counts only the entries this returns.
+  function packageDocuments(pkg) {
+    return (pkg.documents || []).map(item => item.def || item).filter(item => item && item.kind !== "package");
+  }
+
   function renderPackage(pkg, options) {
     options = options || {};
-    const documents = (pkg.documents || []).map(item => item.def || item).filter(item => item && item.kind !== "package");
-    const rendered = documents.map((item, index) => render(item, { fill: Boolean(options.fill), namePrefix: `package_${index}_` }));
+    const documents = packageDocuments(pkg);
+    const rendered = documents.map((item, index) => render(item, { fill: options.fill, namePrefix: `package_${index}_` }));
     let page = 3;
     const entries = rendered.map((html, index) => {
       const pages = Math.max(1, (html.match(/class="sheet/g) || []).length);
@@ -371,10 +377,28 @@
   }
 
   function render(definition, options) {
+    options = options || {};
     const def = clone(definition || blankForm());
-    if (def.kind === "package") return renderPackage(def, options || {});
+    if (def.kind === "package") return renderPackage(def, options);
     if (def.kind === "document") return renderDoc(def);
-    return renderForm(def, options || {});
+    // Forms render as interactive, fillable web forms by default; pass
+    // `fill: false` explicitly for a static preview (e.g. the Studio editor).
+    const fill = options.fill === undefined ? true : options.fill;
+    return renderForm(def, { ...options, fill });
+  }
+
+  // Every fillable form within a definition: the form itself, or (for a
+  // package) each nested document that is a form. `prefix` matches the
+  // `namePrefix` renderPackage gives that document's fields, so a caller can
+  // read/write the same rendered `name` attributes this returns a schema for.
+  function formFillTargets(definition) {
+    const def = clone(definition || blankForm());
+    if (def.kind === "form") return [{ prefix: "", form: prepareForm(def) }];
+    if (def.kind !== "package") return [];
+    return packageDocuments(def)
+      .map((item, index) => ({ prefix: `package_${index}_`, item }))
+      .filter(entry => entry.item.kind === "form")
+      .map(entry => ({ prefix: entry.prefix, form: prepareForm(entry.item) }));
   }
 
   function controls(prefix) {
@@ -492,5 +516,5 @@
     return blankDoc();
   }
 
-  root.BASE = { render, renderForm, renderDoc, renderPackage, paginate, updatePackageIndex, prepareForm, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
+  root.BASE = { render, renderForm, renderDoc, renderPackage, paginate, updatePackageIndex, prepareForm, formFillTargets, slug, esc, clone, blankForm, blankDoc, blankPackage, templateCatalog, fromTemplate, controlKeys: CONTROL_KEYS };
 })(window);
