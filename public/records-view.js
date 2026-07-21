@@ -126,7 +126,9 @@ export function createRecordsView({
   }
 
   function canCreate() {
-    return state.status === "loaded" && state.data.capabilities.createRecord === true;
+    return (
+      state.status === "loaded" && state.data.capabilities.createRecord === true
+    );
   }
 
   // Records matching the current archived-visibility setting only — the universe
@@ -177,7 +179,10 @@ export function createRecordsView({
       else if (key === "recordNumber")
         cmp = collateNumber(a.recordNumber, b.recordNumber);
       else if (key === "type")
-        cmp = collate(recordTypeLabel(a.recordType), recordTypeLabel(b.recordType));
+        cmp = collate(
+          recordTypeLabel(a.recordType),
+          recordTypeLabel(b.recordType),
+        );
       else if (key === "updated") cmp = compareDate(a.updatedAt, b.updatedAt);
       else cmp = compareDate(a.createdAt, b.createdAt);
       const primary = cmp * dir;
@@ -329,7 +334,9 @@ export function createRecordsView({
   function cards(records) {
     return records
       .map(
-        (record) => `<li><a class="record-card" href="${recordDetailHref(projectId, record)}" data-app-link
+        (
+          record,
+        ) => `<li><a class="record-card" href="${recordDetailHref(projectId, record)}" data-app-link
           aria-label="Open record ${escapeHtml(record.title)}${record.recordNumber ? ` (${escapeHtml(record.recordNumber)})` : ""}">
           <span class="record-card-top">
             <span class="record-card-number">${escapeHtml(record.recordNumber || "No record number")}</span>
@@ -357,9 +364,21 @@ export function createRecordsView({
           : ""
       }</div>`;
     }
+    if (
+      records.length > 0 &&
+      visibleUniverse(records).length === 0 &&
+      filters.archived === "active"
+    ) {
+      return `<div class="records-empty" role="status">
+      <p class="section-empty">No active records. This project has archived records.</p>
+      <button class="secondary-button" type="button" data-include-archived>
+        Include archived records
+      </button>
+    </div>`;
+    }
     if (!filtered.length) {
       return `<div class="records-empty" role="status"><p class="section-empty">No records match these filters.</p>
-        <button class="secondary-button" type="button" data-clear-filters>Clear filters</button></div>`;
+      <button class="secondary-button" type="button" data-clear-filters>Clear filters</button></div>`;
     }
     return `<div class="records-table-wrap" role="region" aria-label="Project records" tabindex="0">
         <table class="records-table">
@@ -405,7 +424,8 @@ export function createRecordsView({
   }
 
   function body() {
-    if (state.status === "loading") return `<div class="records-body">${loadingSkeleton()}</div>`;
+    if (state.status === "loading")
+      return `<div class="records-body">${loadingSkeleton()}</div>`;
     if (state.status === "missing") {
       return `<div class="records-body"><section class="inline-error" role="alert">
           <p class="eyebrow">Unavailable</p>
@@ -438,25 +458,35 @@ export function createRecordsView({
   }
 
   function bindResultLinks(container) {
-    container.querySelectorAll("[data-results] a[data-app-link]").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        if (
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey
-        )
-          return;
-        event.preventDefault();
-        navigate(link.getAttribute("href"));
+    container
+      .querySelectorAll("[data-results] a[data-app-link]")
+      .forEach((link) => {
+        link.addEventListener("click", (event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return;
+          event.preventDefault();
+          navigate(link.getAttribute("href"));
+        });
       });
-    });
     container
       .querySelectorAll("[data-results] [data-clear-filters]")
       .forEach((button) =>
         button.addEventListener("click", () => clearFilters(container)),
       );
+    container
+      .querySelector("[data-results] [data-include-archived]")
+      ?.addEventListener("click", () => {
+        filters.archived = "all";
+        syncUrl(true);
+        remountToolbar(container);
+        announce?.("Archived records included.");
+      });
     container
       .querySelector("[data-results] [data-create-record]")
       ?.addEventListener("click", () => openCreate(container));
@@ -490,7 +520,8 @@ export function createRecordsView({
     const trimmed = filters.q.trim();
     if (trimmed) params.set("q", trimmed);
     if (filters.type !== "all") params.set("type", filters.type);
-    if (filters.discipline !== "all") params.set("discipline", filters.discipline);
+    if (filters.discipline !== "all")
+      params.set("discipline", filters.discipline);
     if (filters.revisionStatus !== "all")
       params.set("revisionStatus", filters.revisionStatus);
     if (filters.archived !== "active") params.set("archived", filters.archived);
@@ -555,7 +586,10 @@ export function createRecordsView({
     };
     bindSelect("#records-type", (value) => (filters.type = value));
     bindSelect("#records-discipline", (value) => (filters.discipline = value));
-    bindSelect("#records-revision", (value) => (filters.revisionStatus = value));
+    bindSelect(
+      "#records-revision",
+      (value) => (filters.revisionStatus = value),
+    );
     bindSelect("#records-archived", (value) => (filters.archived = value));
     bindSelect("#records-sort", (value) => {
       filters.sort = SORT_KEYS[value] ? value : "created";
