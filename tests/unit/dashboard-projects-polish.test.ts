@@ -146,7 +146,7 @@ describe("projects header and toolbar polish", () => {
     const children = [...flexRow.children];
     // The text group (eyebrow + title + description) comes first, the action last.
     const textGroup = children[0];
-    expect(textGroup.querySelector(".eyebrow")?.textContent).toContain(
+    expect(textGroup.querySelector(".app-eyebrow")?.textContent).toContain(
       "Project directory",
     );
     expect(textGroup.querySelector("#page-title")?.textContent).toBe(
@@ -169,12 +169,14 @@ describe("projects header and toolbar polish", () => {
     });
     const toolbar = document.querySelector(".projects-toolbar");
     expect(
-      toolbar?.querySelector(".field-search #projects-search"),
+      toolbar?.querySelector(".app-search-field #projects-search"),
     ).not.toBeNull();
     expect(
-      toolbar?.querySelector(".field-filter #projects-status"),
+      toolbar?.querySelector(".app-filter-field #projects-status"),
     ).not.toBeNull();
     expect(toolbar?.querySelector("[data-result-count]")).not.toBeNull();
+    expect(toolbar?.querySelectorAll(".app-field")).toHaveLength(2);
+    expect(toolbar?.querySelector(".field")).toBeNull();
     // Clear filters is a restrained text link, not a heavy button.
     expect(
       toolbar
@@ -244,7 +246,7 @@ describe("create project dialog polish", () => {
       "pf-description",
     ]);
     // Row 1 pairs number and status; row 3 pairs city and region.
-    const rows = body?.querySelectorAll(".field-row");
+    const rows = body?.querySelectorAll(".app-field-row");
     expect(idOrder(rows?.[0] as ParentNode, "input, select")).toEqual([
       "pf-number",
       "pf-status",
@@ -253,6 +255,8 @@ describe("create project dialog polish", () => {
       "pf-city",
       "pf-region",
     ]);
+    expect(body?.querySelectorAll(".app-field")).toHaveLength(6);
+    expect(body?.querySelector(".field")).toBeNull();
   });
 
   it("does not mark fields as validation errors merely because the dialog opened", async () => {

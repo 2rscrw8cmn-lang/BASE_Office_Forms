@@ -70,7 +70,8 @@ export function createProjectOverviewView({
     } catch (error) {
       if (destroyed || error.aborted) return;
       state = {
-        status: error.status === 403 || error.status === 404 ? "missing" : "error",
+        status:
+          error.status === 403 || error.status === 404 ? "missing" : "error",
         data: null,
         error,
       };
@@ -80,12 +81,24 @@ export function createProjectOverviewView({
 
   function summary(counts) {
     const tiles = [
-      { label: "Records", value: counts.records, href: `${base(projectId)}/records` },
+      {
+        label: "Records",
+        value: counts.records,
+        href: `${base(projectId)}/records`,
+      },
       { label: "Draft revisions", value: counts.draftRevisions },
       { label: "Published revisions", value: counts.publishedRevisions },
       { label: "Files", value: counts.files },
-      { label: "Issuances", value: counts.issuances, href: `${base(projectId)}/issuances` },
-      { label: "Active RFIs", value: counts.activeRfis, href: `${base(projectId)}/rfis` },
+      {
+        label: "Issuances",
+        value: counts.issuances,
+        href: `${base(projectId)}/issuances`,
+      },
+      {
+        label: "Active RFIs",
+        value: counts.activeRfis,
+        href: `${base(projectId)}/rfis`,
+      },
     ];
     // One compact, shared strip rather than six equal free-standing boxes.
     return `<dl class="overview-summary" aria-label="Project summary">${tiles
@@ -159,16 +172,34 @@ export function createProjectOverviewView({
 
   function shortcuts(counts) {
     const links = [
-      { label: "Records", href: `${base(projectId)}/records`, value: counts.records },
-      { label: "Issuances", href: `${base(projectId)}/issuances`, value: counts.issuances },
-      { label: "RFIs", href: `${base(projectId)}/rfis`, value: counts.activeRfis },
-      { label: "Team", href: `${base(projectId)}/team`, value: counts.teamMembers },
+      {
+        label: "Records",
+        href: `${base(projectId)}/records`,
+        value: counts.records,
+      },
+      {
+        label: "Issuances",
+        href: `${base(projectId)}/issuances`,
+        value: counts.issuances,
+      },
+      {
+        label: "RFIs",
+        href: `${base(projectId)}/rfis`,
+        value: counts.activeRfis,
+      },
+      {
+        label: "Team",
+        href: `${base(projectId)}/team`,
+        value: counts.teamMembers,
+      },
     ];
     return `<nav class="overview-section overview-shortcuts" aria-labelledby="ov-shortcuts">
         <h2 id="ov-shortcuts">Workflow shortcuts</h2>
         <div class="shortcut-grid">${links
           .map(
-            (link) => `<a class="shortcut-card" href="${escapeHtml(link.href)}" data-app-link>
+            (
+              link,
+            ) => `<a class="shortcut-card" href="${escapeHtml(link.href)}" data-app-link>
               <span class="shortcut-label">${escapeHtml(link.label)}</span>
               <span class="shortcut-go"><span class="shortcut-count">${escapeHtml(String(link.value))}</span><span class="shortcut-arrow" aria-hidden="true">→</span></span>
             </a>`,
@@ -185,14 +216,14 @@ export function createProjectOverviewView({
     }
     if (state.status === "missing") {
       return `<section class="inline-error" role="alert">
-          <p class="eyebrow">Unavailable</p>
+          <p class="app-eyebrow">Unavailable</p>
           <p>This project overview is unavailable or you do not have access to it.</p>
         </section>`;
     }
     if (state.status === "error") {
       const requestId = state.error?.requestId;
       return `<section class="inline-error" role="alert">
-          <p class="eyebrow">Unable to load</p>
+          <p class="app-eyebrow">Unable to load</p>
           <p>The project overview could not be loaded. No changes were made.</p>
           ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
           <div class="state-actions"><button class="secondary-button" type="button" data-overview-retry>Try again</button></div>
@@ -203,7 +234,7 @@ export function createProjectOverviewView({
   }
 
   function mount(container) {
-    container.innerHTML = `<div class="overview-view">${markup()}</div>`;
+    container.innerHTML = `<div class="overview-view app-container-standard">${markup()}</div>`;
     container
       .querySelector("[data-overview-retry]")
       ?.addEventListener("click", () => reload());

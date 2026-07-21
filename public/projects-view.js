@@ -19,7 +19,8 @@ function statusLabel(status) {
 }
 
 function canCreateProjects(session) {
-  const role = session?.status === "ready" ? session.data?.membership?.role : "";
+  const role =
+    session?.status === "ready" ? session.data?.membership?.role : "";
   return role === "org_admin" || role === "document_control_admin";
 }
 
@@ -28,7 +29,9 @@ function overviewHref(project) {
 }
 
 function locationText(project) {
-  const parts = [project.address?.city, project.address?.region].filter(Boolean);
+  const parts = [project.address?.city, project.address?.region].filter(
+    Boolean,
+  );
   return parts.join(", ");
 }
 
@@ -37,10 +40,14 @@ function sortProjects(projects) {
     const activeA = a.status === "active" ? 0 : 1;
     const activeB = b.status === "active" ? 0 : 1;
     if (activeA !== activeB) return activeA - activeB;
-    const number = (a.projectNumber || "").localeCompare(b.projectNumber || "", undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
+    const number = (a.projectNumber || "").localeCompare(
+      b.projectNumber || "",
+      undefined,
+      {
+        numeric: true,
+        sensitivity: "base",
+      },
+    );
     if (number !== 0) return number;
     const name = (a.name || "").localeCompare(b.name || "", undefined, {
       sensitivity: "base",
@@ -50,7 +57,13 @@ function sortProjects(projects) {
   });
 }
 
-export function createProjectsView({ api, navigate, announce, requestRender, getSession }) {
+export function createProjectsView({
+  api,
+  navigate,
+  announce,
+  requestRender,
+  getSession,
+}) {
   let state = { status: "loading", data: null, error: null };
   const filters = { search: "", status: "all" };
   let controller = null;
@@ -79,7 +92,8 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
     const query = filters.search.trim().toLowerCase();
     return sortProjects(
       projects.filter((project) => {
-        if (filters.status !== "all" && project.status !== filters.status) return false;
+        if (filters.status !== "all" && project.status !== filters.status)
+          return false;
         if (!query) return true;
         return (
           (project.projectNumber || "").toLowerCase().includes(query) ||
@@ -91,9 +105,9 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
 
   function heading(session) {
     const showCreate = canCreateProjects(session);
-    return `<div class="page-heading page-heading-actions"><div>
+    return `<div class="page-heading page-heading-actions"><div class="app-container-register">
         <div class="page-heading-text">
-          <p class="eyebrow">Project directory</p>
+          <p class="app-eyebrow">Project directory</p>
           <h1 id="page-title" tabindex="-1">Projects</h1>
           <p>Open a project workspace, or search and filter the projects you can access.</p>
         </div>${
@@ -105,14 +119,16 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
   }
 
   function toolbar(projects) {
-    const statuses = [...new Set(projects.map((project) => project.status))].sort();
+    const statuses = [
+      ...new Set(projects.map((project) => project.status)),
+    ].sort();
     return `<div class="projects-toolbar">
-        <div class="field field-search">
+        <div class="app-field app-search-field">
           <label for="projects-search">Search projects</label>
           <input id="projects-search" type="search" placeholder="Search by number or name"
             autocomplete="off" value="${escapeHtml(filters.search)}" />
         </div>
-        <div class="field field-filter">
+        <div class="app-field app-filter-field">
           <label for="projects-status">Status</label>
           <select id="projects-status">
             <option value="all">All statuses</option>
@@ -149,7 +165,9 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
   function cards(projects) {
     return projects
       .map(
-        (project) => `<li><a class="project-card" href="${overviewHref(project)}" data-app-link
+        (
+          project,
+        ) => `<li><a class="project-card" href="${overviewHref(project)}" data-app-link
           aria-label="Open ${escapeHtml(project.name)} (${escapeHtml(project.projectNumber || "no number")})">
           <span class="project-card-top">
             <span class="project-card-number">${escapeHtml(project.projectNumber || "—")}</span>
@@ -190,20 +208,20 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
 
   function body() {
     if (state.status === "loading") {
-      return `<div class="projects-body"><section class="route-state route-loading" aria-busy="true" aria-label="Loading projects">
+      return `<div class="projects-body app-container-register"><section class="route-state route-loading" aria-busy="true" aria-label="Loading projects">
           <span class="skeleton-line skeleton-short"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-medium"></span>
         </section></div>`;
     }
     if (state.status === "error") {
       const requestId = state.error?.requestId;
-      return `<div class="projects-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unable to load</p>
+      return `<div class="projects-body app-container-register"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unable to load</p>
           <p>Projects could not be loaded. No changes were made.</p>
           ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
           <div class="state-actions"><button class="secondary-button" type="button" data-projects-retry>Try again</button></div>
         </section></div>`;
     }
-    return `<div class="projects-body">${toolbar(state.data)}<div class="projects-results" data-results></div></div>`;
+    return `<div class="projects-body app-container-register">${toolbar(state.data)}<div class="projects-results" data-results></div></div>`;
   }
 
   function updateResults(container) {
@@ -219,23 +237,27 @@ export function createProjectsView({ api, navigate, announce, requestRender, get
   }
 
   function bindResultLinks(container) {
-    container.querySelectorAll("[data-results] a[data-app-link]").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        if (
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey
-        )
-          return;
-        event.preventDefault();
-        navigate(link.getAttribute("href"));
+    container
+      .querySelectorAll("[data-results] a[data-app-link]")
+      .forEach((link) => {
+        link.addEventListener("click", (event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return;
+          event.preventDefault();
+          navigate(link.getAttribute("href"));
+        });
       });
-    });
-    container.querySelectorAll("[data-results] [data-clear-filters]").forEach((button) =>
-      button.addEventListener("click", () => clearFilters(container)),
-    );
+    container
+      .querySelectorAll("[data-results] [data-clear-filters]")
+      .forEach((button) =>
+        button.addEventListener("click", () => clearFilters(container)),
+      );
   }
 
   function clearFilters(container) {

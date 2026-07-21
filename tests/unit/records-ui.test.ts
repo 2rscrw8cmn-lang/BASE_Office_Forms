@@ -265,6 +265,9 @@ describe("records register view", () => {
     expect(openHrefs).toContain("/projects/proj-1/records/rec-1");
     expect(document.querySelector(".record-cards")).not.toBeNull();
     expect(document.querySelectorAll(".record-cards li")).toHaveLength(2);
+    const toolbar = grab(document, ".records-toolbar");
+    expect(toolbar.querySelectorAll(".app-field")).toHaveLength(6);
+    expect(toolbar.querySelector(".field")).toBeNull();
   });
 
   it("shows the current revision, no-revision state, draft presence, and file count", async () => {
@@ -405,11 +408,19 @@ describe("records create authorization and dialog", () => {
     const { document } = await mountRecords();
     grab(document, ".records-heading [data-create-record]").click();
     expect(document.querySelector(".app-dialog")).not.toBeNull();
+    expect(document.activeElement?.id).toBe("rf-title-input");
+    expect(
+      document.querySelector('.app-dialog [aria-invalid="true"]'),
+    ).toBeNull();
+    expect(document.querySelector(".app-dialog .field")).toBeNull();
     fire(grab(document, ".app-dialog form"), "submit");
     await settle(1);
     expect(
       document.querySelector("#rf-title-error")?.hasAttribute("hidden"),
     ).toBe(false);
+    expect(grab(document, "#rf-title-input").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
   });
 
   it("navigates to the new record detail route after a successful creation", async () => {

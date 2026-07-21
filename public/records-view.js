@@ -228,7 +228,7 @@ export function createRecordsView({
       selected !== "all" && !values.has(selected)
         ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`
         : "";
-    return `<div class="field field-filter">
+    return `<div class="app-field app-filter-field">
         <label for="${id}">${escapeHtml(label)}</label>
         <select id="${id}">
           <option value="all"${selected === "all" ? " selected" : ""}>All</option>
@@ -244,7 +244,7 @@ export function createRecordsView({
   }
 
   function sortSelect() {
-    return `<div class="field field-filter">
+    return `<div class="app-field app-filter-field">
         <label for="records-sort">Sort</label>
         <select id="records-sort">
           ${Object.entries(SORT_KEYS)
@@ -259,7 +259,7 @@ export function createRecordsView({
 
   function toolbar(records) {
     return `<div class="records-toolbar">
-        <div class="field field-search">
+        <div class="app-field app-search-field">
           <label for="records-search">Search records</label>
           <input id="records-search" type="search" placeholder="Search by title, number, type, or discipline"
             autocomplete="off" value="${escapeHtml(filters.q)}" />
@@ -267,7 +267,7 @@ export function createRecordsView({
         ${selectMarkup("records-type", "Type", typeOptions(records), filters.type)}
         ${selectMarkup("records-discipline", "Discipline", disciplineOptions(records), filters.discipline)}
         ${selectMarkup("records-revision", "Revision status", revisionStatusOptions(records), filters.revisionStatus)}
-        <div class="field field-filter">
+        <div class="app-field app-filter-field">
           <label for="records-archived">Archived</label>
           <select id="records-archived">
             ${ARCHIVED_OPTIONS.map(
@@ -400,9 +400,9 @@ export function createRecordsView({
   }
 
   function heading() {
-    return `<div class="page-heading page-heading-actions records-heading"><div>
+    return `<div class="page-heading page-heading-actions records-heading"><div class="app-container-register">
         <div class="page-heading-text">
-          <p class="eyebrow">Project documents</p>
+          <p class="app-eyebrow">Project documents</p>
           <h2 id="records-title" tabindex="-1">Records</h2>
           <p>Browse the document records for this project, or search, filter, and open one.</p>
         </div>${
@@ -425,23 +425,23 @@ export function createRecordsView({
 
   function body() {
     if (state.status === "loading")
-      return `<div class="records-body">${loadingSkeleton()}</div>`;
+      return `<div class="records-body app-container-register">${loadingSkeleton()}</div>`;
     if (state.status === "missing") {
-      return `<div class="records-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unavailable</p>
+      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unavailable</p>
           <p>These records are unavailable or you do not have access to this project.</p>
         </section></div>`;
     }
     if (state.status === "error") {
       const requestId = state.error?.requestId;
-      return `<div class="records-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unable to load</p>
+      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unable to load</p>
           <p>The records could not be loaded. No changes were made.</p>
           ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
           <div class="state-actions"><button class="secondary-button" type="button" data-records-retry>Try again</button></div>
         </section></div>`;
     }
-    return `<div class="records-body">${toolbar(state.data.records)}<div class="records-results" data-results></div></div>`;
+    return `<div class="records-body app-container-register">${toolbar(state.data.records)}<div class="records-results" data-results></div></div>`;
   }
 
   function updateResults(container) {
