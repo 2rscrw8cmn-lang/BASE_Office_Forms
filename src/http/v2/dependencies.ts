@@ -2,6 +2,8 @@ import { OrganizationService } from "../../application/identity/organization-ser
 import { SessionResolutionService } from "../../application/identity/session-resolution-service";
 import { ProjectContactService } from "../../application/projects/project-contact-service";
 import { ProjectService } from "../../application/projects/project-service";
+import { DashboardReadModelService } from "../../application/read-models/dashboard-service";
+import { ProjectOverviewReadModelService } from "../../application/read-models/project-overview-service";
 import { RfiService } from "../../application/rfis/rfi-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
@@ -18,6 +20,8 @@ import { D1OrganizationsRepository } from "../../infrastructure/db/d1/organizati
 import { D1ProjectContactsRepository } from "../../infrastructure/db/d1/project-contacts-repository";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import { D1ProjectsRepository } from "../../infrastructure/db/d1/projects-repository";
+import { D1DashboardReadRepository } from "../../infrastructure/db/d1/dashboard-read-repository";
+import { D1ProjectOverviewReadRepository } from "../../infrastructure/db/d1/project-overview-read-repository";
 import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
@@ -49,6 +53,8 @@ export interface V2RouteDependencies {
   files?: FileService;
   issuances?: IssuanceService;
   templates?: TemplateService;
+  dashboard?: DashboardReadModelService;
+  projectOverview?: ProjectOverviewReadModelService;
 }
 
 export function createV2RouteDependencies(
@@ -114,5 +120,13 @@ export function createV2RouteDependencies(
       storage,
     ),
     templates: new TemplateService(new D1TemplatesRepository(environment.DB)),
+    dashboard: new DashboardReadModelService(
+      projects,
+      new D1DashboardReadRepository(environment.DB),
+    ),
+    projectOverview: new ProjectOverviewReadModelService(
+      projects,
+      new D1ProjectOverviewReadRepository(environment.DB),
+    ),
   };
 }
