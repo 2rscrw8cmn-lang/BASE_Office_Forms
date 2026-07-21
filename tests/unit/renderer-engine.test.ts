@@ -407,4 +407,34 @@ describe("renderer engine", () => {
       'class="fin-ghost ghost-line" style="height:24px;flex:none"',
     );
   });
+
+  it("locks the branded header to a fixed organization and notice, ignoring any per-document override", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "document",
+      no: "LOCK-1",
+      title: "Locked header test",
+      org: "Some Other Company",
+      headerNote: "A different notice",
+      blocks: [],
+    });
+
+    expect(html).toContain("BASE Construction LLC");
+    expect(html).toContain("1601 Minnesota Ave, Winter Park, FL 32789");
+    expect(html).not.toContain("Some Other Company");
+    expect(html).not.toContain("A different notice");
+  });
+
+  it("still respects showHeader:false to hide the branded header entirely", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "document",
+      no: "LOCK-2",
+      title: "Hidden header test",
+      showHeader: false,
+      blocks: [],
+    });
+
+    expect(html).not.toContain("BASE Construction LLC");
+  });
 });

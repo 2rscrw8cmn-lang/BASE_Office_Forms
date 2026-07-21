@@ -2,8 +2,10 @@
 (function (root) {
   "use strict";
 
-  const ORG_DEFAULT = "Office Process & Compliance Division";
-  const HEADER_NOTE_DEFAULT = "Controlled Document — Do Not Reproduce";
+  // The branded header is locked: every template shows this organization and
+  // notice, and it isn't editable per-document (see commonPanel in studio.js).
+  const ORG_DEFAULT = "BASE Construction LLC";
+  const HEADER_NOTE_DEFAULT = "1601 Minnesota Ave, Winter Park, FL 32789";
   const CONTROL_KEYS = ["Revision", "Effective", "Classification", "Doc. Control"];
   const esc = value => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -30,9 +32,7 @@
 
   function topBar(def) {
     if (def.showHeader === false) return "";
-    const organization = def.org === undefined ? ORG_DEFAULT : def.org;
-    const headerNote = def.headerNote === undefined ? HEADER_NOTE_DEFAULT : def.headerNote;
-    const headerText = [organization, headerNote].filter(Boolean).map(esc).join("<br>");
+    const headerText = [ORG_DEFAULT, HEADER_NOTE_DEFAULT].filter(Boolean).map(esc).join("<br>");
     return `<div class="page-header"><div class="doc-top">
       <img class="doc-logo" src="${esc(def.logo || "assets/base-logo.svg?v=20260718")}" alt="BASE">
       <div class="doc-org">${headerText}</div>
@@ -439,19 +439,19 @@
   }
 
   function blankForm() {
-    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
+    return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "",
       control: controls("NEW-1"), controlVisibility: {}, showControl: true, appearance: {},
       sections: [{ name: "Section One", req: "REQUIRED", fields: [{ label: "Field label", w: 1, height: 46 }] }], footnotes: [] };
   }
 
   function blankDoc() {
-    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
+    return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "",
       control: controls("DOC-1"), controlVisibility: {}, showControl: true, appearance: {}, authority: "", toc: true, layout: { cover: true },
       blocks: [{ type: "prose", heading: "First Section", paras: ["Write the first paragraph here."] }] };
   }
 
   function blankPackage() {
-    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "", org: ORG_DEFAULT, headerNote: HEADER_NOTE_DEFAULT,
+    return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "",
       control: controls("PKG-1"), controlVisibility: {}, showControl: true, appearance: {}, documents: [] };
   }
 
