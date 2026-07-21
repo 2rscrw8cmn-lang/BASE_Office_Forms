@@ -9,6 +9,7 @@ import { createDashboardView } from "./dashboard-view.js";
 import { createProjectsView } from "./projects-view.js";
 import { createProjectOverviewView } from "./project-overview-view.js";
 import { createRecordsView } from "./records-view.js";
+import { createRecordDetailView } from "./record-detail-view.js";
 
 const iconPaths = {
   dashboard:
@@ -284,7 +285,9 @@ export function createAppShell(options = {}) {
           ? `<div class="feature-view" data-feature="overview"></div>`
           : route.id === "project-records"
             ? `<div class="feature-view" data-feature="records"></div>`
-            : renderPlaceholder(route);
+            : route.id === "record-detail"
+              ? `<div class="feature-view" data-feature="record-detail"></div>`
+              : renderPlaceholder(route);
       return `${renderProjectHeader(route)}${renderProjectTabs(route)}<div class="project-route-content">${inner}</div>`;
     }
     return renderPlaceholder(route);
@@ -308,6 +311,15 @@ export function createAppShell(options = {}) {
       const projectId = route.params?.projectId;
       return { key: `records:${projectId}`, kind: "records", projectId };
     }
+    if (route.id === "record-detail") {
+      const { projectId, recordId } = route.params || {};
+      return {
+        key: `record-detail:${projectId}:${recordId}`,
+        kind: "record-detail",
+        projectId,
+        recordId,
+      };
+    }
     return null;
   }
 
@@ -329,6 +341,12 @@ export function createAppShell(options = {}) {
     if (descriptor.kind === "projects") return createProjectsView(shared);
     if (descriptor.kind === "records")
       return createRecordsView({ ...shared, projectId: descriptor.projectId });
+    if (descriptor.kind === "record-detail")
+      return createRecordDetailView({
+        ...shared,
+        projectId: descriptor.projectId,
+        recordId: descriptor.recordId,
+      });
     return createProjectOverviewView({
       ...shared,
       projectId: descriptor.projectId,

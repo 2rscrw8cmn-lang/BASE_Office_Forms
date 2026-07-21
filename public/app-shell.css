@@ -31,6 +31,274 @@
   --space-5: 30px;
 }
 
+/* Record Detail workspace */
+.record-detail-view {
+  padding-block: 22px 48px;
+}
+.record-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 34px;
+  align-items: start;
+}
+.record-detail-main {
+  min-width: 0;
+}
+.record-back-link {
+  display: inline-block;
+  margin-bottom: 18px;
+  font-size: 0.875rem;
+}
+.record-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.record-detail-number {
+  margin: 0 0 4px;
+  color: var(--shell-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.record-detail-identity h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.5vw, 2rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.record-detail-identity > p:last-child {
+  margin: 7px 0 0;
+  color: var(--shell-text-muted);
+}
+.record-detail-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+.record-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.text-button-danger {
+  border: 0;
+  background: transparent;
+  color: var(--danger, #a12b25);
+  padding: 8px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.danger-button {
+  border: 1px solid #9f2d27;
+  border-radius: var(--radius-sm);
+  background: #9f2d27;
+  color: #fff;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.record-archived-note {
+  margin: 18px 0 0;
+  padding: 10px 12px;
+  background: var(--shell-surface-subtle);
+  border-left: 3px solid var(--shell-text-muted);
+}
+.record-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin: 28px 0 10px;
+}
+.record-section-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.record-section-heading > span {
+  color: var(--shell-text-muted);
+  font-size: 0.82rem;
+}
+.record-current-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+  border-block: 1px solid var(--shell-border-soft);
+}
+.record-current-line p {
+  margin: 8px 0 0;
+}
+.record-revision-link,
+.record-drafts a {
+  margin-right: 10px;
+  font-weight: 700;
+}
+.record-revision-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+  color: var(--shell-text-muted);
+  font-size: 0.82rem;
+}
+.record-drafts ul,
+.record-history-cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.record-drafts li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.record-drafts small {
+  color: var(--shell-text-muted);
+}
+.record-history-table {
+  overflow-x: auto;
+}
+.record-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.record-history th,
+.record-history td {
+  padding: 11px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.record-history thead th {
+  color: var(--shell-text-muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.record-history tbody th {
+  font-weight: 650;
+}
+.record-current-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--shell-text-muted);
+  font-size: 0.74rem;
+  font-weight: 400;
+}
+.cell-number {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.record-history-cards {
+  display: none;
+}
+.record-compact-empty {
+  padding: 16px;
+  background: var(--shell-surface-subtle);
+}
+.record-compact-empty p {
+  margin: 5px 0 12px;
+  color: var(--shell-text-muted);
+}
+.record-details {
+  margin-top: 37px;
+  padding-left: 22px;
+  border-left: 1px solid var(--shell-border-soft);
+}
+.record-details h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+}
+.record-details dl {
+  margin: 0;
+}
+.record-details dl > div {
+  padding: 9px 0;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.record-details dt {
+  color: var(--shell-text-muted);
+  font-size: 0.75rem;
+}
+.record-details dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.record-detail-skeleton {
+  padding-top: 28px;
+}
+
+@media (max-width: 760px) {
+  .record-detail-view {
+    padding-block: 16px 34px;
+  }
+  .record-detail-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .record-detail-header,
+  .record-current-line {
+    flex-direction: column;
+  }
+  .record-detail-controls,
+  .record-revision-facts {
+    align-items: flex-start;
+  }
+  .record-detail-actions {
+    justify-content: flex-start;
+  }
+  .record-detail-actions .primary-button {
+    width: 100%;
+  }
+  .record-drafts li {
+    grid-template-columns: auto auto;
+  }
+  .record-drafts li > span:not(.status-badge),
+  .record-drafts li small {
+    grid-column: 1 / -1;
+  }
+  .record-history-table {
+    display: none;
+  }
+  .record-history-cards {
+    display: grid;
+    gap: 10px;
+  }
+  .record-revision-card {
+    padding: 14px;
+    border: 1px solid var(--shell-border-soft);
+    border-radius: var(--radius-sm);
+  }
+  .record-revision-card > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .record-revision-card strong,
+  .record-revision-card small {
+    color: var(--shell-text-muted);
+    font-size: 0.78rem;
+  }
+  .record-revision-card p {
+    margin: 9px 0;
+  }
+  .record-details {
+    margin-top: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
 html {
   min-width: 320px;
 }

@@ -56,8 +56,7 @@ const routes = [
     id: "record-detail",
     title: "Record detail",
     eyebrow: "Records",
-    description:
-      "Record metadata, revisions, and files will be implemented in the records milestone.",
+    description: "Record metadata and revision history.",
     globalSection: "projects",
     projectTab: "records",
     params: ["projectId", "recordId"],

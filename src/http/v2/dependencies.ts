@@ -5,6 +5,7 @@ import { ProjectService } from "../../application/projects/project-service";
 import { DashboardReadModelService } from "../../application/read-models/dashboard-service";
 import { ProjectOverviewReadModelService } from "../../application/read-models/project-overview-service";
 import { ProjectRecordsReadModelService } from "../../application/read-models/project-records-service";
+import { RecordWorkspaceReadModelService } from "../../application/read-models/record-workspace-service";
 import { RfiService } from "../../application/rfis/rfi-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
@@ -24,6 +25,7 @@ import { D1ProjectsRepository } from "../../infrastructure/db/d1/projects-reposi
 import { D1DashboardReadRepository } from "../../infrastructure/db/d1/dashboard-read-repository";
 import { D1ProjectOverviewReadRepository } from "../../infrastructure/db/d1/project-overview-read-repository";
 import { D1ProjectRecordsReadRepository } from "../../infrastructure/db/d1/project-records-read-repository";
+import { D1RecordWorkspaceReadRepository } from "../../infrastructure/db/d1/record-workspace-read-repository";
 import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
@@ -58,6 +60,7 @@ export interface V2RouteDependencies {
   dashboard?: DashboardReadModelService;
   projectOverview?: ProjectOverviewReadModelService;
   projectRecords?: ProjectRecordsReadModelService;
+  recordWorkspace?: RecordWorkspaceReadModelService;
 }
 
 export function createV2RouteDependencies(
@@ -134,6 +137,10 @@ export function createV2RouteDependencies(
     projectRecords: new ProjectRecordsReadModelService(
       projects,
       new D1ProjectRecordsReadRepository(environment.DB),
+    ),
+    recordWorkspace: new RecordWorkspaceReadModelService(
+      projects,
+      new D1RecordWorkspaceReadRepository(environment.DB),
     ),
   };
 }

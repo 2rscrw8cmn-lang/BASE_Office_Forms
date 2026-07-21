@@ -6,7 +6,13 @@
 // server.
 
 export class ApiError extends Error {
-  constructor({ status = 0, code = "", message, requestId = "", aborted = false }) {
+  constructor({
+    status = 0,
+    code = "",
+    message,
+    requestId = "",
+    aborted = false,
+  }) {
     super(message || "The request could not be completed.");
     this.name = "ApiError";
     this.status = status;
@@ -29,7 +35,8 @@ export function createApiClient(options = {}) {
   const fetchImpl =
     options.fetch ||
     (typeof window !== "undefined" ? window.fetch.bind(window) : null);
-  if (!fetchImpl) throw new Error("An API client requires a fetch implementation.");
+  if (!fetchImpl)
+    throw new Error("An API client requires a fetch implementation.");
 
   async function request(path, { method = "GET", body, signal, headers } = {}) {
     const finalHeaders = { Accept: "application/json", ...(headers || {}) };
@@ -45,7 +52,10 @@ export function createApiClient(options = {}) {
       response = await fetchImpl(path, init);
     } catch (error) {
       if (error && error.name === "AbortError") {
-        throw new ApiError({ aborted: true, message: "The request was cancelled." });
+        throw new ApiError({
+          aborted: true,
+          message: "The request was cancelled.",
+        });
       }
       throw new ApiError({
         message: "The request could not reach the server.",
@@ -64,12 +74,17 @@ export function createApiClient(options = {}) {
       throw new ApiError({
         status: response.status,
         code: payload?.error?.code || "",
-        message: payload?.error?.message || "The request could not be completed.",
+        message:
+          payload?.error?.message || "The request could not be completed.",
         requestId,
       });
     }
 
-    return { data: payload ? payload.data : undefined, requestId, status: response.status };
+    return {
+      data: payload ? payload.data : undefined,
+      requestId,
+      status: response.status,
+    };
   }
 
   return {
@@ -77,9 +92,16 @@ export function createApiClient(options = {}) {
     getDashboard: (opts) => request("/api/v2/dashboard", opts),
     getProjects: (opts) => request("/api/v2/projects", opts),
     getProjectOverview: (projectId, opts) =>
-      request(`/api/v2/projects/${encodeURIComponent(projectId)}/overview`, opts),
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/overview`,
+        opts,
+      ),
     createProject: (input, opts) =>
-      request("/api/v2/projects", { ...(opts || {}), method: "POST", body: input }),
+      request("/api/v2/projects", {
+        ...(opts || {}),
+        method: "POST",
+        body: input,
+      }),
     getProjectRecords: (projectId, { includeArchived = false, ...opts } = {}) =>
       request(
         `/api/v2/projects/${encodeURIComponent(projectId)}/records${
@@ -93,5 +115,25 @@ export function createApiClient(options = {}) {
         method: "POST",
         body: input,
       }),
+    getRecordWorkspace: (projectId, recordId, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/workspace`,
+        opts,
+      ),
+    updateRecord: (projectId, recordId, input, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}`,
+        { ...(opts || {}), method: "PATCH", body: input },
+      ),
+    archiveRecord: (projectId, recordId, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/archive`,
+        { ...(opts || {}), method: "POST" },
+      ),
+    createRevision: (projectId, recordId, input, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions`,
+        { ...(opts || {}), method: "POST", body: input },
+      ),
   };
 }

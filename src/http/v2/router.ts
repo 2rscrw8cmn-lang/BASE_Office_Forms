@@ -177,7 +177,7 @@ export async function routeV2Request(
     );
   }
   const recordRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive|workspace))?)?$/,
   );
   if (recordRoute && dependencies) {
     return handleRecordRoute(
@@ -262,7 +262,9 @@ async function handleRecordRoute(
   action: string | undefined,
 ): Promise<Response> {
   const allowedMethods = action
-    ? ["POST"]
+    ? action === "workspace"
+      ? ["GET"]
+      : ["POST"]
     : recordId
       ? ["GET", "PATCH"]
       : ["GET", "POST"];
@@ -310,6 +312,14 @@ async function handleRecordRoute(
             context.requestId,
           ),
         ),
+      );
+    }
+    if (action === "workspace") {
+      const workspace = dependencies.recordWorkspace;
+      if (!workspace) return unavailable(context);
+      return apiSuccess(
+        context,
+        await workspace.load(authenticated.session, projectId, recordId),
       );
     }
     if (request.method === "GET") {

@@ -185,13 +185,14 @@ success descendants keep Issuances selected. Tabs remain sticky beneath the
 project header on desktop and become a horizontally scrollable navigation row on
 mobile, with the selected link scrolled into view after route changes.
 
-## Dashboard, Projects, Project Overview, and Records surfaces
+## Dashboard, Projects, Project Overview, Records, and Record Detail surfaces
 
 `/dashboard`, `/projects`, `/projects/:projectId`,
-`/projects/:projectId/overview`, and `/projects/:projectId/records` are now
+`/projects/:projectId/overview`, `/projects/:projectId/records`, and
+`/projects/:projectId/records/:recordId` are now
 real, authenticated, data-backed screens instead of placeholders. The
 `/projects/:projectId` → `.../overview` normalization is unchanged, and record
-detail, revision, issuance, RFI, Team, and Administration destinations remain
+revision, issuance, RFI, Team, and Administration destinations remain
 intentional placeholders reached through the same canonical routes.
 
 The **Work Dashboard** answers "what needs my attention today" across every
@@ -302,6 +303,31 @@ current create schema accepts (`recordType`, `title`, and the optional
 record, and on success announces, closes, and navigates to
 `/projects/:projectId/records/:recordId`.
 
+The **Record Detail** workspace loads one additive read model from
+`GET /api/v2/projects/:projectId/records/:recordId/workspace`; the existing
+record-detail GET contract is unchanged. The safe response contains record
+metadata, the authoritative current revision, every revision in deterministic
+`revision_number DESC, id ASC` order, per-revision and total file counts, and
+explicit `updateRecord`, `archiveRecord`, and `createRevision` capabilities. A
+single organization/project/record-scoped D1 aggregate query joins revisions
+and counts files without browser fan-out or per-revision queries. Both
+`currentRevision` and each `isCurrent` flag compare only with the record's
+`current_revision_id`; a newer or higher-numbered draft can never masquerade as
+current. Storage keys, organization IDs, creator IDs, raw state, and
+authorization rationale are not returned.
+
+The standard-width workspace presents a compact record identity, current
+revision, every draft as distinct work, a semantic desktop revision-history
+table with canonical revision links, mobile revision cards, and restrained
+record metadata. Edit Record sends only the existing mutable record fields and
+reloads after confirmation. Archive requires explicit confirmation and reloads
+the same route. Create Revision sends only optional `revisionLabel` and required
+`changeSummary`, leaves revision numbering to the server, and navigates to the
+canonical revision route after creation. All actions are gated solely by the
+server capabilities. Archived records remain fully readable, show their archive
+date and a read-only notice, and expose no mutation controls. Revision Detail,
+file operations, publishing, and issuance remain later milestones.
+
 All five surfaces preserve logical reading order and are responsive: summary
 tiles wrap, attention groups and recent activity stack, the projects and records
 tables become cards, the overview timeline becomes a readable list, and dialogs
@@ -404,6 +430,11 @@ hidden for read-only users who still see the list), create-form validation,
 successful creation navigating to the record detail route, failed creation
 preserving input with a request ID, and Escape-to-close.
 
+`tests/unit/record-detail-ui.test.ts` covers the single workspace request,
+authoritative current/draft separation, semantic table and mobile-card markup,
+canonical revision links, mutable edit payload, reload after edit, draft-create
+payload and navigation, and archived read-only rendering.
+
 `tests/integration/read-models.test.ts` exercises the dashboard and overview
 read models end to end: organization isolation, assigned-project filtering,
 org_admin/document_control_admin visibility, the draft/ready-to-issue/active-RFI
@@ -421,7 +452,10 @@ read-only, capabilities derived from the record policy (create/update/archive
 for managers, read-only for contributors and viewers), deterministic
 newest-first ordering, project and tenant isolation, and unassigned-user
 exclusion. `tests/integration/records.test.ts` additionally pins the
-list-summary envelope shape alongside the record create/update/archive lifecycle.
+list-summary envelope shape alongside the record create/update/archive lifecycle
+and the scoped Record Detail workspace envelope, authoritative current-revision
+selection, file counts, safe fields, access isolation, and read-only
+capabilities.
 
 ## Existing shared library
 
