@@ -39,7 +39,6 @@ export function createRecordForm({
       <form novalidate>
         <div class="app-dialog-head">
           <div>
-            <p class="eyebrow">Records</p>
             <h2 id="rf-title" tabindex="-1">Create record</h2>
             <p id="rf-desc">Add a new document record to this project. Revisions and files are added later.</p>
           </div>
@@ -49,29 +48,29 @@ export function createRecordForm({
         </div>
         <p class="app-dialog-error" role="alert" hidden></p>
         <div class="app-dialog-body">
-          <div class="field">
+          <div class="app-field">
             <label for="rf-title-input">Record title <span aria-hidden="true">*</span></label>
             <input id="rf-title-input" name="title" type="text" required autocomplete="off"
               aria-describedby="rf-title-error" />
-            <p class="field-error" id="rf-title-error" hidden></p>
+            <p class="app-field-error" id="rf-title-error" hidden></p>
           </div>
-          <div class="field-row">
-            <div class="field">
+          <div class="app-field-row">
+            <div class="app-field">
               <label for="rf-number">Record number</label>
               <input id="rf-number" name="recordNumber" type="text" autocomplete="off" />
             </div>
-            <div class="field">
+            <div class="app-field">
               <label for="rf-type">Record type <span aria-hidden="true">*</span></label>
               <select id="rf-type" name="recordType">
                 ${RECORD_TYPE_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
               </select>
             </div>
           </div>
-          <div class="field">
+          <div class="app-field">
             <label for="rf-discipline">Discipline</label>
             <input id="rf-discipline" name="discipline" type="text" autocomplete="off" />
           </div>
-          <div class="field">
+          <div class="app-field">
             <label for="rf-description">Description</label>
             <textarea id="rf-description" name="description" rows="3"></textarea>
           </div>
@@ -210,7 +209,11 @@ export function createRecordForm({
     overlay.removeEventListener("keydown", onKeydown);
     overlay.remove();
     doc.body.classList.remove("app-dialog-open");
-    if (restoreFocus && previousFocus && typeof previousFocus.focus === "function") {
+    if (
+      restoreFocus &&
+      previousFocus &&
+      typeof previousFocus.focus === "function"
+    ) {
       previousFocus.focus();
     }
     onClose?.();

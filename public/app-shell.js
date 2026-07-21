@@ -146,7 +146,7 @@ export function createAppShell(options = {}) {
     <div class="mobile-nav-layer" hidden>
       <button class="mobile-nav-backdrop" type="button" aria-label="Close navigation"></button>
       <aside id="mobile-navigation" class="mobile-nav-drawer" aria-label="Mobile navigation" aria-hidden="true">
-        <div class="mobile-nav-head"><div><p class="eyebrow">BASE Office Forms</p><strong>Workspace navigation</strong></div><button class="mobile-nav-close" type="button" aria-label="Close navigation">${icon("close")}</button></div>
+        <div class="mobile-nav-head"><div><p class="app-eyebrow">BASE Office Forms</p><strong>Workspace navigation</strong></div><button class="mobile-nav-close" type="button" aria-label="Close navigation">${icon("close")}</button></div>
         ${renderNavigation("mobile")}
         ${renderAccountSummary()}
       </aside>
@@ -161,7 +161,7 @@ export function createAppShell(options = {}) {
 
   function renderErrorState(title, description, requestId = "", retry = "") {
     return `<section class="route-state route-error" aria-labelledby="route-error-title">
-      <p class="eyebrow">Unable to continue</p>
+      <p class="app-eyebrow">Unable to continue</p>
       <h1 id="route-error-title" tabindex="-1">${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
       ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
@@ -175,7 +175,7 @@ export function createAppShell(options = {}) {
       error.message ||
       "Your session could not be verified. No changes were made.";
     return `<section class="route-state route-error" aria-labelledby="route-error-title" role="alert">
-      <p class="eyebrow">Unable to continue</p>
+      <p class="app-eyebrow">Unable to continue</p>
       <h1 id="route-error-title" tabindex="-1">Session unavailable</h1>
       <p>${escapeHtml(message)}</p>
       ${error.code ? `<p class="error-code">Error code <code>${escapeHtml(error.code)}</code></p>` : ""}
@@ -189,7 +189,7 @@ export function createAppShell(options = {}) {
     description = "The requested page is not available.",
   ) {
     return `<section class="route-state route-not-found" aria-labelledby="not-found-title">
-      <p class="eyebrow">BASE Office Forms</p>
+      <p class="app-eyebrow">BASE Office Forms</p>
       <h1 id="not-found-title" tabindex="-1">${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
       <div class="state-actions"><a class="primary-button" href="/dashboard" data-app-link>Go to Dashboard</a><a href="/projects" data-app-link>Browse Projects</a></div>
@@ -199,10 +199,10 @@ export function createAppShell(options = {}) {
   function renderProjectHeader(route) {
     const projectId = route.params.projectId;
     if (state.project.status === "loading" || state.project.id !== projectId) {
-      return `<header class="project-context-header" aria-busy="true"><div><p class="eyebrow">Project context</p><h1 tabindex="-1">Loading project&hellip;</h1><p class="project-context-id">Project ID <code>${escapeHtml(projectId)}</code></p></div><span class="status-badge status-neutral">Loading</span></header>`;
+      return `<header class="project-context-header" aria-busy="true"><div><p class="project-context-number">Project <code>${escapeHtml(projectId)}</code></p><h1 tabindex="-1">Loading project&hellip;</h1></div><span class="status-badge status-neutral">Loading</span></header>`;
     }
     const project = state.project.data;
-    return `<header class="project-context-header"><div><p class="eyebrow">${escapeHtml(project.projectNumber || "Project")}</p><h1 tabindex="-1">${escapeHtml(project.name)}</h1><p class="project-context-id">Project number <code>${escapeHtml(project.projectNumber)}</code></p></div><span class="status-badge status-${project.status === "active" ? "success" : "neutral"}">${escapeHtml(project.status)}</span></header>`;
+    return `<header class="project-context-header"><div><p class="project-context-number">${escapeHtml(project.projectNumber || "Project")}</p><h1 tabindex="-1">${escapeHtml(project.name)}</h1></div><span class="status-badge status-${project.status === "active" ? "success" : "neutral"}">${escapeHtml(project.status)}</span></header>`;
   }
 
   function renderProjectTabs(route) {
@@ -217,7 +217,7 @@ export function createAppShell(options = {}) {
 
   function renderPlaceholder(route) {
     return `<section class="route-placeholder" aria-labelledby="page-title">
-      <div class="page-heading"><div><p class="eyebrow">${escapeHtml(route.eyebrow)}</p><h${route.params.projectId ? "2" : "1"} id="page-title" tabindex="-1">${escapeHtml(route.title)}</h${route.params.projectId ? "2" : "1"}><p>${escapeHtml(route.description)}</p></div></div>
+      <div class="page-heading"><div><p class="app-eyebrow">${escapeHtml(route.eyebrow)}</p><h${route.params.projectId ? "2" : "1"} id="page-title" tabindex="-1">${escapeHtml(route.title)}</h${route.params.projectId ? "2" : "1"}><p>${escapeHtml(route.description)}</p></div></div>
       <div class="placeholder-panel"><div class="placeholder-rule" aria-hidden="true"></div><p class="placeholder-label">Planned route</p><code>${escapeHtml(route.pathname)}</code><p>${escapeHtml(route.placeholderNote)}</p></div>
     </section>`;
   }
@@ -297,7 +297,8 @@ export function createAppShell(options = {}) {
 
   function featureDescriptor(route) {
     if (!route) return null;
-    if (route.id === "dashboard") return { key: "dashboard", kind: "dashboard" };
+    if (route.id === "dashboard")
+      return { key: "dashboard", kind: "dashboard" };
     if (route.id === "projects") return { key: "projects", kind: "projects" };
     if (route.id === "project-overview") {
       const projectId = route.params?.projectId;

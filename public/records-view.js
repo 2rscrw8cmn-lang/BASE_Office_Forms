@@ -19,12 +19,11 @@ import {
   recordTypeLabel,
   recordStatusLabel,
   revisionStatusLabel,
-  currentRevisionText,
 } from "./app-format.js";
 import { createRecordForm } from "./record-form.js";
 
 const SORT_KEYS = {
-  created: { label: "Created (newest)", defaultDir: "desc" },
+  created: { label: "Newest", defaultDir: "desc" },
   updated: { label: "Recently updated", defaultDir: "desc" },
   title: { label: "Title A–Z", defaultDir: "asc" },
   recordNumber: { label: "Record number", defaultDir: "asc" },
@@ -218,20 +217,30 @@ export function createRecordsView({
       present.has(value),
     );
     const options = ordered.map((value) => [value, revisionStatusLabel(value)]);
-    if (present.has("none")) options.push(["none", "No published revision"]);
+    if (present.has("none")) options.push(["none", "No revision"]);
     return options;
   }
 
-  function selectMarkup(id, label, options, selected) {
+  function hasActiveFilters() {
+    return (
+      Boolean(filters.q.trim()) ||
+      filters.type !== "all" ||
+      filters.discipline !== "all" ||
+      filters.revisionStatus !== "all" ||
+      filters.archived !== "active"
+    );
+  }
+
+  function selectMarkup(id, label, defaultLabel, options, selected) {
     const values = new Set(options.map(([value]) => value));
     const extra =
       selected !== "all" && !values.has(selected)
         ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`
         : "";
-    return `<div class="field field-filter">
-        <label for="${id}">${escapeHtml(label)}</label>
+    return `<div class="app-field app-filter-field app-register-control">
+        <label class="sr-only" for="${id}">${escapeHtml(label)}</label>
         <select id="${id}">
-          <option value="all"${selected === "all" ? " selected" : ""}>All</option>
+          <option value="all"${selected === "all" ? " selected" : ""}>${escapeHtml(defaultLabel)}</option>
           ${extra}
           ${options
             .map(
@@ -244,8 +253,8 @@ export function createRecordsView({
   }
 
   function sortSelect() {
-    return `<div class="field field-filter">
-        <label for="records-sort">Sort</label>
+    return `<div class="app-field app-filter-field app-register-control app-register-sort">
+        <label class="sr-only" for="records-sort">Sort records</label>
         <select id="records-sort">
           ${Object.entries(SORT_KEYS)
             .map(
@@ -258,28 +267,99 @@ export function createRecordsView({
   }
 
   function toolbar(records) {
-    return `<div class="records-toolbar">
-        <div class="field field-search">
-          <label for="records-search">Search records</label>
-          <input id="records-search" type="search" placeholder="Search by title, number, type, or discipline"
+    return `<div class="app-register-toolbar records-toolbar">
+      <div class="app-register-controls">
+        <div class="app-field app-search-field app-register-search app-register-control">
+          <label class="sr-only" for="records-search">Search records</label>
+          <input id="records-search" type="search" placeholder="Search records..."
             autocomplete="off" value="${escapeHtml(filters.q)}" />
         </div>
-        ${selectMarkup("records-type", "Type", typeOptions(records), filters.type)}
-        ${selectMarkup("records-discipline", "Discipline", disciplineOptions(records), filters.discipline)}
-        ${selectMarkup("records-revision", "Revision status", revisionStatusOptions(records), filters.revisionStatus)}
-        <div class="field field-filter">
-          <label for="records-archived">Archived</label>
-          <select id="records-archived">
-            ${ARCHIVED_OPTIONS.map(
-              ([value, text]) =>
-                `<option value="${value}"${value === filters.archived ? " selected" : ""}>${escapeHtml(text)}</option>`,
-            ).join("")}
-          </select>
+        <div class="app-register-filters">
+          ${selectMarkup("records-type", "Filter by record type", "All types", typeOptions(records), filters.type)}
+          ${selectMarkup("records-discipline", "Filter by discipline", "All disciplines", disciplineOptions(records), filters.discipline)}
+          ${selectMarkup("records-revision", "Filter by revision status", "All revisions", revisionStatusOptions(records), filters.revisionStatus)}
+          <div class="app-field app-filter-field app-register-control">
+            <label class="sr-only" for="records-archived">Archived visibility</label>
+            <select id="records-archived">
+              ${ARCHIVED_OPTIONS.map(
+                ([value, text]) =>
+                  `<option value="${value}"${value === filters.archived ? " selected" : ""}>${escapeHtml(text)}</option>`,
+              ).join("")}
+            </select>
+          </div>
+          ${sortSelect()}
         </div>
-        ${sortSelect()}
-        <button class="text-link" type="button" data-clear-filters>Clear filters</button>
-        <p class="result-count" aria-live="polite" data-result-count></p>
-      </div>`;
+      </div>
+      <div class="app-register-filter-state">
+        <div class="app-filter-chip-list" data-filter-chips hidden></div>
+        <button class="text-link" type="button" data-clear-filters hidden>Clear all</button>
+        <p class="app-register-result-count" aria-live="polite" data-result-count></p>
+      </div>
+    </div>`;
+  }
+
+  function activeFilterChips() {
+    const chips = [];
+    if (filters.type !== "all")
+      chips.push(["type", "Type", recordTypeLabel(filters.type)]);
+    if (filters.discipline !== "all")
+      chips.push(["discipline", "Discipline", filters.discipline]);
+    if (filters.revisionStatus !== "all") {
+      chips.push([
+        "revisionStatus",
+        "Revision",
+        filters.revisionStatus === "none"
+          ? "No revision"
+          : revisionStatusLabel(filters.revisionStatus),
+      ]);
+    }
+    if (filters.archived !== "active") {
+      const archivedLabel =
+        ARCHIVED_OPTIONS.find(([value]) => value === filters.archived)?.[1] ||
+        filters.archived;
+      chips.push(["archived", "Archived", archivedLabel]);
+    }
+    return chips
+      .map(
+        ([key, category, value]) =>
+          `<button class="app-filter-chip" type="button" data-remove-filter="${key}" aria-label="Remove ${escapeHtml(category)} filter: ${escapeHtml(value)}"><span>${escapeHtml(category)}: <strong>${escapeHtml(value)}</strong></span><span aria-hidden="true">×</span></button>`,
+      )
+      .join("");
+  }
+
+  function updateToolbarState(container) {
+    const values = {
+      "#records-search": filters.q,
+      "#records-type": filters.type,
+      "#records-discipline": filters.discipline,
+      "#records-revision": filters.revisionStatus,
+      "#records-archived": filters.archived,
+      "#records-sort": filters.sort,
+    };
+    Object.entries(values).forEach(([selector, value]) => {
+      const control = container.querySelector(selector);
+      if (control && control.value !== value) control.value = value;
+    });
+    const chipList = container.querySelector("[data-filter-chips]");
+    if (chipList) {
+      const markup = activeFilterChips();
+      chipList.innerHTML = markup;
+      chipList.hidden = !markup;
+      chipList.querySelectorAll("[data-remove-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const key = button.getAttribute("data-remove-filter");
+          if (!key || !(key in filters)) return;
+          filters[key] = defaultFilters()[key];
+          syncUrl(true);
+          updateResults(container);
+          announce?.(`${button.textContent.trim()} removed.`);
+        });
+      });
+    }
+    const clear = container.querySelector(
+      ".records-toolbar [data-clear-filters]",
+    );
+    if (clear) clear.hidden = !hasActiveFilters();
   }
 
   function recordMeta(record) {
@@ -297,22 +377,21 @@ export function createRecordsView({
       : "";
   }
 
-  function currentRevisionCell(record) {
-    const text = currentRevisionText(record.currentRevision);
-    if (!text)
-      return `<span class="record-norevision">No published revision</span>`;
-    return `<span class="record-revision">${escapeHtml(text)}</span>`;
-  }
-
-  function revisionStatusCell(record) {
-    if (!record.currentRevision) return "—";
-    return `<span class="status-badge status-neutral">${escapeHtml(revisionStatusLabel(record.currentRevision.status))}</span>`;
+  function revisionCell(record) {
+    if (!record.currentRevision)
+      return `<span class="record-norevision">No revision</span>`;
+    const value =
+      record.currentRevision.revisionLabel ||
+      String(record.currentRevision.revisionNumber);
+    return `<span class="record-revision">Rev ${escapeHtml(value)}</span><span class="record-revision-status">${escapeHtml(revisionStatusLabel(record.currentRevision.status))}</span>`;
   }
 
   function tableRows(records) {
     return records
       .map(
-        (record) => `<tr>
+        (
+          record,
+        ) => `<tr class="app-data-row" data-app-row data-href="${recordDetailHref(projectId, record)}">
           <th scope="row">
             <a href="${recordDetailHref(projectId, record)}" data-app-link
               aria-label="Open record ${escapeHtml(record.title)}${record.recordNumber ? ` (${escapeHtml(record.recordNumber)})` : ""}">${escapeHtml(record.title)}</a>
@@ -320,12 +399,9 @@ export function createRecordsView({
           </th>
           <td>${escapeHtml(recordTypeLabel(record.recordType))}</td>
           <td>${escapeHtml(record.discipline || "—")}</td>
-          <td>${currentRevisionCell(record)}</td>
-          <td>${revisionStatusCell(record)}</td>
+          <td class="cell-revision">${revisionCell(record)}</td>
           <td class="cell-files">${escapeHtml(String(record.fileCount ?? 0))}</td>
-          <td class="cell-date">${escapeHtml(formatDate(record.createdAt) || "—")}</td>
-          <td class="cell-open"><a class="open-link" href="${recordDetailHref(projectId, record)}" data-app-link
-            aria-label="Open record ${escapeHtml(record.title)}">Open record<span class="open-arrow" aria-hidden="true">→</span></a></td>
+          <td class="cell-date">${escapeHtml(formatDate(record.updatedAt) || "—")}</td>
         </tr>`,
       )
       .join("");
@@ -343,13 +419,9 @@ export function createRecordsView({
             <span class="status-badge status-${record.status === "active" ? "success" : "neutral"}">${escapeHtml(recordStatusLabel(record.status))}</span>
           </span>
           <span class="record-card-title">${escapeHtml(record.title)}</span>
-          <span class="record-card-meta">${escapeHtml(recordTypeLabel(record.recordType))}${record.discipline ? ` · ${escapeHtml(record.discipline)}` : ""}</span>
-          <span class="record-card-revision">${
-            currentRevisionText(record.currentRevision)
-              ? `${escapeHtml(currentRevisionText(record.currentRevision))} · ${escapeHtml(revisionStatusLabel(record.currentRevision.status))}`
-              : "No published revision"
-          }${record.hasDraftRevision ? ` <span class="record-draft-badge">Draft in progress</span>` : ""}</span>
-          <span class="record-card-foot">${escapeHtml(String(record.fileCount ?? 0))} file${record.fileCount === 1 ? "" : "s"} · Created ${escapeHtml(formatDate(record.createdAt) || "—")}</span>
+          <span class="record-card-meta"><span>${escapeHtml(recordTypeLabel(record.recordType))}</span><span>${escapeHtml(record.discipline || "No discipline")}</span></span>
+          <span class="record-card-revision">${revisionCell(record)}${record.hasDraftRevision ? ` <span class="record-draft-badge">Draft in progress</span>` : ""}</span>
+          <span class="record-card-foot"><span>${escapeHtml(String(record.fileCount ?? 0))} file${record.fileCount === 1 ? "" : "s"}</span><span>Updated ${escapeHtml(formatDate(record.updatedAt) || "—")}</span></span>
         </a></li>`,
       )
       .join("");
@@ -358,7 +430,7 @@ export function createRecordsView({
   function resultsMarkup(records) {
     const filtered = applyFilters(records);
     if (!records.length) {
-      return `<div class="records-empty"><p class="section-empty">No records have been created for this project.</p>${
+      return `<div class="records-empty"><h3>No records yet</h3><p class="section-empty">Create the first record for this project to begin tracking revisions and files.</p>${
         canCreate()
           ? `<button class="secondary-button" type="button" data-create-record>Create record</button>`
           : ""
@@ -378,20 +450,18 @@ export function createRecordsView({
     }
     if (!filtered.length) {
       return `<div class="records-empty" role="status"><p class="section-empty">No records match these filters.</p>
-      <button class="secondary-button" type="button" data-clear-filters>Clear filters</button></div>`;
+      <button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>`;
     }
     return `<div class="records-table-wrap" role="region" aria-label="Project records" tabindex="0">
-        <table class="records-table">
+        <table class="records-table app-data-table">
           <caption class="sr-only">Records you can access in this project</caption>
           <thead><tr>
             <th scope="col">Record</th>
             <th scope="col">Type</th>
             <th scope="col">Discipline</th>
-            <th scope="col">Current revision</th>
-            <th scope="col">Revision status</th>
+            <th scope="col">Revision</th>
             <th scope="col">Files</th>
-            <th scope="col">Created</th>
-            <th scope="col"><span class="sr-only">Actions</span></th>
+            <th scope="col">Updated</th>
           </tr></thead>
           <tbody>${tableRows(filtered)}</tbody>
         </table>
@@ -400,17 +470,17 @@ export function createRecordsView({
   }
 
   function heading() {
-    return `<div class="page-heading page-heading-actions records-heading"><div>
-        <div class="page-heading-text">
-          <p class="eyebrow">Project documents</p>
+    const total = state.status === "loaded" ? state.data.records.length : null;
+    return `<header class="app-register-header records-heading app-container-register">
+        <div class="app-register-title">
           <h2 id="records-title" tabindex="-1">Records</h2>
-          <p>Browse the document records for this project, or search, filter, and open one.</p>
+          ${total === null ? "" : `<span class="app-register-count">${total} record${total === 1 ? "" : "s"}</span>`}
         </div>${
           canCreate()
             ? `<button class="primary-button" type="button" data-create-record>Create record</button>`
             : ""
         }
-      </div></div>`;
+      </header>`;
   }
 
   function loadingSkeleton() {
@@ -425,23 +495,23 @@ export function createRecordsView({
 
   function body() {
     if (state.status === "loading")
-      return `<div class="records-body">${loadingSkeleton()}</div>`;
+      return `<div class="records-body app-container-register">${loadingSkeleton()}</div>`;
     if (state.status === "missing") {
-      return `<div class="records-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unavailable</p>
+      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unavailable</p>
           <p>These records are unavailable or you do not have access to this project.</p>
         </section></div>`;
     }
     if (state.status === "error") {
       const requestId = state.error?.requestId;
-      return `<div class="records-body"><section class="inline-error" role="alert">
-          <p class="eyebrow">Unable to load</p>
+      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
+          <p class="app-eyebrow">Unable to load</p>
           <p>The records could not be loaded. No changes were made.</p>
           ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
           <div class="state-actions"><button class="secondary-button" type="button" data-records-retry>Try again</button></div>
         </section></div>`;
     }
-    return `<div class="records-body">${toolbar(state.data.records)}<div class="records-results" data-results></div></div>`;
+    return `<div class="records-body app-container-register">${toolbar(state.data.records)}<div class="records-results" data-results></div></div>`;
   }
 
   function updateResults(container) {
@@ -452,8 +522,11 @@ export function createRecordsView({
     const total = visibleUniverse(state.data.records).length;
     const countEl = container.querySelector("[data-result-count]");
     if (countEl) {
-      countEl.textContent = `Showing ${filtered.length} of ${total} record${total === 1 ? "" : "s"}`;
+      countEl.textContent = hasActiveFilters()
+        ? `${filtered.length} of ${total} record${total === 1 ? "" : "s"}`
+        : "";
     }
+    updateToolbarState(container);
     bindResultLinks(container);
   }
 
@@ -475,6 +548,27 @@ export function createRecordsView({
         });
       });
     container
+      .querySelectorAll("[data-results] [data-app-row]")
+      .forEach((row) => {
+        row.addEventListener("click", (event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            event.target.closest?.(
+              "a, button, input, select, textarea, label, [contenteditable='true']",
+            )
+          )
+            return;
+          const selection = row.ownerDocument.defaultView?.getSelection?.();
+          if (selection && !selection.isCollapsed && selection.toString())
+            return;
+          navigate(row.getAttribute("data-href"));
+        });
+      });
+    container
       .querySelectorAll("[data-results] [data-clear-filters]")
       .forEach((button) =>
         button.addEventListener("click", () => clearFilters(container)),
@@ -484,7 +578,7 @@ export function createRecordsView({
       ?.addEventListener("click", () => {
         filters.archived = "all";
         syncUrl(true);
-        remountToolbar(container);
+        updateResults(container);
         announce?.("Archived records included.");
       });
     container
@@ -514,6 +608,28 @@ export function createRecordsView({
     filters = next;
   }
 
+  function normalizeFilters(records) {
+    const typeValues = new Set(typeOptions(records).map(([value]) => value));
+    const disciplineValues = new Set(
+      disciplineOptions(records).map(([value]) => value),
+    );
+    const revisionValues = new Set(
+      revisionStatusOptions(records).map(([value]) => value),
+    );
+    if (filters.type !== "all" && !typeValues.has(filters.type))
+      filters.type = "all";
+    if (
+      filters.discipline !== "all" &&
+      !disciplineValues.has(filters.discipline)
+    )
+      filters.discipline = "all";
+    if (
+      filters.revisionStatus !== "all" &&
+      !revisionValues.has(filters.revisionStatus)
+    )
+      filters.revisionStatus = "all";
+  }
+
   function syncUrl(push) {
     if (!appWindow) return;
     const params = new URLSearchParams();
@@ -534,23 +650,12 @@ export function createRecordsView({
   }
 
   function clearFilters(container) {
-    filters = defaultFilters();
+    const sort = filters.sort;
+    const direction = filters.direction;
+    filters = { ...defaultFilters(), sort, direction };
     syncUrl(true);
-    remountToolbar(container);
-    announce?.("Filters cleared.");
-  }
-
-  // Re-render the toolbar so its controls reflect a programmatic filter reset,
-  // then refresh the results. Used for Clear filters, where the field values
-  // themselves change (individual control edits update results in place and
-  // keep focus).
-  function remountToolbar(container) {
-    const toolbarEl = container.querySelector(".records-toolbar");
-    if (toolbarEl) {
-      toolbarEl.outerHTML = toolbar(state.data.records);
-      bindToolbar(container);
-    }
     updateResults(container);
+    announce?.("Filters cleared.");
   }
 
   function openCreate(container) {
@@ -605,7 +710,11 @@ export function createRecordsView({
     // Restore list state from the URL on every (re)mount so refresh, copied
     // links, and browser back/forward all reproduce the same view.
     readFiltersFromUrl();
-    container.innerHTML = `<section class="workspace-page records-view">${heading()}${body()}</section>`;
+    if (state.status === "loaded") {
+      normalizeFilters(state.data.records);
+      syncUrl(false);
+    }
+    container.innerHTML = `<section class="workspace-page records-view app-register-page">${heading()}${body()}</section>`;
 
     container
       .querySelector("[data-records-retry]")

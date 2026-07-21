@@ -133,32 +133,25 @@ function idOrder(root: ParentNode, selector: string): string[] {
 }
 
 describe("projects header and toolbar polish", () => {
-  it("keeps eyebrow, title, and description together with the create action on the right", async () => {
+  it("uses the compact register header with total count and create action", async () => {
     const { document, shell } = mount("/projects");
     await shell.ready;
     await waitFor(() => {
       expect(
-        document.querySelector(".projects-view .page-heading"),
+        document.querySelector(
+          ".projects-view .app-register-header .app-register-count",
+        ),
       ).not.toBeNull();
     });
-    const flexRow = document.querySelector(".page-heading-actions > div");
-    if (flexRow === null) throw new Error("Expected the header flex row.");
-    const children = [...flexRow.children];
-    // The text group (eyebrow + title + description) comes first, the action last.
-    const textGroup = children[0];
-    expect(textGroup.querySelector(".eyebrow")?.textContent).toContain(
-      "Project directory",
+    const header = document.querySelector(".app-register-header");
+    expect(header?.classList.contains("app-container-register")).toBe(true);
+    expect(header?.querySelector("#page-title")?.textContent).toBe("Projects");
+    expect(header?.querySelector(".app-register-count")?.textContent).toBe(
+      "2 projects",
     );
-    expect(textGroup.querySelector("#page-title")?.textContent).toBe(
-      "Projects",
-    );
-    expect(textGroup.querySelector("p:last-child")?.textContent).toContain(
-      "Open a project workspace",
-    );
-    const action = children[children.length - 1];
-    expect(action.getAttribute("data-create-project")).not.toBeNull();
-    // The action is a sibling of the text group, not nested inside it.
-    expect(textGroup.contains(action)).toBe(false);
+    expect(header?.querySelector("[data-create-project]")).not.toBeNull();
+    expect(header?.querySelector(".app-eyebrow")).toBeNull();
+    expect(header?.querySelector("p")).toBeNull();
   });
 
   it("exposes a single cohesive toolbar with search, compact status, count, and restrained clear", async () => {
@@ -169,23 +162,22 @@ describe("projects header and toolbar polish", () => {
     });
     const toolbar = document.querySelector(".projects-toolbar");
     expect(
-      toolbar?.querySelector(".field-search #projects-search"),
+      toolbar?.querySelector(".app-search-field #projects-search"),
     ).not.toBeNull();
     expect(
-      toolbar?.querySelector(".field-filter #projects-status"),
+      toolbar?.querySelector(".app-filter-field #projects-status"),
     ).not.toBeNull();
     expect(toolbar?.querySelector("[data-result-count]")).not.toBeNull();
-    // Clear filters is a restrained text link, not a heavy button.
-    expect(
-      toolbar
-        ?.querySelector("[data-clear-filters]")
-        ?.classList.contains("text-link"),
-    ).toBe(true);
+    expect(toolbar?.querySelectorAll(".app-field")).toHaveLength(2);
+    expect(toolbar?.querySelector(".field")).toBeNull();
+    const clear = toolbar?.querySelector("[data-clear-filters]");
+    expect(clear?.classList.contains("text-link")).toBe(true);
+    expect(clear?.hasAttribute("hidden")).toBe(true);
   });
 });
 
 describe("projects table and cards polish", () => {
-  it("renders readable header labels, a name row header, and a strong Open affordance", async () => {
+  it("combines project identity and removes the duplicate Open action", async () => {
     const { document, shell } = mount("/projects");
     await shell.ready;
     await waitFor(() => {
@@ -194,23 +186,19 @@ describe("projects table and cards polish", () => {
     const headers = [
       ...document.querySelectorAll(".projects-table thead th"),
     ].map((th) => th.textContent.trim());
-    expect(headers.slice(0, 5)).toEqual([
-      "Number",
-      "Project",
-      "Status",
-      "Location",
-      "Updated",
-    ]);
+    expect(headers).toEqual(["Project", "Status", "Location", "Updated"]);
     // Project name uses a semantic row header.
     expect(
       document.querySelector('.projects-table tbody th[scope="row"] a'),
     ).not.toBeNull();
-    // Open affordance is a dedicated chip link with an arrow.
-    const open = document.querySelector(
-      ".projects-table .cell-open .open-link",
-    );
-    expect(open).not.toBeNull();
-    expect(open?.querySelector(".open-arrow")).not.toBeNull();
+    expect(
+      document.querySelector('.projects-table th[scope="row"] .project-number')
+        ?.textContent,
+    ).toBe("P-001");
+    expect(document.querySelector(".projects-table .cell-open")).toBeNull();
+    expect(
+      document.querySelector(".projects-table [data-app-row]"),
+    ).not.toBeNull();
   });
 
   it("still renders touch-friendly mobile cards alongside the table", async () => {
@@ -244,7 +232,7 @@ describe("create project dialog polish", () => {
       "pf-description",
     ]);
     // Row 1 pairs number and status; row 3 pairs city and region.
-    const rows = body?.querySelectorAll(".field-row");
+    const rows = body?.querySelectorAll(".app-field-row");
     expect(idOrder(rows?.[0] as ParentNode, "input, select")).toEqual([
       "pf-number",
       "pf-status",
@@ -253,6 +241,8 @@ describe("create project dialog polish", () => {
       "pf-city",
       "pf-region",
     ]);
+    expect(body?.querySelectorAll(".app-field")).toHaveLength(6);
+    expect(body?.querySelector(".field")).toBeNull();
   });
 
   it("does not mark fields as validation errors merely because the dialog opened", async () => {

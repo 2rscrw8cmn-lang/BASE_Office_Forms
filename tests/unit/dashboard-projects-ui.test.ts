@@ -481,6 +481,49 @@ describe("projects view", () => {
     expect(rowLinks).toContain("/projects/proj-1/overview");
     expect(rowLinks).toContain("/projects/proj-2/overview");
     expect(document.querySelector(".project-cards")).not.toBeNull();
+    expect(
+      document
+        .querySelector(".projects-view")
+        ?.classList.contains("app-register-page"),
+    ).toBe(true);
+  });
+
+  it("opens a project from non-interactive row space and ignores interactive descendants", async () => {
+    const { document, window, shell } = mount("/projects");
+    await shell.ready;
+    await waitFor(() => {
+      expect(document.querySelector(".projects-table tbody tr")).not.toBeNull();
+    });
+    const row = grab(document, ".projects-table tbody tr");
+    const location = row.querySelectorAll("td")[1];
+    location.dispatchEvent(
+      new window.MouseEvent("click", {
+        bubbles: true,
+        button: 0,
+      }) as unknown as Event,
+    );
+    await settle();
+    expect(window.location.pathname).toBe("/projects/proj-1/overview");
+
+    const modified = mount("/projects");
+    await modified.shell.ready;
+    await waitFor(() => {
+      expect(
+        modified.document.querySelector(".projects-table tbody tr a"),
+      ).not.toBeNull();
+    });
+    const modifiedRow = grab(modified.document, ".projects-table tbody tr");
+    const control = modified.document.createElement("button");
+    control.type = "button";
+    modifiedRow.querySelector("td")?.appendChild(control);
+    control.dispatchEvent(
+      new modified.window.MouseEvent("click", {
+        bubbles: true,
+        button: 0,
+      }) as unknown as Event,
+    );
+    await settle();
+    expect(modified.window.location.pathname).toBe("/projects");
   });
 
   it("filters by search text across number and name", async () => {
@@ -512,19 +555,34 @@ describe("projects view", () => {
       expect(document.querySelector(".projects-table tbody tr")).not.toBeNull();
     });
     const status = grab(document, "#projects-status");
+    expect(
+      grab(document, ".projects-toolbar [data-clear-filters]").hasAttribute(
+        "hidden",
+      ),
+    ).toBe(true);
     (status as HTMLInputElement).value = "planning";
     fire(status, "change");
     await settle();
     expect(document.querySelectorAll(".projects-table tbody tr")).toHaveLength(
       1,
     );
-    expect(textOf(document, "[data-result-count]")).toContain("Showing 1 of 2");
+    expect(textOf(document, "[data-result-count]")).toBe("1 of 2 projects");
+    expect(
+      grab(document, ".projects-toolbar [data-clear-filters]").hasAttribute(
+        "hidden",
+      ),
+    ).toBe(false);
 
     grab(document, ".projects-toolbar [data-clear-filters]").click();
     await settle();
     expect(document.querySelectorAll(".projects-table tbody tr")).toHaveLength(
       2,
     );
+    expect(
+      grab(document, ".projects-toolbar [data-clear-filters]").hasAttribute(
+        "hidden",
+      ),
+    ).toBe(true);
   });
 
   it("shows a no-results state when filters match nothing", async () => {
@@ -565,6 +623,10 @@ describe("projects view", () => {
     });
     grab(document, "[data-create-project]").click();
     expect(document.querySelector(".app-dialog")).not.toBeNull();
+    expect(document.activeElement?.id).toBe("pf-number");
+    expect(
+      document.querySelector('.app-dialog [aria-invalid="true"]'),
+    ).toBeNull();
     fire(grab(document, ".app-dialog form"), "submit");
     await settle(1);
     expect(
@@ -573,6 +635,9 @@ describe("projects view", () => {
     expect(
       document.querySelector("#pf-name-error")?.hasAttribute("hidden"),
     ).toBe(false);
+    expect(grab(document, "#pf-number").getAttribute("aria-invalid")).toBe(
+      "true",
+    );
   });
 
   it("navigates to the new project overview after a successful creation", async () => {
