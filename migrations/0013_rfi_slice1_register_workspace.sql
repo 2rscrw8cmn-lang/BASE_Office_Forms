@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = OFF;
-
 -- RFI Vertical Slice 1: bring the standalone rfi_records foundation up to the
 -- binding RFI product model without folding RFIs into the document-control
 -- `records` spine (see docs/UX_RFI_SPEC.md §"Template vs record" and the
@@ -19,7 +17,18 @@ PRAGMA foreign_keys = OFF;
 --   * separate reference fields (drawing_references, specification_references)
 --   * optional imported legacy reference (legacy_reference), displayed as
 --     visibly-secondary migration/reconciliation context only
+--
 -- A full table rebuild is required because the status CHECK constraint changes.
+--
+-- IMPORTANT (D1): each migration file runs inside an implicit transaction, and
+-- `PRAGMA foreign_keys` is a no-op inside a transaction, so foreign-key
+-- enforcement cannot be turned off here. `rfi_responses` references rfi_records
+-- with ON DELETE RESTRICT, so a naive `DROP TABLE rfi_records` raises
+-- "FOREIGN KEY constraint failed" on any database that already holds RFI data
+-- (RESTRICT is checked immediately even under `defer_foreign_keys`). We therefore
+-- stage rfi_responses aside, rebuild rfi_records, then restore rfi_responses
+-- against the rebuilt parent. This is safe whether the table is empty or
+-- populated and preserves all existing RFI and response rows.
 
 CREATE TABLE rfi_records_v2 (
   id TEXT PRIMARY KEY,
@@ -80,6 +89,11 @@ SELECT
   1, NULL, created_at, updated_at
 FROM rfi_records;
 
+-- Stage the only child that references rfi_records (ON DELETE RESTRICT) so the
+-- parent can be dropped without tripping the constraint, then restore it.
+CREATE TABLE rfi_responses_backup AS SELECT * FROM rfi_responses;
+DROP TABLE rfi_responses;
+
 DROP TABLE rfi_records;
 ALTER TABLE rfi_records_v2 RENAME TO rfi_records;
 
@@ -87,6 +101,28 @@ CREATE INDEX IF NOT EXISTS idx_rfi_records_project_status_created
   ON rfi_records(project_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rfi_records_organization_project_number
   ON rfi_records(organization_id, project_id, rfi_number);
+
+-- Recreate rfi_responses (identical to migration 0006) against the rebuilt
+-- parent and restore every staged row.
+CREATE TABLE rfi_responses (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  rfi_id TEXT NOT NULL,
+  response TEXT NOT NULL,
+  responded_by TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (rfi_id, organization_id) REFERENCES rfi_records(id, organization_id) ON DELETE RESTRICT,
+  UNIQUE (rfi_id)
+);
+
+INSERT INTO rfi_responses (id, organization_id, rfi_id, response, responded_by, created_at)
+  SELECT id, organization_id, rfi_id, response, responded_by, created_at
+  FROM rfi_responses_backup;
+
+DROP TABLE rfi_responses_backup;
+
+CREATE INDEX IF NOT EXISTS idx_rfi_responses_organization_rfi
+  ON rfi_responses(organization_id, rfi_id);
 
 -- Supporting attachments for an RFI draft/revision context. Each file has an
 -- explicit role and remains associated with the exact RFI. Binary content lives
@@ -112,7 +148,5 @@ CREATE TABLE IF NOT EXISTS rfi_attachments (
 
 CREATE INDEX IF NOT EXISTS idx_rfi_attachments_rfi_role_uploaded
   ON rfi_attachments(rfi_id, role, uploaded_at ASC, id ASC);
-
-PRAGMA foreign_keys = ON;
 
 UPDATE app_meta SET schema_version = 11 WHERE id = 1;

@@ -36,7 +36,10 @@ export interface OverviewActiveRfi {
   rfiId: string;
   rfiNumber: string | null;
   title: string;
-  status: Extract<RfiStatus, "open" | "returned_for_clarification" | "response_received">;
+  status: Extract<
+    RfiStatus,
+    "open" | "returned_for_clarification" | "response_received"
+  >;
   dueDate: string | null;
   createdAt: string;
 }
@@ -218,7 +221,10 @@ export class D1ProjectOverviewReadRepository {
         rfi_id: string;
         rfi_number: string | null;
         title: string;
-        status: Extract<RfiStatus, "open" | "returned_for_clarification" | "response_received">;
+        status: Extract<
+          RfiStatus,
+          "open" | "returned_for_clarification" | "response_received"
+        >;
         due_date: string | null;
         created_at: string;
       }>();

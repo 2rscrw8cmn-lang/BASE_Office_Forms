@@ -1394,6 +1394,20 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       "RECORD_NUMBER_CONFLICT",
       "A record with this number already exists in this project.",
     );
+  // Schema drift diagnostic: a query referencing a column/table that does not
+  // exist means the bound D1 database is missing pending migrations (e.g. a
+  // preview deployment shipping new read models against an un-migrated database).
+  // Surface a clear, actionable 503 instead of an opaque failure.
+  if (
+    error instanceof Error &&
+    /no such (column|table)|has no column named/i.test(error.message)
+  )
+    return apiError(
+      context,
+      503,
+      "DATABASE_SCHEMA_OUTDATED",
+      "The database is missing pending migrations for this deployment. Apply D1 migrations (npm run db:migrate:remote) and retry.",
+    );
   throw error;
 }
 

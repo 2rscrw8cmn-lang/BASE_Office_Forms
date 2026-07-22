@@ -94,3 +94,39 @@ npm run deploy
 
 Do not use production credentials or production data in local, preview, or test
 environments.
+
+## Preview / production D1 and applying migrations
+
+This Pages project uses a **single** D1 database (`base-office-forms-library`,
+declared in `wrangler.jsonc`). Pages **preview** and **production** deployments
+bind that same database — there is no separate preview D1. Therefore migrating
+the remote database migrates the database used by both environments:
+
+```bash
+# Apply pending migrations to the shared remote database (preview + production).
+npm run db:migrate:remote      # or the alias: npm run db:migrate:preview
+
+# Verify which migrations are applied and inspect the live RFI schema.
+npm run db:migrations:list:remote
+npm run db:schema:remote
+```
+
+If a Pages **preview** deployment cannot load authenticated data (for example the
+Work Dashboard shows "The dashboard could not be loaded") while older previews
+still work, the cause is almost always that a **new migration has not been
+applied to the bound database**: the new code queries columns/tables that do not
+yet exist. The API now returns `503 DATABASE_SCHEMA_OUTDATED` in that situation
+so the failure is legible. Run `db:migrations:list:remote` to confirm the pending
+migration, then `db:migrate:remote`.
+
+> A migration that errors is rolled back and **not** recorded as applied, so a
+> failed remote apply silently leaves the database on the previous schema. Always
+> confirm with `db:migrations:list:remote` after applying.
+
+If a separate preview database is ever configured in the Cloudflare Pages
+dashboard, it must be migrated explicitly against its own name or id — a
+production migration does **not** reach it automatically:
+
+```bash
+wrangler d1 migrations apply <preview-db-name-or-id> --remote
+```

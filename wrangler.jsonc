@@ -4,6 +4,14 @@
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./public",
+  // Single D1 database for this Pages project. Pages preview and production
+  // deployments bind the same `base-office-forms-library` database (there is no
+  // separate preview D1), so `npm run db:migrate:remote` (aliased as
+  // `db:migrate:preview`) migrates the database used by BOTH environments.
+  // If a separate preview database is ever configured in the Pages dashboard,
+  // add its id here as `preview_database_id` and migrate it explicitly with
+  // `wrangler d1 migrations apply <name-or-id> --remote` — do not assume a
+  // production migration also reached it.
   "d1_databases": [
     {
       "binding": "DB",
