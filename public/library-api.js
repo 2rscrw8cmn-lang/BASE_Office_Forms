@@ -11,7 +11,15 @@
     });
     let payload = {};
     try { payload = await response.json(); } catch (_) {}
-    if (!response.ok) throw new Error(payload.error || `Shared library request failed (${response.status}).`);
+    if (!response.ok) {
+      const base = payload.error || `Shared library request failed (${response.status}).`;
+      // The definition-validation endpoint returns the generic message above
+      // plus a full validationErrors array -- surface the first concrete
+      // issue so a failed save/publish isn't a dead end for the user.
+      const issue = Array.isArray(payload.validationErrors) ? payload.validationErrors[0] : null;
+      const detail = issue ? ` ${issue.path || ""} ${issue.message || ""}`.replace(/\s+/g, " ").trim() : "";
+      throw new Error(detail ? `${base} ${detail}` : base);
+    }
     return payload;
   }
 

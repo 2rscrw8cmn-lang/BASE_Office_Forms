@@ -4,15 +4,32 @@
   const DRAFT_KEY = "baseStudio.draft.v2";
   const $ = selector => document.querySelector(selector);
   const esc = BASE.esc;
+
+  // A permanent identity for a newly created field/section/block, independent
+  // of its label. See normField() in engine.js: once an id is present it is
+  // never re-derived from the label, so renaming a field can't silently
+  // change its stored answer key.
+  function newId(prefix) {
+    return `${prefix || "f"}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  // Sentinel identifying "Document Settings" as the selected node -- a
+  // unique object reference that never appears in def.sections/def.blocks.
+  const DOCUMENT_NODE = {};
+
   let activeId = null;
   let activeVersion = null;
   let activeFolderId = null;
   let folders = [];
   let packageContext = null;
   let activeTemplateKey = null;
-  const collapsedItems = new WeakSet();
   const panelStates = new Map();
   let def = loadInitial();
+  // The selected outline item, tracked by object reference (not index) so it
+  // survives reordering; resolved back to a live collection/index on each
+  // render via locateSelected(), and self-heals to DOCUMENT_NODE if the
+  // referenced item was deleted or def was swapped out.
+  let selectedItem = DOCUMENT_NODE;
 
   function openAttribute(key, defaultOpen) {
     const open = panelStates.has(key) ? panelStates.get(key) : defaultOpen;
@@ -34,7 +51,13 @@
     if (!Array.isArray(value)) {
       const align = ["top", "center", "bottom"].includes(value.align) ? value.align : undefined;
       const textHeight = Number(value.textHeight) > 0 ? Number(value.textHeight) : undefined;
-      return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: Boolean(value.multiline), id: value.id || "", break: Boolean(value.break), align, textHeight };
+      // Input style lives in `type` going forward. Legacy definitions that
+      // only ever set the `multiline` boolean are migrated the moment they
+      // pass through here; `multiline` itself stays for older readers that
+      // never see this normalization (e.g. a definition rendered directly
+      // without ever opening in Studio).
+      const type = value.type || (value.multiline ? "multiline" : "text");
+      return { label: value.label || "Field", w: Number(value.w) || 1, height: Number(value.height || value.h) || 46, multiline: false, id: value.id || "", break: Boolean(value.break), align, textHeight, type };
     }
     return { label: value[0] || "Field", w: Number(value[1]) || 1, id: value[2] || "", height: Number(value[3]) || 46, multiline: Boolean(value[4]) };
   }
@@ -111,15 +134,12 @@
   }
 
   function status(message, tone) {
-    const el = $("#status");
-    el.textContent = message;
-    el.dataset.tone = tone || "";
-    clearTimeout(status.timer);
-    status.timer = setTimeout(() => { el.textContent = "Drafts save locally; Save shared publishes to the team library."; el.dataset.tone = ""; }, 3500);
+    BASE_TOAST.toast(message, tone);
   }
 
   function persist() {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(clean(rootDefinition())));
+    BASE_TOAST.setState("draft");
   }
 
   function textInput(label, path, value, options) {
@@ -171,33 +191,38 @@
     </details>`;
   }
 
+  function fieldCell(caption, control) {
+    return `<div class="field-editor-cell"><span class="field-editor-label">${esc(caption)}</span>${control}</div>`;
+  }
+
   function fieldRows(base, fields, label, defaultAlign) {
     defaultAlign = defaultAlign || "top";
     return `<label class="lbl">${esc(label || "Fields")}</label>` + (fields || []).map((field, index) => {
       const align = field.align || defaultAlign;
+      const type = field.type || (field.multiline ? "multiline" : "text");
       return `<div class="field-editor">
       <input class="in" data-path="${base}.${index}.label" value="${esc(field.label)}" placeholder="Label">
-      <input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">
-      <input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">
-      <input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">
-      <label class="icon-toggle" title="Multiline"><input type="checkbox" data-path="${base}.${index}.multiline" data-value-type="bool"${field.multiline ? " checked" : ""}>↵</label>
-      <select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
+      ${fieldCell("Width", `<input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">`)}
+      ${fieldCell("Height", `<input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">`)}
+      ${fieldCell("Write-in", `<input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">`)}
+      ${fieldCell("Style", `<select class="sel small" data-path="${base}.${index}.type" title="Input style">
+        <option value="text"${type === "text" ? " selected" : ""}>Single line</option>
+        <option value="multiline"${type === "multiline" ? " selected" : ""}>Multiline</option>
+        <option value="date"${type === "date" ? " selected" : ""}>Date</option>
+        <option value="number"${type === "number" ? " selected" : ""}>Number</option>
+      </select>`)}
+      ${fieldCell("Align", `<select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
         <option value="top"${align === "top" ? " selected" : ""}>Top</option>
         <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
         <option value="bottom"${align === "bottom" ? " selected" : ""}>Bottom</option>
-      </select>
+      </select>`)}
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
-    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. The preview shows a dashed outline where it will sit.</div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. The preview shows a dashed outline where it will sit.</div>`;
   }
 
   function cardHead(type, index, noun) {
     return `<div class="card-head"><span class="tag">${esc(type)}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}">×</button></div>`;
-  }
-
-  function editorCard(type, index, noun, title, body, item) {
-    const open = collapsedItems.has(item) ? "" : " open";
-    return `<details class="card editor-card" data-editor-noun="${noun}" data-index="${index}"${open}><summary class="editor-card-summary"><span class="tag">${esc(type)}</span><span class="editor-card-title">${esc(title || "Untitled block")}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}" title="Move up">↑</button><button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}" title="Move down">↓</button><button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button><span class="collapse-indicator" aria-hidden="true"></span></summary><div class="editor-card-body">${body}</div></details>`;
   }
 
   function blockIcon(type) {
@@ -224,72 +249,111 @@
       header: `<rect x="3" y="4" width="7" height="7" rx="1"/><path d="M13 6h8M13 10h5M3 16h18"/>`,
       pagebreak: `<path d="M4 7h16M4 17h16M8 12h8M12 9v6"/>`,
       text: `<path d="M5 5h14M5 9h14M5 13h10M5 17h12"/>`,
-      sign: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`
+      sign: `<path d="M3 17c3-8 4-10 5-10 2 0-1 10 1 10 1 0 3-6 4-6 1 0-1 6 1 6 1 0 3-3 4-3 1 0 1 2 3 2"/>`,
+      document: `<path d="M14 2v6h6"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>`
     };
     return `<span class="block-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${icons[type] || icons.prose}</svg></span>`;
   }
 
-  function pickerButton(attribute, type, label, description) {
-    return `<button ${attribute}="${type}">${blockIcon(type)}<span class="block-copy"><strong>${esc(label)}</strong><span>${esc(description)}</span></span></button>`;
+  // Block catalog, shared by the Add Block drawer's category grouping and its
+  // search filter -- data first, rendering second.
+  const BLOCK_CATALOG = [
+    { title: "Write & organize", items: [
+      ["prose", "Text section", "Narrative with an optional numbered heading."],
+      ["header", "Header", "The BASE logo alongside a company name and contact details you enter."],
+      ["list", "List", "Ordered steps or a simple bulleted list."],
+      ["table", "Table", "Repeated records arranged in columns and rows."],
+      ["keyvalue", "Key / value", "Compact label-and-value document facts."]
+    ] },
+    { title: "Collect & verify", items: [
+      ["fields", "Fields", "Labeled areas for written information."],
+      ["checks", "Choices", "Single- or multiple-choice options."],
+      ["checklist", "Checklist", "Tasks or compliance items with check boxes."],
+      ["attachments", "Attachments", "Drawing, file, and reference tracking rows."]
+    ] },
+    { title: "Plan & track", items: [
+      ["budget", "Budget", "Cost codes, quantities, unit costs, and totals."],
+      ["schedule", "Schedule", "Milestones, owners, dates, and status."],
+      ["contacts", "Project contacts", "Companies, roles, and contact information."],
+      ["revisions", "Revision history", "Track revisions, dates, authors, and changes."],
+      ["evidence", "Evidence log", "Photo, file, location, and caption references."]
+    ] },
+    { title: "Approve & acknowledge", items: [
+      ["signature", "Signature", "Signature, authorization, and date fields."],
+      ["ack", "Acknowledgment", "A statement of understanding with signature."],
+      ["approval", "Review decision", "Disposition, comments, and reviewer sign-off."],
+      ["signatory", "Signatory", "The author or responsible person by name and role."]
+    ] },
+    { title: "Emphasize & arrange", items: [
+      ["note", "Note", "A short caution, reminder, or explanation."],
+      ["callout", "Callout", "An important statement with emphasis."],
+      ["pagebreak", "Page break", "Start the next block on a new printed page."]
+    ] }
+  ];
+
+  function catalogButton(type, label, description) {
+    return `<button data-action="insert-block" data-type="${esc(type)}">${blockIcon(type)}<span class="block-copy"><strong>${esc(label)}</strong><span>${esc(description)}</span></span></button>`;
   }
 
-  function pickerGroup(title, buttons) {
-    return `<h4 class="block-group-title">${esc(title)}</h4>${buttons.join("")}`;
+  function renderBlockCatalog(query) {
+    const q = (query || "").trim().toLowerCase();
+    const groups = BLOCK_CATALOG.map(group => ({
+      title: group.title,
+      items: group.items.filter(([type, label, description]) => !q ||
+        label.toLowerCase().includes(q) || description.toLowerCase().includes(q) || type.includes(q))
+    })).filter(group => group.items.length);
+    $("#blockCatalog").innerHTML = groups.length
+      ? groups.map(group => `<h4 class="block-group-title">${esc(group.title)}</h4>${group.items.map(([type, label, description]) => catalogButton(type, label, description)).join("")}`).join("")
+      : `<div class="empty-state">No blocks match “${esc(query)}.”</div>`;
   }
 
-  function blockPicker(attribute) {
-    return `<details class="block-picker" data-panel-key="block-picker"${openAttribute("block-picker", true)}><summary>Add a block</summary><div class="addmenu">
-      ${pickerGroup("Write & organize", [
-        pickerButton(attribute, "prose", "Text section", "Narrative with an optional numbered heading."),
-        pickerButton(attribute, "header", "Header", "The BASE logo alongside a company name and contact details you enter."),
-        pickerButton(attribute, "list", "List", "Ordered steps or a simple bulleted list."),
-        pickerButton(attribute, "table", "Table", "Repeated records arranged in columns and rows."),
-        pickerButton(attribute, "keyvalue", "Key / value", "Compact label-and-value document facts.")
-      ])}
-      ${pickerGroup("Collect & verify", [
-        pickerButton(attribute, "fields", "Fields", "Labeled areas for written information."),
-        pickerButton(attribute, "checks", "Choices", "Single- or multiple-choice options."),
-        pickerButton(attribute, "checklist", "Checklist", "Tasks or compliance items with check boxes."),
-        pickerButton(attribute, "attachments", "Attachments", "Drawing, file, and reference tracking rows.")
-      ])}
-      ${pickerGroup("Plan & track", [
-        pickerButton(attribute, "budget", "Budget", "Cost codes, quantities, unit costs, and totals."),
-        pickerButton(attribute, "schedule", "Schedule", "Milestones, owners, dates, and status."),
-        pickerButton(attribute, "contacts", "Project contacts", "Companies, roles, and contact information."),
-        pickerButton(attribute, "revisions", "Revision history", "Track revisions, dates, authors, and changes."),
-        pickerButton(attribute, "evidence", "Evidence log", "Photo, file, location, and caption references.")
-      ])}
-      ${pickerGroup("Approve & acknowledge", [
-        pickerButton(attribute, "signature", "Signature", "Signature, authorization, and date fields."),
-        pickerButton(attribute, "ack", "Acknowledgment", "A statement of understanding with signature."),
-        pickerButton(attribute, "approval", "Review decision", "Disposition, comments, and reviewer sign-off."),
-        pickerButton(attribute, "signatory", "Signatory", "The author or responsible person by name and role.")
-      ])}
-      ${pickerGroup("Emphasize & arrange", [
-        pickerButton(attribute, "note", "Note", "A short caution, reminder, or explanation."),
-        pickerButton(attribute, "callout", "Callout", "An important statement with emphasis."),
-        pickerButton(attribute, "pagebreak", "Page break", "Start the next block on a new printed page.")
-      ])}
-    </div></details>`;
+  // --- Selection -------------------------------------------------------
+  // The selected node is tracked by object reference so it survives reorder
+  // (splice/swap keeps the same object) and self-heals to Document Settings
+  // if the item was deleted or def was swapped out entirely.
+
+  function locateSelected() {
+    if (selectedItem === DOCUMENT_NODE) return { collection: "document", index: -1 };
+    if (def.kind === "form") {
+      const index = (def.sections || []).indexOf(selectedItem);
+      if (index >= 0) return { collection: "section", index };
+    }
+    if (def.kind === "document") {
+      const index = (def.blocks || []).indexOf(selectedItem);
+      if (index >= 0) return { collection: "block", index };
+    }
+    return null;
   }
 
-  function formEditor() {
-    return `<div class="editor-hint">Form blocks — use any content block, then collapse finished sections to keep the builder easy to scan.</div>` +
-      (def.sections || []).map((section, index) => {
-        if (section.type) return blockEditor(section, index, "sections", "section");
-        const type = section.fields ? "fields" : section.checks ? "choices" : section.sign ? "signature" : "text";
-        let body = `<div class="two">${textInput("Section name", `sections.${index}.name`, section.name)}${textInput("Requirement", `sections.${index}.req`, section.req)}</div>`;
-        if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields", "top");
-        if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields", "bottom");
-        if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
-        if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
-        return editorCard(type, index, "section", section.name || "Untitled section", body, section);
-      }).join("") + blockPicker("data-add-form-block");
+  function selectNode(item) {
+    selectedItem = item;
+    renderOutline();
+    renderInspector();
+    applySelectionHighlight();
+    openInspectorDrawer();
   }
 
-  function blockEditor(block, index, collection, noun) {
-    collection = collection || "blocks";
-    noun = noun || "block";
+  function itemType(item, noun) {
+    if (noun === "section" && !item.type) return item.fields ? "fields" : item.checks ? "choices" : item.sign ? "signature" : "text";
+    return item.type;
+  }
+
+  function itemLabel(item, noun) {
+    if (noun === "section" && !item.type) return item.name || "Untitled section";
+    const titles = { prose: item.heading, fields: item.heading, checks: item.heading, checklist: item.heading, list: item.heading, signature: item.heading, ack: item.heading, attachments: item.heading, approval: item.heading, budget: item.heading, schedule: item.heading, contacts: item.heading, revisions: item.heading, evidence: item.heading, note: item.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: item.name, header: item.companyName || "Header", pagebreak: "Page break" };
+    return titles[item.type] || "Untitled block";
+  }
+
+  function basicSectionBody(section, index) {
+    let body = `<div class="two">${textInput("Section name", `sections.${index}.name`, section.name)}${textInput("Requirement", `sections.${index}.req`, section.req)}</div>`;
+    if (section.fields) body += fieldRows(`sections.${index}.fields`, section.fields, "Write-in fields", "top");
+    if (section.sign) body += fieldRows(`sections.${index}.sign`, section.sign, "Signature fields", "bottom");
+    if (section.checks) body += textArea("Options — one per line", `sections.${index}.checks`, section.checks.join("\n"), "lines") + `<div class="two">${boolInput("Select one", `sections.${index}.single`, Boolean(section.single))}${textInput("Columns", `sections.${index}.cols`, section.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
+    if (section.text !== undefined) body += textArea("Instruction text", `sections.${index}.text`, section.text);
+    return body;
+  }
+
+  function blockBody(block, index, collection) {
     const base = `${collection}.${index}`;
     let body = "";
     if (block.type === "prose") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${boolInput("Number section", `${base}.number`, block.number !== false)}</div>` + textArea("Paragraphs", `${base}.paras`, (block.paras || []).join("\n\n"), "paras", "Enter = line break. Blank line = new paragraph.");
@@ -312,38 +376,135 @@
     if (block.type === "checks") body = textInput("Heading", `${base}.heading`, block.heading) + textArea("Options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, Boolean(block.single))}${textInput("Columns", `${base}.cols`, block.cols || 1, { type: "number", valueType: "number", min: 1 })}</div>`;
     if (block.type === "approval") body = `<div class="two">${textInput("Heading", `${base}.heading`, block.heading)}${textInput("Requirement", `${base}.req`, block.req)}</div>` + textArea("Decision options", `${base}.checks`, (block.checks || []).join("\n"), "lines") + `<div class="two">${boolInput("Select one", `${base}.single`, block.single !== false)}${textInput("Columns", `${base}.cols`, block.cols || 2, { type: "number", valueType: "number", min: 1 })}</div>` + fieldRows(`${base}.fields`, block.fields || [], "Review / response fields", "top") + fieldRows(`${base}.sign`, block.sign || [], "Reviewer sign-off", "bottom");
     if (block.type === "pagebreak") body = `<p class="micro">Forces the following content onto a new printed page.</p>`;
-    const titles = { prose: block.heading, fields: block.heading, checks: block.heading, checklist: block.heading, list: block.heading, signature: block.heading, ack: block.heading, attachments: block.heading, approval: block.heading, budget: block.heading, schedule: block.heading, contacts: block.heading, revisions: block.heading, evidence: block.heading, note: block.title, callout: "Highlighted statement", table: "Data table", keyvalue: "Key / value facts", signatory: block.name, header: block.companyName || "Header", pagebreak: "Page break" };
-    return editorCard(block.type, index, noun, titles[block.type] || "Untitled block", body, block);
+    return body;
   }
 
-  function documentEditor() {
-    return `<div class="editor-hint">Document blocks — collapse finished sections to keep long documents easy to scan.</div>` +
-      (def.blocks || []).map((block, index) => blockEditor(block, index)).join("") +
-      blockPicker("data-add-block");
+  function inspectorBody(item, index, noun) {
+    if (noun === "section" && !item.type) return basicSectionBody(item, index);
+    const collection = noun === "section" ? "sections" : "blocks";
+    return blockBody(item, index, collection);
   }
 
-  function packageEditor() {
+  function renderInspector() {
+    if (locateSelected() === null) selectedItem = DOCUMENT_NODE;
+    const located = locateSelected();
+    const title = $("#inspectorTitle");
+    if (!located || located.collection === "document") {
+      if (title) title.textContent = "Document Settings";
+      $("#inspector").innerHTML = commonPanel() + controlPanel() + appearancePanel();
+      return;
+    }
+    const array = located.collection === "section" ? def.sections : def.blocks;
+    const item = array[located.index];
+    if (title) title.textContent = itemLabel(item, located.collection);
+    $("#inspector").innerHTML = `<div class="inspector-item"><div class="inspector-item-head"><span class="tag">${esc(itemType(item, located.collection))}</span><span class="spacer"></span><button class="mini" data-action="move-up" data-index="${located.index}" data-noun="${located.collection}" title="Move up">↑</button><button class="mini" data-action="move-down" data-index="${located.index}" data-noun="${located.collection}" title="Move down">↓</button><button class="mini del" data-action="delete-item" data-index="${located.index}" data-noun="${located.collection}" title="Delete">×</button></div>${inspectorBody(item, located.index, located.collection)}</div>`;
+  }
+
+  // --- Outline -----------------------------------------------------------
+
+  function outlineRow(item, index, noun) {
+    const selected = selectedItem === item;
+    const req = item.req;
+    return `<div class="outline-row${selected ? " selected" : ""}" draggable="true">
+      <span class="outline-drag-handle" aria-hidden="true">⠿</span>
+      <button class="outline-row-body" data-action="select-node" data-noun="${noun}" data-index="${index}">
+        <span class="outline-no">${String(index + 1).padStart(2, "0")}</span>
+        ${blockIcon(itemType(item, noun))}
+        <span class="outline-label">${esc(itemLabel(item, noun))}</span>
+        ${req ? `<span class="outline-req">${esc(req)}</span>` : ""}
+      </button>
+      <span class="outline-row-actions">
+        <button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button>
+      </span>
+    </div>`;
+  }
+
+  function insertPoint(noun, atIndex) {
+    return `<button class="outline-insert" data-action="open-add-drawer" data-noun="${noun}" data-insert-at="${atIndex}" title="Insert a block here" aria-label="Insert a block here">+</button>`;
+  }
+
+  function documentHeaderRow() {
+    const selected = selectedItem === DOCUMENT_NODE;
+    return `<button class="outline-doc-header${selected ? " selected" : ""}" data-action="select-document">
+      ${blockIcon("document")}
+      <span><span class="outline-doc-title">${esc(def.title || "Untitled")}</span><span class="outline-doc-meta">Document Settings</span></span>
+    </button>`;
+  }
+
+  function outlineRows(noun) {
+    const array = noun === "section" ? (def.sections || []) : (def.blocks || []);
+    let body = insertPoint(noun, 0);
+    array.forEach((item, index) => {
+      body += outlineRow(item, index, noun) + insertPoint(noun, index + 1);
+    });
+    return body;
+  }
+
+  function packageOutline() {
     const docs = def.documents || [];
-    return `<details class="panel collapsible package-tools" data-panel-key="package-tools"${openAttribute("package-tools", true)}><summary>Package documents</summary><p class="micro">A package is a controlled snapshot of several documents. Add a new item here or bring in an existing library record; its cover and page index regenerate automatically.</p><div class="package-add-grid"><button data-action="add-package-blank" data-kind="document">+ Blank document</button><button data-action="add-package-blank" data-kind="form">+ Blank form</button><button data-action="open-package-templates">+ From template</button><button data-action="open-library">+ From library</button></div></details>` +
+    return `<div class="package-tools"><p class="micro">A package is a controlled snapshot of several documents. Add a new item here or bring in an existing library record; its cover and page index regenerate automatically.</p><div class="package-add-grid"><button data-action="add-package-blank" data-kind="document">+ Blank document</button><button data-action="add-package-blank" data-kind="form">+ Blank form</button><button data-action="open-package-templates">+ From template</button><button data-action="open-library">+ From library</button></div></div>` +
       (docs.length ? docs.map((item, index) => {
         const doc = item.def || item;
         return `<article class="card package-card">${cardHead(doc.documentType || doc.kind, index, "package")}<strong>${esc(doc.title || "Untitled")}</strong><span>${esc(doc.no || "")} · ${esc(doc.kind || "document")}${item.sourceId ? " · Library snapshot" : ""}</span><div class="package-card-actions"><button class="wide-action" data-action="duplicate-package-document" data-index="${index}">Duplicate</button><button class="wide-action package-edit" data-action="edit-package-document" data-index="${index}">Edit document</button></div></article>`;
       }).join("") : `<div class="empty-state">This package is empty. Add a blank item, use a template, or bring in a controlled document from the library.</div>`);
   }
 
-  function renderEditor() {
+  function renderOutline() {
     const packageNav = packageContext ? `<section class="panel package-editing"><h3>Editing package document</h3><p class="micro">Changes are being saved inside ${esc(packageContext.packageDef.title || "this package")}.</p><button class="wide-action" data-action="back-to-package">← Back to package</button></section>` : "";
-    $("#ed").innerHTML = packageNav + commonPanel() + controlPanel() + appearancePanel() + (def.kind === "form" ? formEditor() : def.kind === "document" ? documentEditor() : packageEditor());
+    let body = packageNav + documentHeaderRow();
+    if (def.kind === "form") body += `<div class="outline-list">${outlineRows("section")}</div>`;
+    else if (def.kind === "document") body += `<div class="outline-list">${outlineRows("block")}</div>`;
+    else body += packageOutline();
+    $("#outline").innerHTML = body;
   }
 
+  // Keeps the last preview that rendered successfully so a definition that
+  // becomes momentarily invalid (e.g. mid-edit, or a bad AI import) never
+  // blanks the builder -- it shows the last good page and an error toast
+  // instead of a broken/blank preview.
+  let lastGoodPreviewHtml = "";
+
+  // Every keystroke rebuilds #pv from scratch (fresh innerHTML) and
+  // re-paginates the whole thing, which can shrink/grow the scrollable
+  // height mid-edit and drag .previewpane's scroll position back toward the
+  // top. Tracking the user's real scroll position via a standing listener
+  // (rather than re-reading it inside renderPreview each time) keeps it
+  // correct even when several renders fire in quick succession -- e.g.
+  // clicking a number input's spinner -- where re-reading scrollTop
+  // mid-render could capture a transient, not-yet-settled value.
+  let lastKnownScrollTop = 0;
+  const previewPane = $(".previewpane");
+  if (previewPane) previewPane.addEventListener("scroll", () => { lastKnownScrollTop = previewPane.scrollTop; });
+
   function renderPreview() {
-    $("#pv").innerHTML = BASE.render(def, { fill: false });
-    requestAnimationFrame(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit(); });
+    try {
+      const html = BASE.render(def, { fill: false });
+      lastGoodPreviewHtml = html;
+      $("#pv").innerHTML = html;
+      applySelectionHighlight();
+      if (previewPane) previewPane.scrollTop = lastKnownScrollTop;
+      requestAnimationFrame(() => {
+        BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit();
+        if (previewPane) previewPane.scrollTop = lastKnownScrollTop;
+      });
+    } catch (error) {
+      if (lastGoodPreviewHtml) $("#pv").innerHTML = lastGoodPreviewHtml;
+      status(`Could not render the preview: ${error.message}. Showing the last valid version.`, "error");
+    }
+  }
+
+  function applySelectionHighlight() {
+    const previous = $("#pv .preview-selected");
+    if (previous) previous.classList.remove("preview-selected");
+    const located = locateSelected();
+    if (!located || located.collection === "document") return;
+    const target = $(`#pv [data-preview-${located.collection}="${located.index}"]`);
+    if (target) target.classList.add("preview-selected");
   }
 
   function renderAll() {
     normalize(def);
-    renderEditor(); renderPreview(); persist();
+    renderOutline(); renderInspector(); renderPreview(); persist();
     $("#kindBadge").textContent = `${packageContext ? "PACKAGE ITEM · " : ""}${def.documentType || def.kind}`.toUpperCase();
     updateCommandState();
   }
@@ -367,6 +528,29 @@
     }));
   }
 
+  function jumpToOutline(noun, index) {
+    // The row already renders with the persistent .selected style by the
+    // time this runs (selectNode() re-renders the outline first), so this
+    // only needs to scroll it into view -- flashing a second, competing
+    // outline here (like jumpToPreview's .preview-jump) used to bleed past
+    // the row's edges into the zero-margin insert points above/below it.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const rows = Array.prototype.slice.call($("#outline").querySelectorAll(`[data-action="select-node"][data-noun="${noun}"]`));
+      const button = rows.find(row => Number(row.dataset.index) === index);
+      if (!button) return;
+      (button.closest(".outline-row") || button).scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+  }
+
+  function openInspectorDrawer() {
+    const inspector = $(".inspector");
+    if (inspector) inspector.classList.add("open");
+  }
+  function closeInspectorDrawer() {
+    const inspector = $(".inspector");
+    if (inspector) inspector.classList.remove("open");
+  }
+
   function fit() {
     const pane = $(".previewpane");
     const sheet = $("#pv .sheet");
@@ -388,28 +572,16 @@
     return element.value;
   }
 
-  function addSection(type) {
-    const templates = {
-      fields: { name: "New Section", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46 }] },
-      checks: { name: "New Choices", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"] },
-      sign: { name: "Authorization", req: "REQUIRED", sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
-      text: { name: "Instructions", text: "Add instructions here." }
-    };
-    def.sections.push(templates[type]);
-    const index = def.sections.length - 1;
-    renderAll(); jumpToPreview("section", index);
-  }
-
   function newBlock(type) {
     const templates = {
-      prose: { type, heading: "New Section", paras: ["Write here."] }, fields: { type, heading: "Information", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46 }] },
-      checks: { type, heading: "Options", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"] }, checklist: { type, heading: "Checklist", items: ["Item one", "Item two"] },
+      prose: { type, heading: "New Section", paras: ["Write here."] }, fields: { type, heading: "Information", req: "REQUIRED", fields: [{ label: "Field", w: 1, height: 46, id: newId() }] },
+      checks: { type, heading: "Options", req: "SELECT ONE", single: true, cols: 1, checks: ["Option A", "Option B"], id: newId("g") }, checklist: { type, heading: "Checklist", items: ["Item one", "Item two"], id: newId("g") },
       list: { type, heading: "List", ordered: false, items: ["Item one", "Item two"] }, table: { type, columns: ["Column A", "Column B"], rows: [["", ""]] },
       keyvalue: { type, items: [["Label", "Value"], ["Label", "Value"]] }, callout: { type, text: "Important callout." }, note: { type, title: "Note", text: "Important note." },
-      signature: { type, heading: "Authorization", req: "REQUIRED", fields: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
-      ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46 }], sign: [{ label: "Signature", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
-      attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46 }, { label: "Attachment / drawing / reference 2", w: 1, height: 46 }] },
-      approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], fields: [{ label: "Review comments", w: 1, height: 78, multiline: true }], sign: [{ label: "Reviewed By", w: 2, height: 54 }, { label: "Date", w: 1, height: 54 }] },
+      signature: { type, heading: "Authorization", req: "REQUIRED", fields: [{ label: "Signature", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
+      ack: { type, heading: "Acknowledgment", req: "REQUIRED", intro: "I acknowledge and understand this document.", fields: [{ label: "Printed Name", w: 2, height: 46, id: newId() }], sign: [{ label: "Signature", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
+      attachments: { type, heading: "Attachments / References", req: "AS APPLICABLE", fields: [{ label: "Attachment / drawing / reference 1", w: 1, height: 46, id: newId() }, { label: "Attachment / drawing / reference 2", w: 1, height: 46, id: newId() }] },
+      approval: { type, heading: "Review Decision", req: "SELECT ONE", single: true, cols: 2, checks: ["Approved", "Approved as Noted", "Revise and Resubmit", "Rejected"], id: newId("g"), fields: [{ label: "Review comments", w: 1, height: 78, type: "multiline", id: newId() }], sign: [{ label: "Reviewed By", w: 2, height: 54, id: newId() }, { label: "Date", w: 1, height: 54, id: newId() }] },
       budget: { type, heading: "Budget / Cost Breakdown", currency: "$", rows: [["01", "Labor", "1", "0.00", ""], ["02", "Materials", "1", "0.00", ""], ["03", "Equipment", "1", "0.00", ""]] },
       schedule: { type, heading: "Schedule / Milestones", columns: ["Milestone", "Owner", "Start", "Due", "Status"], rows: [["Milestone one", "", "", "", "Not Started"], ["Milestone two", "", "", "", "Not Started"]] },
       contacts: { type, heading: "Project Contacts", columns: ["Company / Person", "Role", "Email", "Phone"], rows: [["", "", "", ""], ["", "", "", ""]] },
@@ -422,18 +594,6 @@
     return BASE.clone(templates[type] || templates.prose);
   }
 
-  function addBlock(type) {
-    def.blocks.push(newBlock(type));
-    const index = def.blocks.length - 1;
-    renderAll(); jumpToPreview("block", index);
-  }
-
-  function addFormBlock(type) {
-    def.sections.push(newBlock(type));
-    const index = def.sections.length - 1;
-    renderAll(); jumpToPreview("section", index);
-  }
-
   function move(array, index, delta) {
     const next = index + delta;
     if (next < 0 || next >= array.length) return;
@@ -444,6 +604,67 @@
     if (noun === "section") return def.sections;
     if (noun === "block") return def.blocks;
     return def.documents;
+  }
+
+  // --- Outline drag-to-reorder -----------------------------------------
+  // Reuses the existing insertion points as drop targets, so dragging a row
+  // highlights the same "+" affordance used to insert a new block there --
+  // one consistent mental model for "this is where it lands."
+
+  let dragSource = null; // { noun, index }
+
+  function clearDragTarget() {
+    const marked = $("#outline .outline-insert.drag-target");
+    if (marked) marked.classList.remove("drag-target");
+  }
+
+  function nearestInsertPoint(row, clientY) {
+    const rect = row.getBoundingClientRect();
+    const before = clientY < rect.top + rect.height / 2;
+    const sibling = before ? row.previousElementSibling : row.nextElementSibling;
+    return sibling && sibling.classList.contains("outline-insert") ? sibling : null;
+  }
+
+  function reorderItem(noun, sourceIndex, insertAt) {
+    const array = currentArray(noun);
+    const item = array[sourceIndex];
+    if (!item) return;
+    array.splice(sourceIndex, 1);
+    const adjusted = sourceIndex < insertAt ? insertAt - 1 : insertAt;
+    array.splice(Math.max(0, Math.min(adjusted, array.length)), 0, item);
+    renderAll();
+  }
+
+  // --- Add Block drawer ----------------------------------------------
+
+  let drawerNoun = null;
+  let drawerInsertAt = null;
+
+  function openAddDrawer(noun, insertAt) {
+    drawerNoun = noun;
+    drawerInsertAt = insertAt;
+    const search = $("#blockSearch");
+    if (search) search.value = "";
+    renderBlockCatalog("");
+    $("#addBlockDrawer").hidden = false;
+    requestAnimationFrame(() => { if (search) search.focus(); });
+  }
+
+  function closeAddDrawer() {
+    $("#addBlockDrawer").hidden = true;
+    drawerNoun = null;
+    drawerInsertAt = null;
+  }
+
+  function insertBlockAt(noun, atIndex, type) {
+    const array = currentArray(noun);
+    const item = newBlock(type);
+    const insertIndex = Math.max(0, Math.min(atIndex == null ? array.length : atIndex, array.length));
+    array.splice(insertIndex, 0, item);
+    closeAddDrawer();
+    selectedItem = item;
+    renderAll();
+    jumpToPreview(noun, insertIndex);
   }
 
   function addBlankPackageDocument(kind) {
@@ -478,6 +699,7 @@
     packageContext = { packageDef: def, index };
     def = normalize(BASE.clone(item.def || item));
     activeTemplateKey = null;
+    selectedItem = DOCUMENT_NODE;
     renderAll();
     status("Editing a document inside the package.", "success");
   }
@@ -488,6 +710,7 @@
     def = packageContext.packageDef;
     packageContext = null;
     activeTemplateKey = null;
+    selectedItem = DOCUMENT_NODE;
     renderAll();
     status("Package document updated.", "success");
   }
@@ -505,25 +728,27 @@
     const input = document.createElement("input"); input.type = "file"; input.accept = ".json,application/json";
     input.onchange = () => {
       const reader = new FileReader();
-      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; activeTemplateKey = null; renderAll(); status("Backup imported.", "success"); } catch (error) { status(`Could not import backup: ${error.message}`, "error"); } };
+      reader.onload = () => { try { def = normalize(JSON.parse(reader.result)); activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; activeTemplateKey = null; selectedItem = DOCUMENT_NODE; renderAll(); status("Backup imported.", "success"); } catch (error) { status(`Could not import backup: ${error.message}`, "error"); } };
       reader.readAsText(input.files[0]);
     };
     input.click();
   }
 
   async function saveLibrary() {
+    BASE_TOAST.setState("saving");
     try {
       const document = clean(rootDefinition());
-      status("Saving to the shared library…");
       const saved = await BASE_LIBRARY.saveDocument(document, { id: activeId, folderId: activeFolderId, version: activeVersion });
       activeId = saved.document.id;
       activeVersion = saved.document.version;
       activeFolderId = saved.document.folderId || null;
       updateCommandState();
       status(`Saved to the shared library · version ${saved.document.version}.`, "success");
+      BASE_TOAST.setState("saved");
       return saved.document;
     } catch (error) {
       status(`Could not save: ${error.message}`, "error");
+      BASE_TOAST.setState("error");
       throw error;
     }
   }
@@ -536,8 +761,8 @@
       `Update the "${label}" template with your current changes?\n\nEveryone who starts a new "${label}" from now on will get this version. This cannot be undone.`
     );
     if (!confirmed) return;
+    BASE_TOAST.setState("saving");
     try {
-      status("Updating template…");
       const definition = clean(rootDefinition());
       const published = await BASE_TEMPLATES.publishTemplate(activeTemplateKey, {
         name: def.title || label,
@@ -545,9 +770,11 @@
         definition
       });
       status(`Template updated — "${label}" is now on version ${published.publishedVersion.versionNumber}.`, "success");
+      BASE_TOAST.setState("saved");
       return published;
     } catch (error) {
       status(`Could not update template: ${error.message}`, "error");
+      BASE_TOAST.setState("error");
       throw error;
     }
   }
@@ -560,6 +787,7 @@
       const published = await BASE_TEMPLATES.getTemplate(key);
       if (activeTemplateKey !== key || packageContext) return;
       def = normalize(BASE.clone(published.publishedVersion.definition));
+      selectedItem = DOCUMENT_NODE;
       renderAll();
       status(`Loaded your organization's updated "${published.name}" template (v${published.publishedVersion.versionNumber}).`, "success");
     } catch (_) {
@@ -629,45 +857,23 @@
       const kind = def.kind;
       activeId = null; activeVersion = null; activeFolderId = null; packageContext = null; activeTemplateKey = null;
       def = normalize(kind === "form" ? BASE.blankForm() : kind === "package" ? BASE.blankPackage() : BASE.blankDoc());
+      selectedItem = DOCUMENT_NODE;
       history.replaceState({}, "", "builder.html");
       renderAll();
       status(`Deleted “${title}” from the controlled library.`, "success");
     } catch (error) { status(`Could not delete document: ${error.message}`, "error"); }
   }
 
-  $("#ed").addEventListener("toggle", event => {
-    const details = event.target;
-    if (!(details instanceof HTMLDetailsElement)) return;
-    if (details.matches(".editor-card")) {
-      const item = currentArray(details.dataset.editorNoun)[Number(details.dataset.index)];
-      if (item) {
-        if (details.open) collapsedItems.delete(item);
-        else collapsedItems.add(item);
-      }
-    }
-    if (details.dataset.panelKey) panelStates.set(details.dataset.panelKey, details.open);
-  }, true);
-
-  $("#ed").addEventListener("input", event => {
-    const el = event.target;
-    if (el.dataset.path) { setPath(def, el.dataset.path, parseValue(el)); renderPreview(); persist(); }
-    if (el.dataset.controlValue) { def.control[el.dataset.controlValue] = el.value; renderPreview(); persist(); }
-  });
-  $("#ed").addEventListener("change", event => {
-    const el = event.target;
-    if (el.dataset.path) { setPath(def, el.dataset.path, parseValue(el)); renderPreview(); persist(); }
-    if (el.dataset.controlVisible) { def.controlVisibility[el.dataset.controlVisible] = el.checked; renderPreview(); persist(); }
-    if (el.matches("[data-library-folder]")) activeFolderId = el.value || null;
-  });
-  $("#ed").addEventListener("click", event => {
+  $("#outline").addEventListener("click", event => {
     const button = event.target.closest("button"); if (!button) return;
-    if (button.closest("summary")) event.preventDefault();
-    if (button.dataset.addSection) return addSection(button.dataset.addSection);
-    if (button.dataset.addFormBlock) return addFormBlock(button.dataset.addFormBlock);
-    if (button.dataset.addBlock) return addBlock(button.dataset.addBlock);
     const action = button.dataset.action;
-    if (action === "add-field") { getPath(def, button.dataset.base).push({ label: "New field", w: 1, height: 46 }); return renderAll(); }
-    if (action === "delete-field") { getPath(def, button.dataset.base).splice(Number(button.dataset.index), 1); return renderAll(); }
+    if (action === "select-document") return selectNode(DOCUMENT_NODE);
+    if (action === "select-node") {
+      const item = currentArray(button.dataset.noun)[Number(button.dataset.index)];
+      if (item) { selectNode(item); jumpToPreview(button.dataset.noun, Number(button.dataset.index)); }
+      return;
+    }
+    if (action === "open-add-drawer") return openAddDrawer(button.dataset.noun, button.dataset.insertAt === "" ? null : Number(button.dataset.insertAt));
     if (["move-up", "move-down", "delete-item"].includes(action)) {
       const array = currentArray(button.dataset.noun), index = Number(button.dataset.index);
       if (action === "delete-item") array.splice(index, 1); else move(array, index, action === "move-up" ? -1 : 1);
@@ -678,8 +884,115 @@
     if (action === "back-to-package") return backToPackage();
     if (action === "add-package-blank") return addBlankPackageDocument(button.dataset.kind);
     if (action === "open-package-templates") return openPackageTemplates();
-    if (action === "open-library") openLibrary();
+    if (action === "open-library") return openLibrary();
   });
+
+  $("#outline").addEventListener("dragstart", event => {
+    const row = event.target.closest(".outline-row");
+    const button = row && row.querySelector('[data-action="select-node"]');
+    if (!button) return;
+    dragSource = { noun: button.dataset.noun, index: Number(button.dataset.index) };
+    row.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "");
+  });
+
+  $("#outline").addEventListener("dragover", event => {
+    if (!dragSource) return;
+    const insertEl = event.target.closest(".outline-insert");
+    const row = event.target.closest(".outline-row");
+    let target = null;
+    if (insertEl && insertEl.dataset.noun === dragSource.noun) target = insertEl;
+    else if (row) {
+      const button = row.querySelector('[data-action="select-node"]');
+      if (button && button.dataset.noun === dragSource.noun) target = nearestInsertPoint(row, event.clientY);
+    }
+    if (!target) return;
+    event.preventDefault();
+    if (!target.classList.contains("drag-target")) { clearDragTarget(); target.classList.add("drag-target"); }
+  });
+
+  $("#outline").addEventListener("drop", event => {
+    const target = $("#outline .outline-insert.drag-target");
+    if (!target || !dragSource) return;
+    event.preventDefault();
+    reorderItem(dragSource.noun, dragSource.index, Number(target.dataset.insertAt));
+    clearDragTarget();
+    dragSource = null;
+  });
+
+  $("#outline").addEventListener("dragend", () => {
+    const dragging = $("#outline .outline-row.dragging");
+    if (dragging) dragging.classList.remove("dragging");
+    clearDragTarget();
+    dragSource = null;
+  });
+
+  // Arrow-key navigation between outline rows, mirroring the toolbar menus'
+  // keyboard pattern -- moves focus only; Enter/Space still activates.
+  $("#outline").addEventListener("keydown", event => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const focusable = Array.prototype.slice.call(
+      $("#outline").querySelectorAll('[data-action="select-document"], [data-action="select-node"]'),
+    );
+    const index = focusable.indexOf(document.activeElement);
+    if (index === -1) return;
+    event.preventDefault();
+    const nextIndex = event.key === "ArrowDown" ? Math.min(index + 1, focusable.length - 1) : Math.max(index - 1, 0);
+    focusable[nextIndex].focus();
+  });
+
+  $("#inspector").addEventListener("toggle", event => {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement)) return;
+    if (details.dataset.panelKey) panelStates.set(details.dataset.panelKey, details.open);
+  }, true);
+
+  $("#inspector").addEventListener("input", event => {
+    const el = event.target;
+    if (el.dataset.path) { setPath(def, el.dataset.path, parseValue(el)); renderPreview(); persist(); }
+    if (el.dataset.controlValue) { def.control[el.dataset.controlValue] = el.value; renderPreview(); persist(); }
+  });
+  $("#inspector").addEventListener("change", event => {
+    const el = event.target;
+    if (el.dataset.path) { setPath(def, el.dataset.path, parseValue(el)); renderPreview(); persist(); if (el.dataset.path.endsWith(".title") || el.dataset.path === "title") renderOutline(); }
+    if (el.dataset.controlVisible) { def.controlVisibility[el.dataset.controlVisible] = el.checked; renderPreview(); persist(); }
+    if (el.matches("[data-library-folder]")) activeFolderId = el.value || null;
+  });
+  $("#inspector").addEventListener("click", event => {
+    const button = event.target.closest("button"); if (!button) return;
+    if (button.closest("summary")) event.preventDefault();
+    const action = button.dataset.action;
+    if (action === "add-field") { getPath(def, button.dataset.base).push({ label: "New field", w: 1, height: 46, id: newId() }); renderInspector(); renderPreview(); persist(); return; }
+    if (action === "delete-field") { getPath(def, button.dataset.base).splice(Number(button.dataset.index), 1); renderInspector(); renderPreview(); persist(); return; }
+    if (["move-up", "move-down", "delete-item"].includes(action)) {
+      const array = currentArray(button.dataset.noun), index = Number(button.dataset.index);
+      if (action === "delete-item") array.splice(index, 1); else move(array, index, action === "move-up" ? -1 : 1);
+      return renderAll();
+    }
+  });
+
+  $("#pv").addEventListener("click", event => {
+    const target = event.target.closest("[data-preview-section],[data-preview-block]");
+    if (!target) return;
+    const sectionAttr = target.getAttribute("data-preview-section");
+    const noun = sectionAttr != null ? "section" : "block";
+    const index = Number(sectionAttr != null ? sectionAttr : target.getAttribute("data-preview-block"));
+    const array = currentArray(noun);
+    const item = array && array[index];
+    if (!item) return;
+    selectNode(item);
+    jumpToOutline(noun, index);
+  });
+
+  $("#addBlockDrawer").addEventListener("click", event => {
+    if (event.target.matches("[data-action='close-drawer'], .drawer-backdrop")) return closeAddDrawer();
+    const button = event.target.closest("button[data-action='insert-block']");
+    if (button) insertBlockAt(drawerNoun, drawerInsertAt, button.dataset.type);
+  });
+  $("#blockSearch").addEventListener("input", event => renderBlockCatalog(event.target.value));
+
+  $(".inspector-close").addEventListener("click", closeInspectorDrawer);
 
   $("#modal").addEventListener("change", event => {
     if (event.target.id === "libraryFolderFilter") openLibrary(event.target.value);
@@ -707,7 +1020,7 @@
       try {
         const item = await BASE_LIBRARY.getDocument(button.dataset.libraryOpen);
         const key = BASE_LIBRARY.editKey(item.id);
-        def = normalize(BASE.clone(item.definition)); activeId = key ? item.id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; packageContext = null; activeTemplateKey = null;
+        def = normalize(BASE.clone(item.definition)); activeId = key ? item.id : null; activeVersion = key ? item.version : null; activeFolderId = item.folderId || null; packageContext = null; activeTemplateKey = null; selectedItem = DOCUMENT_NODE;
         closeModal(); renderAll(); status(key ? "Opened shared library document." : "Opened a public document as a new copy.", "success");
       } catch (error) { status(`Could not open document: ${error.message}`, "error"); }
       return;
@@ -738,7 +1051,7 @@
       return;
     }
     if (button.dataset.action === "apply-ai") {
-      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); activeTemplateKey = null; closeModal(); renderAll(); status("AI JSON imported.", "success"); }
+      try { const parsed = JSON.parse($("#aiJson").value); def = normalize(parsed.definition || parsed); activeTemplateKey = null; selectedItem = DOCUMENT_NODE; closeModal(); renderAll(); status("AI JSON imported.", "success"); }
       catch (error) { status(`Invalid AI JSON: ${error.message}`, "error"); }
     }
   });
@@ -817,6 +1130,7 @@
     def = normalize(BASE.fromTemplate($("#templateSelect").value));
     activeId = null; activeVersion = null; activeFolderId = null; packageContext = null;
     activeTemplateKey = $("#templateSelect").value;
+    selectedItem = DOCUMENT_NODE;
     renderAll();
     status("New template created.", "success");
     applyPublishedTemplateOverride(activeTemplateKey);
@@ -834,6 +1148,8 @@
   setupToolbarMenus();
   window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
+  window.addEventListener("offline", () => BASE_TOAST.setState("offline"));
+  window.addEventListener("online", () => BASE_TOAST.setState("draft"));
 
   async function initialize() {
     try { folders = await BASE_LIBRARY.listFolders(); }
@@ -864,6 +1180,7 @@
       activeTemplateKey = null;
       status(`New ${kind === "form" || kind === "package" ? kind : "document"} started.`, "success");
     }
+    selectedItem = DOCUMENT_NODE;
     renderAll();
   }
 

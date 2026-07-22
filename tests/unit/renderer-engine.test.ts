@@ -127,6 +127,113 @@ describe("renderer engine", () => {
     expect(html).toContain('type="checkbox" name="pick_any"');
   });
 
+  it("keeps a tall field a single-line input unless multiline is explicitly set (Issue #32)", () => {
+    // A field >= 70px tall used to always render as a textarea. That silent
+    // coupling is removed: height only affects layout, never input vs textarea.
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "TALL-1",
+      title: "Tall field test",
+      sections: [
+        {
+          name: "Details",
+          fields: [{ label: "Stamp box", w: 1, height: 90 }],
+        },
+      ],
+    });
+
+    expect(html).toContain('<input class="fin" name="stamp_box">');
+    expect(html).not.toContain("<textarea");
+  });
+
+  it("still renders a small field as a textarea when multiline is explicit (legacy boolean)", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "TALL-2",
+      title: "Explicit multiline test",
+      sections: [
+        {
+          name: "Details",
+          fields: [{ label: "Notes", w: 1, height: 40, multiline: true }],
+        },
+      ],
+    });
+
+    expect(html).toContain('<textarea class="ftx" name="notes">');
+  });
+
+  it("renders date and number fields with the matching HTML input type", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "TYPE-1",
+      title: "Explicit input types",
+      sections: [
+        {
+          name: "Details",
+          fields: [
+            { label: "Start date", w: 1, height: 46, type: "date" },
+            { label: "Quantity", w: 1, height: 46, type: "number" },
+            { label: "Notes", w: 1, height: 90, type: "multiline" },
+          ],
+        },
+      ],
+    });
+
+    expect(html).toContain('<input class="fin" name="start_date" type="date">');
+    expect(html).toContain('<input class="fin" name="quantity" type="number">');
+    expect(html).toContain('<textarea class="ftx" name="notes">');
+  });
+
+  it("keeps a field's answer key stable across renders when it has an explicit id (Issue #32)", () => {
+    // Once a field has a permanent id, renaming its label must never change
+    // the rendered `name` attribute -- that key is the stored answer identity.
+    const renderer = loadRenderer();
+    const before = renderer.render({
+      kind: "form",
+      no: "STABLE-1",
+      title: "Stable id test",
+      sections: [
+        {
+          name: "Details",
+          fields: [
+            { label: "Project No.", w: 1, height: 46, id: "project_no" },
+          ],
+        },
+      ],
+    });
+    const after = renderer.render({
+      kind: "form",
+      no: "STABLE-1",
+      title: "Stable id test",
+      sections: [
+        {
+          name: "Details",
+          fields: [
+            { label: "Project Number", w: 1, height: 46, id: "project_no" },
+          ],
+        },
+      ],
+    });
+
+    expect(before).toContain('name="project_no"');
+    expect(after).toContain('name="project_no"');
+  });
+
+  it("still derives a field's id from its label when no explicit id is set (legacy definitions)", () => {
+    const renderer = loadRenderer();
+    const html = renderer.render({
+      kind: "form",
+      no: "LEGACY-1",
+      title: "Legacy id test",
+      sections: [{ name: "Details", fields: [{ label: "Project No.", w: 1 }] }],
+    });
+
+    expect(html).toContain('name="project_no"');
+  });
+
   it("suppresses interactive controls when fill is explicitly disabled", () => {
     const renderer = loadRenderer();
     const html = renderer.render(
