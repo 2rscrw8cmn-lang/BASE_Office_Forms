@@ -15,9 +15,16 @@
     return `${prefix || ""}${field.id}`;
   }
 
+  // Write-in fields carry whatever input style the Style dropdown set
+  // (text/multiline/date/number) -- all of them are a single text-like
+  // value. Only choose_one/choose_any fields are checkbox/radio groups.
+  function isTextType(type) {
+    return type !== "choose_one" && type !== "choose_any";
+  }
+
   function readField(container, prefix, field) {
     const name = cssEscape(fieldName(prefix, field));
-    if (field.type === "text") {
+    if (isTextType(field.type)) {
       const element = container.querySelector(`[name="${name}"]`);
       return element ? element.value : "";
     }
@@ -30,7 +37,7 @@
 
   function writeField(container, prefix, field, value) {
     const name = cssEscape(fieldName(prefix, field));
-    if (field.type === "text") {
+    if (isTextType(field.type)) {
       const element = container.querySelector(`[name="${name}"]`);
       if (element) element.value = value == null ? "" : value;
       return;
@@ -92,7 +99,7 @@
   function reset(container, definition, targets) {
     targets = targets || root.BASE.formFillTargets(definition);
     targets.forEach(({ prefix, form }) => {
-      form._schema.forEach(field => writeField(container, prefix, field, field.type === "text" ? "" : []));
+      form._schema.forEach(field => writeField(container, prefix, field, isTextType(field.type) ? "" : []));
     });
   }
 
