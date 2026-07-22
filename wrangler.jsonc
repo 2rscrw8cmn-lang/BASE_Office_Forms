@@ -14,10 +14,11 @@
   // production migration also reached it.
   "d1_databases": [
     {
-      "binding": "DB",
-      "database_name": "base-office-forms-library",
-      "database_id": "1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab",
-      "migrations_dir": "./migrations",
+       "binding": "DB",
+        "database_name": "base-office-forms-library",
+        "database_id": "1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab",
+        "preview_database_id": "b3b1b9d7-b4ce-4ebd-97c4-67c9f450f3d6",
+        "migrations_dir": "./migrations"
     },
   ],
   "r2_buckets": [
