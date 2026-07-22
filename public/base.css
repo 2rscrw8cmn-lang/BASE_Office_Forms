@@ -180,6 +180,7 @@ p { margin: 0; text-wrap: pretty; }
 }
 /* custom column ratios: add style="--tpl:2.2fr 1fr 1fr 1.3fr" */
 .grid[style*="--tpl"] { grid-template-columns: var(--tpl); }
+.grid + .grid { margin-top: 6px; }
 
 .field {
   border: 1px solid var(--field);
