@@ -32,3 +32,11 @@ declare module "*app-shell.js" {
     fetch: typeof fetch;
   }): AppShell;
 }
+
+declare module "*app-format.js" {
+  export function revisionName(revision: {
+    revisionNumber?: number | null;
+    revisionLabel?: string | null;
+  }): string;
+  export function fileTypeLabel(mediaType?: string | null): string;
+}

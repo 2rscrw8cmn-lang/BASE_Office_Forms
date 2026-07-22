@@ -20,6 +20,7 @@ import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-re
 import { D1RecordRevisionSequencesRepository } from "../../src/infrastructure/db/d1/record-revision-sequences-repository";
 import { D1RecordRevisionsRepository } from "../../src/infrastructure/db/d1/record-revisions-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
+import { D1ProjectRecordSequencesRepository } from "../../src/infrastructure/db/d1/project-record-sequences-repository";
 import { D1RevisionFilesRepository } from "../../src/infrastructure/db/d1/revision-files-repository";
 import { D1UsersRepository } from "../../src/infrastructure/db/d1/users-repository";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
@@ -106,7 +107,10 @@ function dependencies(storage: IssuanceStoragePort): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
-  const records = new D1RecordsRepository(database);
+  const records = new D1RecordsRepository(
+    database,
+    new D1ProjectRecordSequencesRepository(database),
+  );
   const revisions = new D1RecordRevisionsRepository(
     database,
     new D1RecordRevisionSequencesRepository(database),

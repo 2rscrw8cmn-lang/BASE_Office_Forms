@@ -2,10 +2,11 @@ import type {
   Record,
   RecordStatus,
   RecordUpdateInput,
-  RecordWriteInput,
+  RecordCreateInput,
 } from "../../../domain/records/record";
 import { RecordArchivedError } from "../../../domain/records/errors";
 import type { NewActivityEvent } from "./activity-events-repository";
+import { D1ProjectRecordSequencesRepository } from "./project-record-sequences-repository";
 
 interface RecordRow {
   id: string;
@@ -122,7 +123,10 @@ type ActivityInput = Omit<
 >;
 
 export class D1RecordsRepository {
-  constructor(private readonly database: D1Database) {}
+  constructor(
+    private readonly database: D1Database,
+    private readonly sequences: D1ProjectRecordSequencesRepository,
+  ) {}
 
   async list(
     organizationId: string,
@@ -160,7 +164,7 @@ export class D1RecordsRepository {
     organizationId: string,
     projectId: string,
     createdBy: string,
-    input: RecordWriteInput,
+    input: RecordCreateInput,
     event: Omit<NewActivityEvent, "organizationId" | "objectId" | "newState">,
   ): Promise<Record> {
     const now = new Date().toISOString();
@@ -169,6 +173,7 @@ export class D1RecordsRepository {
       organizationId,
       projectId,
       ...input,
+      recordNumber: null,
       status: "active",
       createdBy,
       currentRevisionId: null,
@@ -176,17 +181,21 @@ export class D1RecordsRepository {
       createdAt: now,
       updatedAt: now,
     };
-    await this.database.batch([
+    const results = await this.database.batch([
+      this.sequences.ensureStatement(organizationId, projectId, now),
+      this.sequences.advanceStatement(organizationId, projectId, now),
       this.database
         .prepare(
-          `INSERT INTO records (${RECORD_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO records (${RECORD_COLUMNS})
+           SELECT ?, ?, ?, ?, printf('%04d', last_number), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+           FROM project_record_sequences
+           WHERE organization_id = ? AND project_id = ?`,
         )
         .bind(
           record.id,
           record.organizationId,
           record.projectId,
           record.recordType,
-          record.recordNumber,
           record.title,
           record.description,
           record.status,
@@ -197,6 +206,8 @@ export class D1RecordsRepository {
           record.archivedAt,
           record.createdAt,
           record.updatedAt,
+          record.organizationId,
+          record.projectId,
         ),
       eventStatement(
         this.database,
@@ -204,7 +215,12 @@ export class D1RecordsRepository {
         record,
       ),
     ]);
-    return record;
+    if (results[2].meta.changes !== 1 || results[3].meta.changes !== 1) {
+      throw new Error("Record could not be created.");
+    }
+    const created = await this.findById(organizationId, projectId, record.id);
+    if (!created) throw new Error("Created record could not be loaded.");
+    return created;
   }
 
   async updateWithActivity(
@@ -221,12 +237,11 @@ export class D1RecordsRepository {
     const results = await this.database.batch([
       this.database
         .prepare(
-          `UPDATE records SET record_number = ?, title = ?, description = ?,
+          `UPDATE records SET title = ?, description = ?,
            discipline = ?, source = ?, updated_at = ?
            WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'active'`,
         )
         .bind(
-          updated.recordNumber,
           updated.title,
           updated.description,
           updated.discipline,

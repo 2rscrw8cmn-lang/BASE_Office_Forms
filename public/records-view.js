@@ -16,11 +16,13 @@
 import {
   escapeHtml,
   formatDate,
+  disciplineLabel,
   recordTypeLabel,
   recordStatusLabel,
+  revisionName,
   revisionStatusLabel,
 } from "./app-format.js";
-import { createRecordForm } from "./record-form.js";
+import { createAddDocumentForm } from "./add-document-form.js";
 
 const SORT_KEYS = {
   created: { label: "Newest", defaultDir: "desc" },
@@ -160,7 +162,7 @@ export function createRecordsView({
         record.title,
         record.recordNumber || "",
         recordTypeLabel(record.recordType),
-        record.discipline || "",
+        disciplineLabel(record.discipline),
       ]
         .join(" ")
         .toLowerCase();
@@ -206,7 +208,9 @@ export function createRecordsView({
         records.map((record) => record.discipline).filter((value) => value),
       ),
     ];
-    return present.sort((a, b) => collate(a, b)).map((value) => [value, value]);
+    return present
+      .sort((a, b) => collate(disciplineLabel(a), disciplineLabel(b)))
+      .map((value) => [value, disciplineLabel(value)]);
   }
 
   function revisionStatusOptions(records) {
@@ -380,10 +384,7 @@ export function createRecordsView({
   function revisionCell(record) {
     if (!record.currentRevision)
       return `<span class="record-norevision">No revision</span>`;
-    const value =
-      record.currentRevision.revisionLabel ||
-      String(record.currentRevision.revisionNumber);
-    return `<span class="record-revision">Rev ${escapeHtml(value)}</span><span class="record-revision-status">${escapeHtml(revisionStatusLabel(record.currentRevision.status))}</span>`;
+    return `<span class="record-revision">${escapeHtml(revisionName(record.currentRevision))}</span><span class="record-revision-status">${escapeHtml(revisionStatusLabel(record.currentRevision.status))}</span>`;
   }
 
   function tableRows(records) {
@@ -398,7 +399,7 @@ export function createRecordsView({
             ${recordMeta(record)}
           </th>
           <td>${escapeHtml(recordTypeLabel(record.recordType))}</td>
-          <td>${escapeHtml(record.discipline || "—")}</td>
+          <td>${escapeHtml(disciplineLabel(record.discipline))}</td>
           <td class="cell-revision">${revisionCell(record)}</td>
           <td class="cell-files">${escapeHtml(String(record.fileCount ?? 0))}</td>
           <td class="cell-date">${escapeHtml(formatDate(record.updatedAt) || "—")}</td>
@@ -419,7 +420,7 @@ export function createRecordsView({
             <span class="status-badge status-${record.status === "active" ? "success" : "neutral"}">${escapeHtml(recordStatusLabel(record.status))}</span>
           </span>
           <span class="record-card-title">${escapeHtml(record.title)}</span>
-          <span class="record-card-meta"><span>${escapeHtml(recordTypeLabel(record.recordType))}</span><span>${escapeHtml(record.discipline || "No discipline")}</span></span>
+          <span class="record-card-meta"><span>${escapeHtml(recordTypeLabel(record.recordType))}</span><span>${escapeHtml(record.discipline ? disciplineLabel(record.discipline) : "No discipline")}</span></span>
           <span class="record-card-revision">${revisionCell(record)}${record.hasDraftRevision ? ` <span class="record-draft-badge">Draft in progress</span>` : ""}</span>
           <span class="record-card-foot"><span>${escapeHtml(String(record.fileCount ?? 0))} file${record.fileCount === 1 ? "" : "s"}</span><span>Updated ${escapeHtml(formatDate(record.updatedAt) || "—")}</span></span>
         </a></li>`,
@@ -432,7 +433,7 @@ export function createRecordsView({
     if (!records.length) {
       return `<div class="records-empty"><h3>No records yet</h3><p class="section-empty">Create the first record for this project to begin tracking revisions and files.</p>${
         canCreate()
-          ? `<button class="secondary-button" type="button" data-create-record>Create record</button>`
+          ? `<button class="secondary-button" type="button" data-create-record>Add document</button>`
           : ""
       }</div>`;
     }
@@ -454,7 +455,7 @@ export function createRecordsView({
     }
     return `<div class="records-table-wrap" role="region" aria-label="Project records" tabindex="0">
         <table class="records-table app-data-table">
-          <caption class="sr-only">Records you can access in this project</caption>
+          <caption class="sr-only">Documents you can access in this project</caption>
           <thead><tr>
             <th scope="col">Record</th>
             <th scope="col">Type</th>
@@ -473,11 +474,11 @@ export function createRecordsView({
     const total = state.status === "loaded" ? state.data.records.length : null;
     return `<header class="app-register-header records-heading app-container-register">
         <div class="app-register-title">
-          <h2 id="records-title" tabindex="-1">Records</h2>
+          <h2 id="records-title" tabindex="-1">Document Register</h2>
           ${total === null ? "" : `<span class="app-register-count">${total} record${total === 1 ? "" : "s"}</span>`}
         </div>${
           canCreate()
-            ? `<button class="primary-button" type="button" data-create-record>Create record</button>`
+            ? `<button class="primary-button" type="button" data-create-record>Add document</button>`
             : ""
         }
       </header>`;
@@ -660,14 +661,18 @@ export function createRecordsView({
 
   function openCreate(container) {
     if (!canCreate()) return;
-    openForm = createRecordForm({
+    openForm = createAddDocumentForm({
       api,
       projectId,
       document: container.ownerDocument,
       announce,
-      onSuccess: (record) => {
+      onSuccess: (result) => {
         openForm = null;
-        if (record?.id) navigate(recordDetailHref(projectId, record));
+        if (result?.href) navigate(result.href);
+        else if (result?.record?.id && result?.revision?.id)
+          navigate(
+            `/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(result.record.id)}/revisions/${encodeURIComponent(result.revision.id)}`,
+          );
       },
       onClose: () => {
         openForm = null;

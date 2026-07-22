@@ -16,6 +16,7 @@ import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-re
 import { D1RecordRevisionSequencesRepository } from "../../src/infrastructure/db/d1/record-revision-sequences-repository";
 import { D1RecordRevisionsRepository } from "../../src/infrastructure/db/d1/record-revisions-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
+import { D1ProjectRecordSequencesRepository } from "../../src/infrastructure/db/d1/project-record-sequences-repository";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 import { invokeV2Api } from "../helpers/api";
 import { resetIdentityFoundation, testDatabase } from "../helpers/d1";
@@ -70,7 +71,10 @@ function dependencies(): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
-  const records = new D1RecordsRepository(database);
+  const records = new D1RecordsRepository(
+    database,
+    new D1ProjectRecordSequencesRepository(database),
+  );
   const revisionSequences = new D1RecordRevisionSequencesRepository(database);
   return {
     authenticationAdapter: new FixtureAuthenticationAdapter(),
@@ -209,7 +213,7 @@ async function createRecord(projectId: string): Promise<ApiRecord> {
       recordType: "drawing",
       title: "  Floor Plan  ",
       description: " Level one ",
-      discipline: " Architecture ",
+      discipline: "architectural",
       source: " Consultant ",
     }),
     dependencies(),
@@ -254,7 +258,7 @@ describe("revisions foundation API", () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(9);
+    expect(version?.schema_version).toBe(10);
 
     const project = await createProject("P-REV-1");
     const record = await createRecord(project.id);
@@ -269,7 +273,7 @@ describe("revisions foundation API", () => {
       revisionLabel: "P0",
       title: "Floor Plan",
       description: "Level one",
-      discipline: "Architecture",
+      discipline: "architectural",
       source: "Consultant",
       changeSummary: "Initial issue",
       status: "draft",

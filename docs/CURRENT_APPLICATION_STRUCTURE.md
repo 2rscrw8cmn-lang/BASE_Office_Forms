@@ -22,7 +22,10 @@ Browser
 ├── public/project-form.js                     Create Project dialog
 ├── public/project-overview-view.js            Project Overview feature module
 ├── public/records-view.js                     Project Records register feature module
-├── public/record-form.js                      Create Record dialog
+├── public/add-document-form.js                Guided Add Document workflow
+├── public/record-detail-view.js               Document-first Record workspace
+├── public/revision-detail-view.js             Revision file/publish workspace
+├── public/record-options.js                    Shared controlled discipline vocabulary
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
@@ -41,6 +44,7 @@ Storage
 │   ├── folders
 │   ├── documents
 │   ├── records
+│   ├── project_record_sequences
 │   ├── record_revisions
 │   ├── record_revision_sequences
 │   ├── revision_files
@@ -185,13 +189,14 @@ success descendants keep Issuances selected. Tabs remain sticky beneath the
 project header on desktop and become a horizontally scrollable navigation row on
 mobile, with the selected link scrolled into view after route changes.
 
-## Dashboard, Projects, Project Overview, and Records surfaces
+## Dashboard, Projects, Project Overview, Records, and Record Detail surfaces
 
 `/dashboard`, `/projects`, `/projects/:projectId`,
-`/projects/:projectId/overview`, and `/projects/:projectId/records` are now
+`/projects/:projectId/overview`, `/projects/:projectId/records`, and
+`/projects/:projectId/records/:recordId` are now
 real, authenticated, data-backed screens instead of placeholders. The
 `/projects/:projectId` → `.../overview` normalization is unchanged, and record
-detail, revision, issuance, RFI, Team, and Administration destinations remain
+revision, issuance, RFI, Team, and Administration destinations remain
 intentional placeholders reached through the same canonical routes.
 
 The **Work Dashboard** answers "what needs my attention today" across every
@@ -271,13 +276,14 @@ D1 query per project (`D1ProjectRecordsReadRepository`) behind
 `ProjectRecordsReadModelService`, so the browser never fans out per record,
 revision, or file.
 
-The register renders a semantic desktop table (Record, Type, Discipline, Current
-revision, Revision status, Files, Created, Actions) and a mobile card list from
+The register renders a semantic desktop table (Record, Type, Discipline,
+Revision, Files, Updated) and a mobile card list from
 the same data. The record title is the primary text with the record number as
 secondary metadata; drafts show a "Draft in progress" badge beside the record
 without masquerading as the current revision; the current revision reads as
-"Revision <label|number>" with a separate revision-status badge, or "No
-published revision" when absent; record status and revision status stay distinct.
+`Rev <number> · <optional label>` with a separate revision-status label, or "No
+revision" when absent; record status and revision status stay distinct. Revision
+numbers are always shown even when a human label exists.
 Archived records are excluded by default, clearly labelled when shown, and stay
 read-only. A cohesive toolbar provides case-insensitive search (title, record
 number, type label, discipline), Type / Discipline / Revision-status filters
@@ -290,19 +296,83 @@ string so refresh, copied links, and browser back/forward restore the same view;
 search, filter, and sort run in the browser over the already-authorized list and
 never act as an authorization boundary.
 
-The **Create Record** action appears only when the server-provided
-`capabilities.createRecord` is true (never inferred from a role string). Its
-dialog (`record-form.js`) mirrors Create Project — dialog semantics, focus trap,
-initial focus, Escape-to-close, focus restoration, labelled title and
-description, inline validation with a top-level summary, a submission loading
-state, and server error display with the request ID. It sends only fields the
-current create schema accepts (`recordType`, `title`, and the optional
-`recordNumber`, `discipline`, `description`) via the unchanged
-`POST /api/v2/projects/:projectId/records` route, never optimistically inserts a
-record, and on success announces, closes, and navigates to
-`/projects/:projectId/records/:recordId`.
+The user-facing register is named **Document Register** and its project tab is
+**Documents**; backend Record terminology and API paths remain unchanged. The
+capability-gated **Add document** workflow (`add-document-form.js`) starts with
+two real choices: upload a document, or reserve an empty document identity. It
+creates the Record and initial draft Revision using the existing APIs, then
+uploads the selected file through the existing multipart endpoint. Success
+navigates directly to the Revision workspace. The staged sequence is explicitly
+recoverable: if draft creation fails, the already-created document can be
+opened; if upload fails, the dialog reports the request ID and links directly to
+the usable empty draft for retry.
 
-All five surfaces preserve logical reading order and are responsive: summary
+Document disciplines use one shared controlled vocabulary from
+`public/record-options.js` in both the browser and server validation layer:
+General, Civil, Landscape, Structural, Architectural, Interiors, Fire
+Protection, Plumbing, Mechanical, Electrical, Technology / Low Voltage,
+Equipment, Survey, Contractor, Owner, and Other. Create and edit surfaces use a
+select. Unknown legacy values remain readable and may be submitted unchanged,
+but replacing one requires a controlled value; new arbitrary values are
+rejected.
+
+Record numbers are server-generated, immutable, organization/project-scoped
+sequences formatted with a minimum of four digits (`0001`, `0002`, ...). The
+create and update contracts reject client-supplied `recordNumber`. Migration
+`0012_project_record_sequences.sql` adds the concurrency-safe
+`project_record_sequences` table and advances the schema to version 10. A
+project's sequence is lazily bootstrapped from its highest all-numeric legacy
+record number, ignores nonnumeric legacy identifiers, and never reuses a number
+after archive.
+
+The **Record Detail** workspace loads one additive read model from
+`GET /api/v2/projects/:projectId/records/:recordId/workspace`; the existing
+record-detail GET contract is unchanged. The safe response contains record
+metadata, the authoritative current revision, every revision in deterministic
+`revision_number DESC, id ASC` order, safe per-file metadata, issuance counts,
+per-revision and total file counts, and explicit Record/Revision/File
+capabilities. A
+single organization/project/record-scoped D1 aggregate query joins revisions
+and counts files without browser fan-out or per-revision queries. Both
+`currentRevision` and each `isCurrent` flag compare only with the record's
+`current_revision_id`; a newer or higher-numbered draft can never masquerade as
+current. Storage keys, organization IDs, creator IDs, raw state, and
+authorization rationale are not returned.
+
+The full-width workspace presents a compact two-row document header: breadcrumb,
+title/status/actions, then number, type, discipline, authoritative revision,
+revision status, and factual issuance status. The current work/revision panel
+makes files the visual focus. A single draft appears only in Current work and is
+excluded from adjacent history; multiple drafts are listed without inventing an
+authoritative one. Empty drafts lead with Upload document, drafts with files
+lead into their file/publish workflow, and a published document links **View
+current revision** to the Revision workspace while each **View file** link uses
+the scoped content route. Previous Revisions excludes the current revision and
+uses `Created` for `createdAt`; it never relabels that timestamp as Published.
+Issuance is factual status only and the workspace does not offer an Issue action.
+Metadata is collapsed below the document content. Edit and Archive sit in a
+restrained overflow menu. Archived documents retain files and history but expose
+no mutation controls.
+
+The canonical Revision route is now a real authenticated workspace backed by
+`GET /api/v2/projects/:projectId/records/:recordId/revisions/:revisionId/workspace`.
+It shows parent document identity, `Rev <number> · <optional label>`, status, current marker,
+change summary, date, issuance count, and every file with a scoped content URL.
+Editable drafts expose multipart upload and publish actions only through
+server-derived capabilities. Upload failures retain the selected file name and
+request ID; success reloads. Publishing reloads into a read-only current state.
+Published, superseded, and archived revisions never render upload or publish
+controls. The underlying file and publish contracts are unchanged.
+
+Published Library templates remain reusable masters only. The repository has no
+project-form-instance entity, no persisted template-version reference on a
+Record or Revision, and no application path for saving a project-specific copy
+of a renderer definition. Therefore **Use a Library template** is intentionally
+absent rather than disabled or fake; the missing domain and renderer integration
+is tracked in GitHub issue #30. `public/engine.js` and the controlled renderer
+are unchanged.
+
+All document-management surfaces preserve logical reading order and are responsive: summary
 tiles wrap, attention groups and recent activity stack, the projects and records
 tables become cards, the overview timeline becomes a readable list, and dialogs
 become full-width sheets — without horizontal page overflow. Status is never
@@ -415,10 +485,21 @@ presence, file count, active/archived labels and default archived exclusion,
 case-insensitive search across title and record number, Type / Discipline /
 Revision-status filters, the announced result count, clear filters, the filtered
 empty state, query-string restoration and mirroring, browser-back restoration,
-Create-record visibility by capability (shown when `createRecord` is true,
-hidden for read-only users who still see the list), create-form validation,
-successful creation navigating to the record detail route, failed creation
-preserving input with a request ID, and Escape-to-close.
+Add-document visibility by capability (shown when `createRecord` is true,
+hidden for read-only users who still see the list), guided upload and empty
+document choices, record/revision/file sequencing, recoverable upload failure,
+validation, canonical Revision navigation, and Escape-to-close.
+
+`tests/unit/record-detail-ui.test.ts` covers the single workspace request,
+authoritative current/draft separation without duplicate draft presentation,
+file cards and scoped content URLs, one contextual primary action, empty-draft
+upload state, historical revision rendering, mutable edit payload, reload after
+edit, draft-create payload and navigation, and archived read-only rendering.
+
+`tests/unit/revision-detail-ui.test.ts` covers the real Revision workspace,
+canonical file downloads, empty draft upload, successful refresh, upload failure
+with retained file context and request ID, publication reload, and immutable
+published rendering.
 
 `tests/integration/read-models.test.ts` exercises the dashboard and overview
 read models end to end: organization isolation, assigned-project filtering,
@@ -437,7 +518,10 @@ read-only, capabilities derived from the record policy (create/update/archive
 for managers, read-only for contributors and viewers), deterministic
 newest-first ordering, project and tenant isolation, and unassigned-user
 exclusion. `tests/integration/records.test.ts` additionally pins the
-list-summary envelope shape alongside the record create/update/archive lifecycle.
+list-summary envelope shape alongside the record create/update/archive lifecycle
+and the scoped Record Detail workspace envelope, authoritative current-revision
+selection, file counts, safe fields, access isolation, and read-only
+capabilities.
 
 ## Existing shared library
 

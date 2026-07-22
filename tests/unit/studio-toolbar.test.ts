@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // the tests stay focused on toolbar wiring and accessibility.
 
 const engineSource = readFileSync("public/engine.js", "utf8");
+const toastSource = readFileSync("public/studio-toast.js", "utf8");
 const studioSource = readFileSync("public/studio.js", "utf8");
 const builderHtml = readFileSync("public/builder.html", "utf8");
 
@@ -176,6 +177,10 @@ function loadStudio(options: { editKey?: unknown } = {}): Studio {
   base.paginate = () => undefined;
   base.updatePackageIndex = () => undefined;
   context.BASE = base;
+  runInNewContext(toastSource, context);
+  context.BASE_TOAST = (
+    context.window as { BASE_TOAST: Record<string, unknown> }
+  ).BASE_TOAST;
   runInNewContext(studioSource, context);
 
   const el = (selector: string): ElementLike => {
@@ -246,7 +251,7 @@ describe("Studio command toolbar (Issue #25)", () => {
     studio.el("#downloadButton").click();
 
     expect(studio.createObjectURL).toHaveBeenCalledTimes(1);
-    expect(studio.el("#status").textContent).toContain("backup exported");
+    expect(studio.el("#toastStack").textContent).toContain("backup exported");
   });
 
   it("Share is an icon-only control with an accessible name and decorative icon", async () => {

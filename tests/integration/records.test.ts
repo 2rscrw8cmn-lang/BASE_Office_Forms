@@ -14,7 +14,11 @@ import { D1ProjectMembershipsRepository } from "../../src/infrastructure/db/d1/p
 import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
 import { D1ProjectRecordsReadRepository } from "../../src/infrastructure/db/d1/project-records-read-repository";
+import { D1ProjectRecordSequencesRepository } from "../../src/infrastructure/db/d1/project-record-sequences-repository";
 import { ProjectRecordsReadModelService } from "../../src/application/read-models/project-records-service";
+import { RecordWorkspaceReadModelService } from "../../src/application/read-models/record-workspace-service";
+import { RevisionWorkspaceReadModelService } from "../../src/application/read-models/revision-workspace-service";
+import { D1RecordWorkspaceReadRepository } from "../../src/infrastructure/db/d1/record-workspace-read-repository";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 import { invokeV2Api } from "../helpers/api";
 import { resetIdentityFoundation, testDatabase } from "../helpers/d1";
@@ -50,6 +54,12 @@ const sessions: Partial<Record<string, AppSession>> = {
     membershipRole: "viewer",
     projectPermissions: [],
   },
+  orgBAdmin: {
+    userId: "user-org-b",
+    organizationId: "org-b",
+    membershipRole: "org_admin",
+    projectPermissions: [],
+  },
 };
 
 class FixtureAuthenticationAdapter implements AuthenticationAdapter {
@@ -69,6 +79,10 @@ function dependencies(): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
+  const recordWorkspace = new RecordWorkspaceReadModelService(
+    projects,
+    new D1RecordWorkspaceReadRepository(database),
+  );
   return {
     authenticationAdapter: new FixtureAuthenticationAdapter(),
     organizations: new OrganizationService(
@@ -76,11 +90,19 @@ function dependencies(): V2RouteDependencies {
       new D1MembershipsRepository(database),
     ),
     projects,
-    records: new RecordService(projects, new D1RecordsRepository(database)),
+    records: new RecordService(
+      projects,
+      new D1RecordsRepository(
+        database,
+        new D1ProjectRecordSequencesRepository(database),
+      ),
+    ),
     projectRecords: new ProjectRecordsReadModelService(
       projects,
       new D1ProjectRecordsReadRepository(database),
     ),
+    recordWorkspace,
+    revisionWorkspace: new RevisionWorkspaceReadModelService(recordWorkspace),
   };
 }
 
@@ -109,7 +131,8 @@ async function seed(): Promise<void> {
   const database = testDatabase();
   const now = new Date().toISOString();
   const seededSessions = Object.entries(sessions).filter(
-    (entry): entry is [string, AppSession] => entry[1] !== undefined,
+    (entry): entry is [string, AppSession] =>
+      entry[1] !== undefined && entry[1].organizationId === "org-a",
   );
   await database.batch([
     database
@@ -153,7 +176,7 @@ async function seed(): Promise<void> {
       .bind(now, now),
     database
       .prepare(
-        "INSERT INTO organization_memberships (id, organization_id, user_id, role, status, created_at) VALUES ('membership-user-org-b', 'org-b', 'user-org-b', 'contributor', 'active', ?)",
+        "INSERT INTO organization_memberships (id, organization_id, user_id, role, status, created_at) VALUES ('membership-user-org-b', 'org-b', 'user-org-b', 'org_admin', 'active', ?)",
       )
       .bind(now),
   ]);
@@ -170,10 +193,13 @@ interface ApiRecord {
   recordType: string;
 }
 
-async function createProject(number: string): Promise<ApiProject> {
+async function createProject(
+  number: string,
+  session = "admin",
+): Promise<ApiProject> {
   const response = await invokeV2Api(
     "/api/v2/projects",
-    request("admin", "POST", {
+    request(session, "POST", {
       projectNumber: number,
       name: `Project ${number}`,
     }),
@@ -185,16 +211,16 @@ async function createProject(number: string): Promise<ApiProject> {
 
 async function createRecord(
   projectId: string,
-  number: string | null = "A-101",
+  session = "admin",
+  title = "Floor Plan",
 ): Promise<ApiRecord> {
   const response = await invokeV2Api(
     `/api/v2/projects/${projectId}/records`,
-    request("admin", "POST", {
+    request(session, "POST", {
       recordType: "drawing",
-      recordNumber: number,
-      title: "  Floor Plan  ",
+      title: `  ${title}  `,
       description: " Level one ",
-      discipline: " Architecture ",
+      discipline: "architectural",
       source: " Consultant ",
     }),
     dependencies(),
@@ -209,16 +235,186 @@ describe("records foundation API", () => {
     await seed();
   });
 
-  it("creates, lists, retrieves, updates, and archives records with schema version 9", async () => {
+  it("returns a scoped record workspace with authoritative revision and file summaries", async () => {
+    const project = await createProject("P-WORKSPACE");
+    const record = await createRecord(project.id);
+    const database = testDatabase();
+    const now = new Date().toISOString();
+    await database.batch([
+      database
+        .prepare(
+          `INSERT INTO record_revisions
+        (id, organization_id, project_id, record_id, revision_number, revision_label, title, change_summary, status, created_by, created_at)
+        VALUES ('rev-current', 'org-a', ?, ?, 1, 'A', 'Published plan', 'Initial issue', 'published', 'user-admin', ?)`,
+        )
+        .bind(project.id, record.id, now),
+      database
+        .prepare(
+          `INSERT INTO record_revisions
+        (id, organization_id, project_id, record_id, revision_number, revision_label, title, change_summary, status, created_by, created_at)
+        VALUES ('rev-draft', 'org-a', ?, ?, 2, 'B', 'Draft plan', 'Coordination', 'draft', 'user-admin', ?)`,
+        )
+        .bind(project.id, record.id, now),
+    ]);
+    await database
+      .prepare(
+        "UPDATE records SET current_revision_id = 'rev-current' WHERE id = ?",
+      )
+      .bind(record.id)
+      .run();
+    await database.batch([
+      database
+        .prepare(
+          `INSERT INTO revision_files
+        (id, organization_id, project_id, record_id, revision_id, storage_key, original_filename, media_type, byte_size, sha256, uploaded_by, uploaded_at)
+        VALUES ('file-current', 'org-a', ?, ?, 'rev-current', 'private/current.pdf', 'current.pdf', 'application/pdf', 10, ?, 'user-admin', ?)`,
+        )
+        .bind(project.id, record.id, "a".repeat(64), now),
+      database
+        .prepare(
+          `INSERT INTO revision_files
+        (id, organization_id, project_id, record_id, revision_id, storage_key, original_filename, media_type, byte_size, sha256, uploaded_by, uploaded_at)
+        VALUES ('file-draft', 'org-a', ?, ?, 'rev-draft', 'private/draft.pdf', 'draft.pdf', 'application/pdf', 10, ?, 'user-admin', ?)`,
+        )
+        .bind(project.id, record.id, "b".repeat(64), now),
+    ]);
+
+    const response = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/workspace`,
+      request("admin"),
+      dependencies(),
+    );
+    expect(response.status).toBe(200);
+    const model = await jsonData<Record<string, unknown>>(response);
+    expect(model).toMatchObject({
+      record: { id: record.id, projectId: project.id, title: "Floor Plan" },
+      currentRevision: { id: "rev-current", revisionNumber: 1, fileCount: 1 },
+      revisions: [
+        {
+          id: "rev-draft",
+          revisionNumber: 2,
+          status: "draft",
+          fileCount: 1,
+          isCurrent: false,
+          files: [{ id: "file-draft", originalFilename: "draft.pdf" }],
+          capabilities: { uploadFile: true, publishRevision: true },
+        },
+        {
+          id: "rev-current",
+          revisionNumber: 1,
+          status: "published",
+          fileCount: 1,
+          isCurrent: true,
+          files: [{ id: "file-current", originalFilename: "current.pdf" }],
+          capabilities: { uploadFile: false, publishRevision: false },
+        },
+      ],
+      totalFileCount: 2,
+      capabilities: {
+        updateRecord: true,
+        archiveRecord: true,
+        createRevision: true,
+      },
+    });
+    expect(JSON.stringify(model)).not.toContain("organizationId");
+    expect(JSON.stringify(model)).not.toContain("storage_key");
+    expect(JSON.stringify(model)).not.toContain("private/current.pdf");
+
+    const revisionWorkspace = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/revisions/rev-draft/workspace`,
+      request("admin"),
+      dependencies(),
+    );
+    expect(revisionWorkspace.status).toBe(200);
+    await expect(revisionWorkspace.json()).resolves.toMatchObject({
+      data: {
+        record: { id: record.id },
+        revision: {
+          id: "rev-draft",
+          files: [{ id: "file-draft", originalFilename: "draft.pdf" }],
+          capabilities: { uploadFile: true, publishRevision: true },
+        },
+        currentRevisionId: "rev-current",
+      },
+    });
+
+    const wrongProject = await invokeV2Api(
+      `/api/v2/projects/not-${project.id}/records/${record.id}/workspace`,
+      request("admin"),
+      dependencies(),
+    );
+    expect(wrongProject.status).toBe(404);
+    const inaccessible = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/workspace`,
+      request("manager"),
+      dependencies(),
+    );
+    expect(inaccessible.status).toBe(404);
+
+    await database
+      .prepare("UPDATE records SET current_revision_id = NULL WHERE id = ?")
+      .bind(record.id)
+      .run();
+    const withoutCurrent = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/workspace`,
+      request("viewer"),
+      dependencies(),
+    );
+    expect(withoutCurrent.status).toBe(404);
+    await database
+      .prepare(
+        "INSERT INTO project_memberships (id, organization_id, project_id, user_id, role, status, created_at) VALUES ('viewer-workspace', 'org-a', ?, 'user-viewer', 'viewer', 'active', ?)",
+      )
+      .bind(project.id, now)
+      .run();
+    const readable = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/workspace`,
+      request("viewer"),
+      dependencies(),
+    );
+    await expect(
+      jsonData<Record<string, unknown>>(readable),
+    ).resolves.toMatchObject({
+      currentRevision: null,
+      capabilities: {
+        updateRecord: false,
+        archiveRecord: false,
+        createRevision: false,
+      },
+    });
+    await database
+      .prepare(
+        "UPDATE records SET status = 'archived', archived_at = ? WHERE id = ?",
+      )
+      .bind(now, record.id)
+      .run();
+    const archived = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/${record.id}/workspace`,
+      request("admin"),
+      dependencies(),
+    );
+    await expect(
+      jsonData<Record<string, unknown>>(archived),
+    ).resolves.toMatchObject({
+      record: { status: "archived", archivedAt: now },
+      capabilities: {
+        updateRecord: false,
+        archiveRecord: false,
+        createRevision: false,
+      },
+    });
+  });
+
+  it("creates, lists, retrieves, updates, and archives records with schema version 10", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(9);
+    expect(version?.schema_version).toBe(10);
     const project = await createProject("P-REC-1");
     const record = await createRecord(project.id);
     expect(record).toMatchObject({
       recordType: "drawing",
-      recordNumber: "A-101",
+      recordNumber: "0001",
       title: "Floor Plan",
       status: "active",
     });
@@ -239,19 +435,23 @@ describe("records foundation API", () => {
       dependencies(),
     );
     await expect(detail.json()).resolves.toMatchObject({
-      data: { description: "Level one", discipline: "Architecture" },
+      data: { description: "Level one", discipline: "architectural" },
     });
     const update = await invokeV2Api(
       `/api/v2/projects/${project.id}/records/${record.id}`,
       request("documentControl", "PATCH", {
         title: " Revised Floor Plan ",
-        recordNumber: " A-102 ",
+        discipline: "structural",
       }),
       dependencies(),
     );
     expect(update.status).toBe(200);
     await expect(update.json()).resolves.toMatchObject({
-      data: { title: "Revised Floor Plan", recordNumber: "A-102" },
+      data: {
+        title: "Revised Floor Plan",
+        recordNumber: "0001",
+        discipline: "structural",
+      },
     });
     const archive = await invokeV2Api(
       `/api/v2/projects/${project.id}/records/${record.id}/archive`,
@@ -296,10 +496,78 @@ describe("records foundation API", () => {
     });
   });
 
-  it("validates input and enforces project-scoped record numbers", async () => {
+  it("allocates isolated project sequences atomically and never reuses archived numbers", async () => {
     const first = await createProject("P-REC-2A");
     const second = await createProject("P-REC-2B");
-    await createRecord(first.id, null);
+    const otherOrganization = await createProject("P-REC-2C", "orgBAdmin");
+    const concurrent = await Promise.all([
+      createRecord(first.id, "admin", "First"),
+      createRecord(first.id, "admin", "Second"),
+      createRecord(first.id, "admin", "Third"),
+    ]);
+    expect(concurrent.map((record) => record.recordNumber).sort()).toEqual([
+      "0001",
+      "0002",
+      "0003",
+    ]);
+    expect((await createRecord(second.id)).recordNumber).toBe("0001");
+    expect(
+      (await createRecord(otherOrganization.id, "orgBAdmin")).recordNumber,
+    ).toBe("0001");
+    const archive = await invokeV2Api(
+      `/api/v2/projects/${first.id}/records/${concurrent[1].id}/archive`,
+      request("admin", "POST"),
+      dependencies(),
+    );
+    expect(archive.status).toBe(200);
+    expect((await createRecord(first.id, "admin", "Fourth")).recordNumber).toBe(
+      "0004",
+    );
+  });
+
+  it("bootstraps after numeric legacy records and preserves nonnumeric legacy values", async () => {
+    const project = await createProject("P-REC-LEGACY");
+    const now = new Date().toISOString();
+    await testDatabase().batch([
+      testDatabase()
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, record_number, title, status, discipline, created_by, created_at, updated_at) VALUES ('legacy-numeric', 'org-a', ?, 'document', '0041', 'Numeric legacy', 'active', 'ARCH', 'user-admin', ?, ?)",
+        )
+        .bind(project.id, now, now),
+      testDatabase()
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, record_number, title, status, discipline, created_by, created_at, updated_at) VALUES ('legacy-alpha', 'org-a', ?, 'document', 'A-900', 'Alpha legacy', 'active', 'ARCH', 'user-admin', ?, ?)",
+        )
+        .bind(project.id, now, now),
+    ]);
+    const generated = await createRecord(project.id);
+    expect(generated.recordNumber).toBe("0042");
+    const legacy = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/legacy-alpha`,
+      request("admin"),
+      dependencies(),
+    );
+    await expect(legacy.json()).resolves.toMatchObject({
+      data: { recordNumber: "A-900", discipline: "ARCH" },
+    });
+    const unchangedLegacy = await invokeV2Api(
+      `/api/v2/projects/${project.id}/records/legacy-alpha`,
+      request("admin", "PATCH", { title: "Updated legacy" }),
+      dependencies(),
+    );
+    expect(unchangedLegacy.status).toBe(200);
+    await expect(unchangedLegacy.json()).resolves.toMatchObject({
+      data: {
+        recordNumber: "A-900",
+        discipline: "ARCH",
+        title: "Updated legacy",
+      },
+    });
+  });
+
+  it("rejects protected fields and uncontrolled discipline values", async () => {
+    const first = await createProject("P-REC-VALIDATION");
+    const record = await createRecord(first.id);
     const invalidType = await invokeV2Api(
       `/api/v2/projects/${first.id}/records`,
       request("admin", "POST", { recordType: "rfi", title: "Invalid" }),
@@ -312,41 +580,38 @@ describe("records foundation API", () => {
       dependencies(),
     );
     expect(missingTitle.status).toBe(400);
-    const emptyNumber = await invokeV2Api(
+    const clientNumber = await invokeV2Api(
       `/api/v2/projects/${first.id}/records`,
       request("admin", "POST", {
         recordType: "document",
-        recordNumber: " ",
-        title: "Empty number",
+        recordNumber: "9999",
+        title: "Client numbered",
       }),
       dependencies(),
     );
-    expect(emptyNumber.status).toBe(400);
-    await createRecord(first.id, "C-001");
-    const duplicate = await invokeV2Api(
+    expect(clientNumber.status).toBe(400);
+    const updateNumber = await invokeV2Api(
+      `/api/v2/projects/${first.id}/records/${record.id}`,
+      request("admin", "PATCH", { recordNumber: "9999" }),
+      dependencies(),
+    );
+    expect(updateNumber.status).toBe(400);
+    const invalidDiscipline = await invokeV2Api(
       `/api/v2/projects/${first.id}/records`,
       request("admin", "POST", {
         recordType: "document",
-        recordNumber: " C-001 ",
-        title: "Duplicate",
+        title: "Invalid discipline",
+        discipline: "Architecture",
       }),
       dependencies(),
     );
-    expect(duplicate.status).toBe(409);
-    await createRecord(second.id, "C-001");
-    const now = new Date().toISOString();
-    await testDatabase().batch([
-      testDatabase()
-        .prepare(
-          "INSERT INTO projects (id, organization_id, project_number, name, status, timezone, created_at, updated_at) VALUES ('project-record-org-b', 'org-b', 'P-REC-B', 'Other', 'planning', 'America/New_York', ?, ?)",
-        )
-        .bind(now, now),
-      testDatabase()
-        .prepare(
-          "INSERT INTO records (id, organization_id, project_id, record_type, record_number, title, status, created_by, created_at, updated_at) VALUES ('record-org-b', 'org-b', 'project-record-org-b', 'document', 'C-001', 'Other', 'active', 'user-org-b', ?, ?)",
-        )
-        .bind(now, now),
-    ]);
+    expect(invalidDiscipline.status).toBe(400);
+    const invalidDisciplineUpdate = await invokeV2Api(
+      `/api/v2/projects/${first.id}/records/${record.id}`,
+      request("admin", "PATCH", { discipline: "Architecture" }),
+      dependencies(),
+    );
+    expect(invalidDisciplineUpdate.status).toBe(400);
     const protectedFields = await invokeV2Api(
       `/api/v2/projects/${first.id}/records`,
       request("admin", "POST", {
@@ -580,7 +845,12 @@ describe("records foundation API", () => {
         .run();
     }
 
-    const rollbackRecord = await createRecord(project.id, "ROLLBACK-1");
+    const rollbackRecord = await createRecord(
+      project.id,
+      "admin",
+      "Rollback target",
+    );
+    expect(rollbackRecord.recordNumber).toBe("0002");
     await testDatabase()
       .prepare(
         "CREATE TRIGGER fail_record_updated_activity BEFORE INSERT ON activity_events WHEN NEW.action = 'record.updated' BEGIN SELECT RAISE(ABORT, 'forced record update audit failure'); END",
@@ -598,7 +868,7 @@ describe("records foundation API", () => {
         .prepare("SELECT title FROM records WHERE id = ?")
         .bind(rollbackRecord.id)
         .first<{ title: string }>();
-      expect(stored?.title).toBe("Floor Plan");
+      expect(stored?.title).toBe("Rollback target");
     } finally {
       await testDatabase()
         .prepare("DROP TRIGGER IF EXISTS fail_record_updated_activity")

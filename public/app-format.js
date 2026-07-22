@@ -2,6 +2,7 @@
 // modules. Human-readable labels for statuses, purposes, attention reasons, and
 // activity descriptions live here in one consistent layer so no two views
 // derive conflicting text.
+export { disciplineLabel } from "./record-options.js";
 
 export function escapeHtml(value) {
   return String(value == null ? "" : value)
@@ -126,17 +127,51 @@ export function revisionStatusLabel(status) {
   return REVISION_STATUS_LABELS[status] || status;
 }
 
-// The current published revision, spoken as "Revision <label|number>" so the
-// revision identity is never confused with the record identity. Returns null
-// when the record has no current revision.
+export function revisionName(revision) {
+  if (!revision) return "";
+  const number = Number(revision.revisionNumber);
+  const label = String(revision.revisionLabel ?? "").trim();
+  const numbered =
+    number === 1
+      ? "Original"
+      : Number.isInteger(number) && number > 1
+        ? `Rev ${number - 1}`
+        : "Version";
+  return label ? `${numbered} · ${label}` : numbered;
+}
+
 export function currentRevisionText(currentRevision) {
   if (!currentRevision) return null;
-  const name =
-    currentRevision.revisionLabel != null &&
-    String(currentRevision.revisionLabel).trim() !== ""
-      ? currentRevision.revisionLabel
-      : currentRevision.revisionNumber;
-  return `Revision ${name}`;
+  return revisionName(currentRevision);
+}
+
+const FILE_TYPE_LABELS = {
+  "image/png": "PNG image",
+  "image/jpeg": "JPEG image",
+  "image/jpg": "JPEG image",
+  "application/pdf": "PDF document",
+  "application/msword": "Word document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "Word document",
+  "application/vnd.ms-excel": "Excel workbook",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+    "Excel workbook",
+  "application/acad": "DWG drawing",
+  "application/dwg": "DWG drawing",
+  "application/x-dwg": "DWG drawing",
+  "application/vnd.dwg": "DWG drawing",
+  "image/vnd.dwg": "DWG drawing",
+  "image/x-dwg": "DWG drawing",
+};
+
+export function fileTypeLabel(mediaType) {
+  return (
+    FILE_TYPE_LABELS[
+      String(mediaType ?? "")
+        .trim()
+        .toLowerCase()
+    ] || "File"
+  );
 }
 
 export function actorLabel(event) {
