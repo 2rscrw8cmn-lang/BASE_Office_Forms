@@ -1,4 +1,8 @@
-import { RfiIllegalTransitionError } from "../../../domain/rfis/errors";
+import {
+  RfiConflictError,
+  RfiIllegalTransitionError,
+} from "../../../domain/rfis/errors";
+import { canUpdateDraft } from "../../../domain/rfis/lifecycle";
 import type {
   Rfi,
   RfiResponse,
@@ -16,98 +20,135 @@ interface RfiRow {
   id: string;
   organization_id: string;
   project_id: string;
+  template_version_id: string | null;
   rfi_number: string | null;
+  legacy_reference: string | null;
   status: RfiStatus;
-  title: string;
+  subject: string;
   question: string;
-  suggested_resolution: string | null;
+  contractor_suggestion: string | null;
+  drawing_references: string | null;
+  specification_references: string | null;
+  responsible_party: string | null;
   submitted_by: string | null;
-  assigned_to: string | null;
-  due_date: string | null;
+  requested_response_date: string | null;
   cost_impact: string | null;
   schedule_impact: string | null;
+  issued_number_sequence: number | null;
+  project_snapshot_json: string | null;
   issued_at: string | null;
-  answered_at: string | null;
+  response_received_at: string | null;
   closed_at: string | null;
+  lock_version: number;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
-const RFI_COLUMNS = `id, organization_id, project_id, rfi_number, status, title, question,
-  suggested_resolution, submitted_by, assigned_to, due_date, cost_impact, schedule_impact,
-  issued_at, answered_at, closed_at, created_at, updated_at`;
+const RFI_COLUMNS = `id, organization_id, project_id, template_version_id, rfi_number,
+  legacy_reference, status, subject, question, contractor_suggestion,
+  drawing_references, specification_references, responsible_party, submitted_by,
+  requested_response_date, cost_impact, schedule_impact, issued_number_sequence,
+  project_snapshot_json, issued_at, response_received_at, closed_at, lock_version,
+  created_by, created_at, updated_at`;
+
+// Column projection for activity `new_state` snapshots. Kept in sync with the
+// row shape so every event captures the authoritative post-write state.
+const STATE_JSON_OBJECT = `json_object(
+  'projectId', project_id,
+  'templateVersionId', template_version_id,
+  'rfiNumber', rfi_number,
+  'status', status,
+  'subject', subject,
+  'question', question,
+  'contractorSuggestion', contractor_suggestion,
+  'drawingReferences', drawing_references,
+  'specificationReferences', specification_references,
+  'responsibleParty', responsible_party,
+  'submittedBy', submitted_by,
+  'requestedResponseDate', requested_response_date,
+  'costImpact', cost_impact,
+  'scheduleImpact', schedule_impact,
+  'issuedAt', issued_at,
+  'responseReceivedAt', response_received_at,
+  'closedAt', closed_at,
+  'lockVersion', lock_version
+)`;
 
 function mapRfi(row: RfiRow): Rfi {
   return {
     id: row.id,
     organizationId: row.organization_id,
     projectId: row.project_id,
+    templateVersionId: row.template_version_id,
     rfiNumber: row.rfi_number,
+    legacyReference: row.legacy_reference,
     status: row.status,
-    title: row.title,
+    subject: row.subject,
     question: row.question,
-    suggestedResolution: row.suggested_resolution,
+    contractorSuggestion: row.contractor_suggestion,
+    drawingReferences: row.drawing_references,
+    specificationReferences: row.specification_references,
+    responsibleParty: row.responsible_party,
     submittedBy: row.submitted_by,
-    assignedTo: row.assigned_to,
-    dueDate: row.due_date,
+    requestedResponseDate: row.requested_response_date,
     costImpact: row.cost_impact,
     scheduleImpact: row.schedule_impact,
+    issuedNumberSequence: row.issued_number_sequence,
     issuedAt: row.issued_at,
-    answeredAt: row.answered_at,
+    responseReceivedAt: row.response_received_at,
     closedAt: row.closed_at,
+    lockVersion: row.lock_version,
+    createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function state(rfi: Rfi): Record<string, unknown> {
+function priorState(rfi: Rfi): Record<string, unknown> {
   return {
     projectId: rfi.projectId,
+    templateVersionId: rfi.templateVersionId,
     rfiNumber: rfi.rfiNumber,
     status: rfi.status,
-    title: rfi.title,
+    subject: rfi.subject,
     question: rfi.question,
-    suggestedResolution: rfi.suggestedResolution,
+    contractorSuggestion: rfi.contractorSuggestion,
+    drawingReferences: rfi.drawingReferences,
+    specificationReferences: rfi.specificationReferences,
+    responsibleParty: rfi.responsibleParty,
     submittedBy: rfi.submittedBy,
-    assignedTo: rfi.assignedTo,
-    dueDate: rfi.dueDate,
+    requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
     scheduleImpact: rfi.scheduleImpact,
     issuedAt: rfi.issuedAt,
-    answeredAt: rfi.answeredAt,
+    responseReceivedAt: rfi.responseReceivedAt,
     closedAt: rfi.closedAt,
+    lockVersion: rfi.lockVersion,
   };
 }
 
+type ActivityInput = Omit<
+  NewActivityEvent,
+  "organizationId" | "objectId" | "priorState" | "newState"
+>;
+
+// Emits the activity event only when the immediately-preceding batch statement
+// changed exactly one row (`changes() = 1`), so an event is never recorded for a
+// write that was rejected by its own guard.
 function eventStatement(
   database: D1Database,
   event: NewActivityEvent,
-  rfi: Rfi,
+  rfi: Pick<Rfi, "id" | "organizationId" | "projectId">,
 ): D1PreparedStatement {
   return database
     .prepare(
       `INSERT INTO activity_events
         (id, organization_id, actor_user_id, actor_type, object_type, object_id,
          action, prior_state_json, new_state_json, metadata_json, correlation_id, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, json_object(
-         'projectId', project_id,
-         'rfiNumber', rfi_number,
-         'status', status,
-         'title', title,
-         'question', question,
-         'suggestedResolution', suggested_resolution,
-         'submittedBy', submitted_by,
-         'assignedTo', assigned_to,
-         'dueDate', due_date,
-         'costImpact', cost_impact,
-         'scheduleImpact', schedule_impact,
-         'issuedAt', issued_at,
-         'answeredAt', answered_at,
-         'closedAt', closed_at
-       ), ?, ?, ?
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ${STATE_JSON_OBJECT}, ?, ?, ?
        FROM rfi_records
-       WHERE id = ? AND organization_id = ? AND project_id = ?
-         AND status = ? AND updated_at = ? AND changes() = 1`,
+       WHERE id = ? AND organization_id = ? AND project_id = ? AND changes() = 1`,
     )
     .bind(
       crypto.randomUUID(),
@@ -124,15 +165,13 @@ function eventStatement(
       rfi.id,
       rfi.organizationId,
       rfi.projectId,
-      rfi.status,
-      rfi.updatedAt,
     );
 }
 
-type ActivityInput = Omit<
-  NewActivityEvent,
-  "organizationId" | "objectId" | "priorState" | "newState"
->;
+export interface RfiCreateInput extends RfiWriteInput {
+  templateVersionId: string | null;
+  createdBy: string;
+}
 
 export class D1RfiRecordsRepository {
   constructor(
@@ -172,7 +211,7 @@ export class D1RfiRecordsRepository {
   async createWithActivity(
     organizationId: string,
     projectId: string,
-    input: RfiWriteInput,
+    input: RfiCreateInput,
     event: Omit<NewActivityEvent, "organizationId" | "objectId" | "newState">,
   ): Promise<Rfi> {
     const now = new Date().toISOString();
@@ -180,12 +219,26 @@ export class D1RfiRecordsRepository {
       id: crypto.randomUUID(),
       organizationId,
       projectId,
+      templateVersionId: input.templateVersionId,
       rfiNumber: null,
+      legacyReference: null,
       status: "draft",
-      ...input,
+      subject: input.subject,
+      question: input.question,
+      contractorSuggestion: input.contractorSuggestion,
+      drawingReferences: input.drawingReferences,
+      specificationReferences: input.specificationReferences,
+      responsibleParty: input.responsibleParty,
+      submittedBy: input.submittedBy,
+      requestedResponseDate: input.requestedResponseDate,
+      costImpact: input.costImpact,
+      scheduleImpact: input.scheduleImpact,
+      issuedNumberSequence: null,
       issuedAt: null,
-      answeredAt: null,
+      responseReceivedAt: null,
       closedAt: null,
+      lockVersion: 1,
+      createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
     };
@@ -193,25 +246,33 @@ export class D1RfiRecordsRepository {
       this.database
         .prepare(
           `INSERT INTO rfi_records (${RFI_COLUMNS})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
+          rfi.templateVersionId,
           rfi.rfiNumber,
+          rfi.legacyReference,
           rfi.status,
-          rfi.title,
+          rfi.subject,
           rfi.question,
-          rfi.suggestedResolution,
+          rfi.contractorSuggestion,
+          rfi.drawingReferences,
+          rfi.specificationReferences,
+          rfi.responsibleParty,
           rfi.submittedBy,
-          rfi.assignedTo,
-          rfi.dueDate,
+          rfi.requestedResponseDate,
           rfi.costImpact,
           rfi.scheduleImpact,
+          rfi.issuedNumberSequence,
+          null,
           rfi.issuedAt,
-          rfi.answeredAt,
+          rfi.responseReceivedAt,
           rfi.closedAt,
+          rfi.lockVersion,
+          rfi.createdBy,
           rfi.createdAt,
           rfi.updatedAt,
         ),
@@ -224,42 +285,75 @@ export class D1RfiRecordsRepository {
     return rfi;
   }
 
-  async updateDraftWithActivity(rfi: Rfi, input: RfiWriteInput): Promise<Rfi> {
+  /**
+   * Applies an inline/full draft edit under optimistic concurrency. The write is
+   * guarded by both the editable-draft status and the caller's lockVersion, so a
+   * stale writer is rejected. A rejected write is disambiguated by re-reading:
+   * a lockVersion mismatch is a conflict, anything else is an illegal transition.
+   */
+  async updateDraftWithActivity(
+    rfi: Rfi,
+    input: RfiWriteInput,
+    expectedLockVersion: number,
+    event: ActivityInput,
+  ): Promise<Rfi> {
+    const now = new Date().toISOString();
+    const nextLock = expectedLockVersion + 1;
     const updated: Rfi = {
       ...rfi,
       ...input,
-      updatedAt: new Date().toISOString(),
+      lockVersion: nextLock,
+      updatedAt: now,
     };
-    const result = await this.database
-      .prepare(
-        `UPDATE rfi_records SET title = ?, question = ?, suggested_resolution = ?,
-          submitted_by = ?, assigned_to = ?, due_date = ?, cost_impact = ?,
-          schedule_impact = ?, updated_at = ?
-         WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'`,
-      )
-      .bind(
-        updated.title,
-        updated.question,
-        updated.suggestedResolution,
-        updated.submittedBy,
-        updated.assignedTo,
-        updated.dueDate,
-        updated.costImpact,
-        updated.scheduleImpact,
-        updated.updatedAt,
-        updated.id,
-        updated.organizationId,
-        updated.projectId,
-      )
-      .run();
-    if (result.meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(rfi.status, "be edited");
+    const results = await this.database.batch([
+      this.database
+        .prepare(
+          `UPDATE rfi_records SET subject = ?, question = ?, contractor_suggestion = ?,
+            drawing_references = ?, specification_references = ?, responsible_party = ?,
+            submitted_by = ?, requested_response_date = ?, cost_impact = ?,
+            schedule_impact = ?, lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND status = 'draft' AND lock_version = ?`,
+        )
+        .bind(
+          updated.subject,
+          updated.question,
+          updated.contractorSuggestion,
+          updated.drawingReferences,
+          updated.specificationReferences,
+          updated.responsibleParty,
+          updated.submittedBy,
+          updated.requestedResponseDate,
+          updated.costImpact,
+          updated.scheduleImpact,
+          nextLock,
+          now,
+          rfi.id,
+          rfi.organizationId,
+          rfi.projectId,
+          expectedLockVersion,
+        ),
+      eventStatement(
+        this.database,
+        {
+          ...event,
+          organizationId: rfi.organizationId,
+          objectId: rfi.id,
+          priorState: priorState(rfi),
+          newState: null,
+        },
+        rfi,
+      ),
+    ]);
+    if (results[0].meta.changes !== 1) {
+      await this.throwWriteFailure(rfi, "be edited", expectedLockVersion);
     }
     return updated;
   }
 
   async issueWithActivity(rfi: Rfi, event: ActivityInput): Promise<Rfi> {
     const now = new Date().toISOString();
+    const nextLock = rfi.lockVersion + 1;
     const results = await this.database.batch([
       this.sequences.ensureForIssueStatement(
         rfi.organizationId,
@@ -274,22 +368,31 @@ export class D1RfiRecordsRepository {
       this.database
         .prepare(
           `UPDATE rfi_records
-           SET status = 'issued',
+           SET status = 'open',
+             issued_number_sequence = (
+               SELECT last_number FROM rfi_number_sequences
+               WHERE project_id = ? AND organization_id = ?
+             ),
              rfi_number = 'RFI-' || printf('%03d', (
                SELECT last_number FROM rfi_number_sequences
                WHERE project_id = ? AND organization_id = ?
              )),
-             issued_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'`,
+             issued_at = ?, lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND status IN ('draft', 'ready_to_issue') AND lock_version = ?`,
         )
         .bind(
           rfi.projectId,
           rfi.organizationId,
+          rfi.projectId,
+          rfi.organizationId,
           now,
+          nextLock,
           now,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
+          rfi.lockVersion,
         ),
       eventStatement(
         this.database,
@@ -297,14 +400,14 @@ export class D1RfiRecordsRepository {
           ...event,
           organizationId: rfi.organizationId,
           objectId: rfi.id,
-          priorState: state(rfi),
+          priorState: priorState(rfi),
           newState: null,
         },
-        { ...rfi, status: "issued", issuedAt: now, updatedAt: now },
+        rfi,
       ),
     ]);
     if (results[2].meta.changes !== 1 || results[3].meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(rfi.status, "be issued");
+      await this.throwWriteFailure(rfi, "be issued");
     }
     const issued = await this.findById(
       rfi.organizationId,
@@ -326,10 +429,12 @@ export class D1RfiRecordsRepository {
       input,
     );
     const now = new Date().toISOString();
+    const nextLock = rfi.lockVersion + 1;
     const answered: Rfi = {
       ...rfi,
-      status: "answered",
-      answeredAt: now,
+      status: "response_received",
+      responseReceivedAt: now,
+      lockVersion: nextLock,
       updatedAt: now,
     };
     const results = await this.database.batch([
@@ -337,16 +442,21 @@ export class D1RfiRecordsRepository {
       this.database
         .prepare(
           `UPDATE rfi_records
-           SET status = 'answered', answered_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'issued'
+           SET status = 'response_received', response_received_at = ?,
+             lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND status IN ('open', 'returned_for_clarification')
+             AND lock_version = ?
              AND EXISTS (SELECT 1 FROM rfi_responses WHERE id = ?)`,
         )
         .bind(
-          answered.answeredAt,
+          answered.responseReceivedAt,
+          nextLock,
           answered.updatedAt,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
+          rfi.lockVersion,
           response.id,
         ),
       eventStatement(
@@ -355,7 +465,7 @@ export class D1RfiRecordsRepository {
           ...event,
           organizationId: answered.organizationId,
           objectId: answered.id,
-          priorState: state(rfi),
+          priorState: priorState(rfi),
           newState: null,
           metadata: { ...event.metadata, responseId: response.id },
         },
@@ -367,61 +477,99 @@ export class D1RfiRecordsRepository {
       results[1].meta.changes !== 1 ||
       results[2].meta.changes !== 1
     ) {
-      throw new RfiIllegalTransitionError(rfi.status, "be responded to");
+      await this.throwWriteFailure(rfi, "be responded to");
     }
     return { rfi: answered, response };
   }
 
+  /**
+   * Applies a simple lifecycle transition (mark-ready, return-for-clarification,
+   * close, reopen, void) under a status + lockVersion guard, bumping lockVersion
+   * so a concurrent stale edit is rejected afterwards.
+   */
   async transitionWithActivity(
     rfi: Rfi,
-    status: Exclude<RfiStatus, "draft" | "issued"> | "answered",
+    toStatus: RfiStatus,
+    action: string,
     event: ActivityInput,
   ): Promise<Rfi> {
     const now = new Date().toISOString();
-    const answeredAt = status === "answered" ? now : rfi.answeredAt;
-    const closedAt = status === "closed" ? now : null;
+    const nextLock = rfi.lockVersion + 1;
+    const responseReceivedAt =
+      toStatus === "response_received" ? now : rfi.responseReceivedAt;
+    const closedAt =
+      toStatus === "closed" ? now : toStatus === "open" ? null : rfi.closedAt;
     const updated: Rfi = {
       ...rfi,
-      status,
-      answeredAt,
+      status: toStatus,
+      responseReceivedAt,
       closedAt,
+      lockVersion: nextLock,
       updatedAt: now,
     };
     const results = await this.database.batch([
       this.database
         .prepare(
           `UPDATE rfi_records
-           SET status = ?, answered_at = ?, closed_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = ?`,
+           SET status = ?, response_received_at = ?, closed_at = ?,
+             lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND status = ? AND lock_version = ?`,
         )
         .bind(
-          status,
-          answeredAt,
+          toStatus,
+          responseReceivedAt,
           closedAt,
+          nextLock,
           now,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
           rfi.status,
+          rfi.lockVersion,
         ),
       eventStatement(
         this.database,
         {
           ...event,
+          action,
           organizationId: updated.organizationId,
           objectId: updated.id,
-          priorState: state(rfi),
+          priorState: priorState(rfi),
           newState: null,
         },
         updated,
       ),
     ]);
     if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(
-        rfi.status,
-        `transition to ${status}`,
-      );
+      await this.throwWriteFailure(rfi, `transition to ${toStatus}`);
     }
     return updated;
+  }
+
+  private async throwWriteFailure(
+    rfi: Rfi,
+    action: string,
+    expectedLockVersion: number = rfi.lockVersion,
+  ): Promise<never> {
+    const current = await this.findById(
+      rfi.organizationId,
+      rfi.projectId,
+      rfi.id,
+    );
+    if (current && current.lockVersion !== expectedLockVersion) {
+      throw new RfiConflictError();
+    }
+    if (
+      current &&
+      action === "be edited" &&
+      canUpdateDraft(current.status) &&
+      current.lockVersion === expectedLockVersion
+    ) {
+      // Same lock, still editable, yet no row changed: a genuine conflict raced
+      // in and out. Treat as a conflict so the caller reloads.
+      throw new RfiConflictError();
+    }
+    throw new RfiIllegalTransitionError(rfi.status, action);
   }
 }

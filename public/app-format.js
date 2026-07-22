@@ -53,7 +53,9 @@ export function readyToIssueReason(fileCount) {
 }
 
 export function activeRfiReason(status) {
-  if (status === "answered") return "RFI answered and awaiting close";
+  if (status === "response_received") return "Response received and awaiting close";
+  if (status === "returned_for_clarification")
+    return "Returned for clarification";
   return "RFI awaiting response";
 }
 
@@ -80,10 +82,15 @@ const ACTIVITY_LABELS = {
   "file.uploaded": "File uploaded",
   "issuance.created": "Issuance created",
   "rfi.created": "RFI drafted",
+  "rfi.updated": "RFI updated",
+  "rfi.marked_ready": "RFI marked ready to issue",
   "rfi.issued": "RFI issued",
-  "rfi.responded": "RFI answered",
+  "rfi.responded": "Response received",
+  "rfi.returned_for_clarification": "Returned for clarification",
   "rfi.closed": "RFI closed",
   "rfi.reopened": "RFI reopened",
+  "rfi.voided": "RFI voided",
+  "rfi.attachment_added": "Attachment added",
 };
 
 export function describeActivity(action) {
@@ -177,4 +184,78 @@ export function fileTypeLabel(mediaType) {
 export function actorLabel(event) {
   if (event.actorType === "system") return "System";
   return event.actorDisplayName || "A team member";
+}
+
+// RFI register / workspace labels. Statuses are the binding workflow states and
+// are always shown as text (never color alone).
+const RFI_STATUS_LABELS = {
+  draft: "Draft",
+  ready_to_issue: "Ready to issue",
+  open: "Open",
+  response_received: "Response received",
+  closed: "Closed",
+  returned_for_clarification: "Returned for clarification",
+  void: "Void",
+};
+
+export function rfiStatusLabel(status) {
+  return RFI_STATUS_LABELS[status] || status || "—";
+}
+
+// Neutral/attention/success tones for status badges — paired with the text
+// label above so status is never conveyed by color alone.
+const RFI_STATUS_TONES = {
+  draft: "neutral",
+  ready_to_issue: "attention",
+  open: "attention",
+  response_received: "success",
+  closed: "neutral",
+  returned_for_clarification: "attention",
+  void: "neutral",
+};
+
+export function rfiStatusTone(status) {
+  return RFI_STATUS_TONES[status] || "neutral";
+}
+
+const RFI_ATTACHMENT_ROLE_LABELS = {
+  supporting_attachment: "Supporting attachment",
+  reference_drawing: "Reference drawing",
+};
+
+export function rfiAttachmentRoleLabel(role) {
+  return RFI_ATTACHMENT_ROLE_LABELS[role] || role;
+}
+
+// The official RFI number, or the explicit unnumbered-draft label. The database
+// UUID is never used as an identifier here.
+export function rfiNumberLabel(rfiNumber) {
+  return rfiNumber || "Unnumbered Draft";
+}
+
+// A short, safe activity summary line. Never renders raw activity JSON — only
+// the mapped action label plus a structured hint (changed fields / role).
+export function rfiActivityDetail(event) {
+  if (Array.isArray(event.changedFields) && event.changedFields.length) {
+    return event.changedFields.map(rfiFieldLabel).join(", ");
+  }
+  if (event.role) return rfiAttachmentRoleLabel(event.role);
+  return "";
+}
+
+const RFI_FIELD_LABELS = {
+  subject: "Subject",
+  question: "Question",
+  contractorSuggestion: "Contractor suggestion",
+  drawingReferences: "Drawing references",
+  specificationReferences: "Specification references",
+  responsibleParty: "Responsible party",
+  submittedBy: "Submitted by",
+  requestedResponseDate: "Requested response date",
+  costImpact: "Cost impact",
+  scheduleImpact: "Schedule impact",
+};
+
+export function rfiFieldLabel(field) {
+  return RFI_FIELD_LABELS[field] || field;
 }

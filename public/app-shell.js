@@ -11,6 +11,8 @@ import { createProjectOverviewView } from "./project-overview-view.js";
 import { createRecordsView } from "./records-view.js";
 import { createRecordDetailView } from "./record-detail-view.js";
 import { createRevisionDetailView } from "./revision-detail-view.js";
+import { createRfisView } from "./rfis-view.js";
+import { createRfiWorkspaceView } from "./rfi-workspace-view.js";
 
 const iconPaths = {
   dashboard:
@@ -290,7 +292,11 @@ export function createAppShell(options = {}) {
               ? `<div class="feature-view" data-feature="record-detail"></div>`
               : route.id === "revision-detail"
                 ? `<div class="feature-view" data-feature="revision-detail"></div>`
-                : renderPlaceholder(route);
+                : route.id === "project-rfis"
+                  ? `<div class="feature-view" data-feature="rfis"></div>`
+                  : route.id === "rfi-workspace"
+                    ? `<div class="feature-view" data-feature="rfi-workspace"></div>`
+                    : renderPlaceholder(route);
       return `${renderProjectHeader(route)}${renderProjectTabs(route)}<div class="project-route-content">${inner}</div>`;
     }
     return renderPlaceholder(route);
@@ -333,6 +339,19 @@ export function createAppShell(options = {}) {
         revisionId,
       };
     }
+    if (route.id === "project-rfis") {
+      const projectId = route.params?.projectId;
+      return { key: `rfis:${projectId}`, kind: "rfis", projectId };
+    }
+    if (route.id === "rfi-workspace") {
+      const { projectId, rfiId } = route.params || {};
+      return {
+        key: `rfi-workspace:${projectId}:${rfiId}`,
+        kind: "rfi-workspace",
+        projectId,
+        rfiId,
+      };
+    }
     return null;
   }
 
@@ -366,6 +385,14 @@ export function createAppShell(options = {}) {
         projectId: descriptor.projectId,
         recordId: descriptor.recordId,
         revisionId: descriptor.revisionId,
+      });
+    if (descriptor.kind === "rfis")
+      return createRfisView({ ...shared, projectId: descriptor.projectId });
+    if (descriptor.kind === "rfi-workspace")
+      return createRfiWorkspaceView({
+        ...shared,
+        projectId: descriptor.projectId,
+        rfiId: descriptor.rfiId,
       });
     return createProjectOverviewView({
       ...shared,

@@ -4,21 +4,27 @@ import {
   assertCanUpdateDraft,
   closeStatus,
   issueStatus,
+  markReadyStatus,
   reopenStatus,
   respondStatus,
+  returnForClarificationStatus,
+  voidStatus,
 } from "../../domain/rfis/lifecycle";
 import type {
   Rfi,
+  RfiAttachment,
   RfiDetail,
   RfiResponse,
   RfiWriteInput,
 } from "../../domain/rfis/rfi";
+import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import {
   D1RfiResponsesRepository,
   type RfiResponseWriteInput,
 } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { ProjectService } from "../projects/project-service";
+import { RfiTemplateBindingService } from "./rfi-template-binding-service";
 
 export interface RfiMutationInput extends RfiWriteInput {
   correlationId: string;
@@ -28,11 +34,33 @@ export interface RfiResponseInput extends RfiResponseWriteInput {
   correlationId: string;
 }
 
+// The draft fields whose changes are worth recording on the activity timeline.
+const TRACKED_FIELDS: readonly (keyof RfiWriteInput)[] = [
+  "subject",
+  "question",
+  "contractorSuggestion",
+  "drawingReferences",
+  "specificationReferences",
+  "responsibleParty",
+  "submittedBy",
+  "requestedResponseDate",
+  "costImpact",
+  "scheduleImpact",
+];
+
+function changedFields(current: Rfi, next: RfiWriteInput): string[] {
+  return TRACKED_FIELDS.filter(
+    (field) => (current[field] ?? null) !== (next[field] ?? null),
+  );
+}
+
 export class RfiService {
   constructor(
     private readonly projects: ProjectService,
     private readonly records: D1RfiRecordsRepository,
     private readonly responses: D1RfiResponsesRepository,
+    private readonly attachments: D1RfiAttachmentsRepository,
+    private readonly templateBinding: RfiTemplateBindingService,
   ) {}
 
   async list(actor: AppSession, projectId: string): Promise<Rfi[]> {
@@ -47,10 +75,11 @@ export class RfiService {
   ): Promise<RfiDetail> {
     await this.projects.requireRfiAccess(actor, projectId);
     const rfi = await this.find(actor, projectId, rfiId);
-    return {
-      ...rfi,
-      responses: await this.responses.list(actor.organizationId, rfi.id),
-    };
+    const [responses, attachments] = await Promise.all([
+      this.responses.list(actor.organizationId, rfi.id),
+      this.attachments.list(actor.organizationId, rfi.id),
+    ]);
+    return { ...rfi, responses, attachments };
   }
 
   async createDraft(
@@ -63,17 +92,26 @@ export class RfiService {
       projectId,
       "rfis:create_draft",
     );
+    const template = await this.templateBinding.resolveDefault(
+      actor.organizationId,
+      actor.userId,
+      input.correlationId,
+    );
     return this.records.createWithActivity(
       actor.organizationId,
       projectId,
-      input,
+      {
+        ...toWriteInput(input),
+        templateVersionId: template.templateVersionId,
+        createdBy: actor.userId,
+      },
       {
         actorUserId: actor.userId,
         actorType: "user",
         objectType: "rfi",
         action: "rfi.created",
         priorState: null,
-        metadata: {},
+        metadata: { templateVersionId: template.templateVersionId },
         correlationId: input.correlationId,
       },
     );
@@ -83,6 +121,7 @@ export class RfiService {
     actor: AppSession,
     projectId: string,
     rfiId: string,
+    expectedLockVersion: number,
     input: RfiMutationInput,
   ): Promise<Rfi> {
     await this.projects.requireRfiManagement(
@@ -92,7 +131,36 @@ export class RfiService {
     );
     const rfi = await this.find(actor, projectId, rfiId);
     assertCanUpdateDraft(rfi.status);
-    return this.records.updateDraftWithActivity(rfi, input);
+    return this.records.updateDraftWithActivity(
+      rfi,
+      toWriteInput(input),
+      expectedLockVersion,
+      {
+        actorUserId: actor.userId,
+        actorType: "user",
+        objectType: "rfi",
+        action: "rfi.updated",
+        metadata: { changedFields: changedFields(rfi, input) },
+        correlationId: input.correlationId,
+      },
+    );
+  }
+
+  async markReady(
+    actor: AppSession,
+    projectId: string,
+    rfiId: string,
+    correlationId: string,
+  ): Promise<Rfi> {
+    return this.transition(
+      actor,
+      projectId,
+      rfiId,
+      "rfis:mark_ready",
+      markReadyStatus,
+      "rfi.marked_ready",
+      correlationId,
+    );
   }
 
   async issue(
@@ -140,23 +208,38 @@ export class RfiService {
     );
   }
 
+  async returnForClarification(
+    actor: AppSession,
+    projectId: string,
+    rfiId: string,
+    correlationId: string,
+  ): Promise<Rfi> {
+    return this.transition(
+      actor,
+      projectId,
+      rfiId,
+      "rfis:return_for_clarification",
+      returnForClarificationStatus,
+      "rfi.returned_for_clarification",
+      correlationId,
+    );
+  }
+
   async close(
     actor: AppSession,
     projectId: string,
     rfiId: string,
     correlationId: string,
   ): Promise<Rfi> {
-    await this.projects.requireRfiManagement(actor, projectId, "rfis:close");
-    const rfi = await this.find(actor, projectId, rfiId);
-    closeStatus(rfi.status);
-    return this.records.transitionWithActivity(rfi, "closed", {
-      actorUserId: actor.userId,
-      actorType: "user",
-      objectType: "rfi",
-      action: "rfi.closed",
-      metadata: {},
+    return this.transition(
+      actor,
+      projectId,
+      rfiId,
+      "rfis:close",
+      closeStatus,
+      "rfi.closed",
       correlationId,
-    });
+    );
   }
 
   async reopen(
@@ -165,14 +248,51 @@ export class RfiService {
     rfiId: string,
     correlationId: string,
   ): Promise<Rfi> {
-    await this.projects.requireRfiManagement(actor, projectId, "rfis:reopen");
+    return this.transition(
+      actor,
+      projectId,
+      rfiId,
+      "rfis:reopen",
+      reopenStatus,
+      "rfi.reopened",
+      correlationId,
+    );
+  }
+
+  async void(
+    actor: AppSession,
+    projectId: string,
+    rfiId: string,
+    correlationId: string,
+  ): Promise<Rfi> {
+    return this.transition(
+      actor,
+      projectId,
+      rfiId,
+      "rfis:void",
+      voidStatus,
+      "rfi.voided",
+      correlationId,
+    );
+  }
+
+  private async transition(
+    actor: AppSession,
+    projectId: string,
+    rfiId: string,
+    capability: Parameters<ProjectService["requireRfiManagement"]>[2],
+    resolveStatus: (status: Rfi["status"]) => Rfi["status"],
+    action: string,
+    correlationId: string,
+  ): Promise<Rfi> {
+    await this.projects.requireRfiManagement(actor, projectId, capability);
     const rfi = await this.find(actor, projectId, rfiId);
-    reopenStatus(rfi.status);
-    return this.records.transitionWithActivity(rfi, "answered", {
+    const toStatus = resolveStatus(rfi.status);
+    return this.records.transitionWithActivity(rfi, toStatus, action, {
       actorUserId: actor.userId,
       actorType: "user",
       objectType: "rfi",
-      action: "rfi.reopened",
+      action,
       metadata: {},
       correlationId,
     });
@@ -191,4 +311,21 @@ export class RfiService {
     if (!rfi) throw new RfiNotFoundError();
     return rfi;
   }
+}
+
+export type { RfiAttachment };
+
+function toWriteInput(input: RfiWriteInput): RfiWriteInput {
+  return {
+    subject: input.subject,
+    question: input.question,
+    contractorSuggestion: input.contractorSuggestion,
+    drawingReferences: input.drawingReferences,
+    specificationReferences: input.specificationReferences,
+    responsibleParty: input.responsibleParty,
+    submittedBy: input.submittedBy,
+    requestedResponseDate: input.requestedResponseDate,
+    costImpact: input.costImpact,
+    scheduleImpact: input.scheduleImpact,
+  };
 }

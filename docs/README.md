@@ -10,6 +10,7 @@ This directory is the implementation source of truth for evolving the existing B
 4. `DATA_MODEL.md` — D1 schema and relational strategy.
 5. `WORKFLOWS.md` — project, RFI, submittal, template, share, and delivery state transitions.
 6. `UX_PRODUCT_SPEC.md` — required screen structure and user behavior.
+   - `UX_RFI_SPEC.md` — RFI register, inline-edit boundaries, and workspace addendum (RFI Vertical Slice). Read alongside `UX_PRODUCT_SPEC.md`, which deferred the RFI redesign.
 7. `API_CONTRACTS.md` — endpoint and transaction contracts.
 8. `API_SECURITY_STORAGE.md` — authentication, authorization, tenant isolation, R2, shares, and recovery.
 9. `TESTING_QUALITY_STRATEGY.md` — mandatory test and release gates.

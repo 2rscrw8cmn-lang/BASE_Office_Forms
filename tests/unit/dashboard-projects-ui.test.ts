@@ -79,7 +79,7 @@ const dashboardPayload = {
       rfiId: "rfi-1",
       rfiNumber: "RFI-004",
       title: "Ceiling height",
-      status: "issued",
+      status: "open",
       dueDate: "2026-07-27",
       projectId: "proj-1",
       projectNumber: "P-001",
@@ -190,7 +190,7 @@ const overviewPayload = {
         rfiId: "rfi-1",
         rfiNumber: "RFI-004",
         title: "Ceiling height",
-        status: "answered",
+        status: "response_received",
         dueDate: null,
         createdAt: "2026-07-16T10:00:00Z",
         projectId: "proj-1",
@@ -700,7 +700,7 @@ describe("project overview view", () => {
     const overviewText = textOf(document, ".overview-view");
     expect(overviewText).toContain("Rev 1");
     expect(overviewText).toContain("Draft revision");
-    expect(overviewText).toContain("RFI answered and awaiting close");
+    expect(overviewText).toContain("Response received and awaiting close");
     expect(overviewText).toContain("Revision published");
 
     const shortcutHrefs = [...document.querySelectorAll(".shortcut-card")].map(

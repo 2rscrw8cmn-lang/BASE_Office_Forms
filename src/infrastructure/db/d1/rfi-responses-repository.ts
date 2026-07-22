@@ -63,7 +63,8 @@ export class D1RfiResponsesRepository {
          SELECT ?, ?, ?, ?, ?, ?
          WHERE EXISTS (
            SELECT 1 FROM rfi_records
-           WHERE id = ? AND organization_id = ? AND status = 'issued'
+           WHERE id = ? AND organization_id = ?
+             AND status IN ('open', 'returned_for_clarification')
          )`,
       )
       .bind(

@@ -13,7 +13,8 @@ export class D1RfiNumberSequencesRepository {
          SELECT ?, ?, 0
          WHERE EXISTS (
            SELECT 1 FROM rfi_records
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND status IN ('draft', 'ready_to_issue')
          )`,
       )
       .bind(projectId, organizationId, rfiId, organizationId, projectId);
@@ -31,7 +32,8 @@ export class D1RfiNumberSequencesRepository {
          WHERE project_id = ? AND organization_id = ?
            AND EXISTS (
              SELECT 1 FROM rfi_records
-             WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'
+             WHERE id = ? AND organization_id = ? AND project_id = ?
+               AND status IN ('draft', 'ready_to_issue')
            )`,
       )
       .bind(projectId, organizationId, rfiId, organizationId, projectId);

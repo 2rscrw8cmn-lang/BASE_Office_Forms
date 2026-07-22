@@ -1,5 +1,7 @@
 import type { RfiWriteInput } from "../../domain/rfis/rfi";
+import { isRfiAttachmentRole } from "../../domain/rfis/rfi";
 import type { RfiResponseWriteInput } from "../../infrastructure/db/d1/rfi-responses-repository";
+import type { RfiAttachmentRole } from "../../domain/rfis/rfi";
 import { RequestValidationError } from "./project-schemas";
 
 type JsonRecord = Record<string, unknown>;
@@ -34,41 +36,63 @@ function optionalDate(value: unknown, field: string): string | null {
   return date;
 }
 
+// A field is taken from the request when present, otherwise from the fallback
+// (the current persisted value) so a PATCH is a genuine partial update.
+function resolve<T>(
+  source: JsonRecord,
+  key: string,
+  fallback: RfiWriteInput | undefined,
+  parse: () => T,
+): T {
+  if (source[key] === undefined && fallback) {
+    return fallback[key as keyof RfiWriteInput] as T;
+  }
+  return parse();
+}
+
 function rfiInput(value: unknown, fallback?: RfiWriteInput): RfiWriteInput {
   const source = object(value);
   return {
-    title:
-      source.title === undefined && fallback
-        ? fallback.title
-        : requiredText(source.title, "title"),
-    question:
-      source.question === undefined && fallback
-        ? fallback.question
-        : requiredText(source.question, "question"),
-    suggestedResolution:
-      source.suggestedResolution === undefined && fallback
-        ? fallback.suggestedResolution
-        : optionalText(source.suggestedResolution, "suggestedResolution"),
-    submittedBy:
-      source.submittedBy === undefined && fallback
-        ? fallback.submittedBy
-        : optionalText(source.submittedBy, "submittedBy"),
-    assignedTo:
-      source.assignedTo === undefined && fallback
-        ? fallback.assignedTo
-        : optionalText(source.assignedTo, "assignedTo"),
-    dueDate:
-      source.dueDate === undefined && fallback
-        ? fallback.dueDate
-        : optionalDate(source.dueDate, "dueDate"),
-    costImpact:
-      source.costImpact === undefined && fallback
-        ? fallback.costImpact
-        : optionalText(source.costImpact, "costImpact"),
-    scheduleImpact:
-      source.scheduleImpact === undefined && fallback
-        ? fallback.scheduleImpact
-        : optionalText(source.scheduleImpact, "scheduleImpact"),
+    subject: resolve(source, "subject", fallback, () =>
+      requiredText(source.subject, "subject"),
+    ),
+    question: resolve(source, "question", fallback, () =>
+      requiredText(source.question, "question"),
+    ),
+    contractorSuggestion: resolve(
+      source,
+      "contractorSuggestion",
+      fallback,
+      () => optionalText(source.contractorSuggestion, "contractorSuggestion"),
+    ),
+    drawingReferences: resolve(source, "drawingReferences", fallback, () =>
+      optionalText(source.drawingReferences, "drawingReferences"),
+    ),
+    specificationReferences: resolve(
+      source,
+      "specificationReferences",
+      fallback,
+      () =>
+        optionalText(source.specificationReferences, "specificationReferences"),
+    ),
+    responsibleParty: resolve(source, "responsibleParty", fallback, () =>
+      optionalText(source.responsibleParty, "responsibleParty"),
+    ),
+    submittedBy: resolve(source, "submittedBy", fallback, () =>
+      optionalText(source.submittedBy, "submittedBy"),
+    ),
+    requestedResponseDate: resolve(
+      source,
+      "requestedResponseDate",
+      fallback,
+      () => optionalDate(source.requestedResponseDate, "requestedResponseDate"),
+    ),
+    costImpact: resolve(source, "costImpact", fallback, () =>
+      optionalText(source.costImpact, "costImpact"),
+    ),
+    scheduleImpact: resolve(source, "scheduleImpact", fallback, () =>
+      optionalText(source.scheduleImpact, "scheduleImpact"),
+    ),
   };
 }
 
@@ -76,15 +100,35 @@ export function parseRfiCreate(value: unknown): RfiWriteInput {
   return rfiInput(value);
 }
 
+export interface ParsedRfiUpdate {
+  input: RfiWriteInput;
+  lockVersion: number;
+}
+
 export function parseRfiUpdate(
   value: unknown,
   current: RfiWriteInput,
-): RfiWriteInput {
+): ParsedRfiUpdate {
   const source = object(value);
-  if (Object.keys(source).length === 0) {
+  const fieldKeys = Object.keys(source).filter((key) => key !== "lockVersion");
+  if (fieldKeys.length === 0) {
     throw new RequestValidationError("At least one field is required.");
   }
-  return rfiInput(source, current);
+  const fields: JsonRecord = {};
+  for (const key of fieldKeys) fields[key] = source[key];
+  return {
+    input: rfiInput(fields, current),
+    lockVersion: parseLockVersion(source.lockVersion),
+  };
+}
+
+export function parseLockVersion(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new RequestValidationError(
+      "A positive integer lockVersion is required for concurrency safety.",
+    );
+  }
+  return value;
 }
 
 export function parseRfiResponse(value: unknown): RfiResponseWriteInput {
@@ -92,5 +136,57 @@ export function parseRfiResponse(value: unknown): RfiResponseWriteInput {
   return {
     response: requiredText(source.response, "response"),
     respondedBy: optionalText(source.respondedBy, "respondedBy"),
+  };
+}
+
+export interface ParsedRfiAttachmentUpload {
+  role: RfiAttachmentRole;
+  originalFilename: string;
+  mediaType: string;
+  content: ArrayBuffer;
+}
+
+/**
+ * Parses the RFI-attachment multipart envelope: exactly one "file" field plus a
+ * required "role" field (supporting_attachment | reference_drawing). Substantive
+ * file checks remain the domain layer's job via `validateFileUpload`.
+ */
+export async function parseRfiAttachmentUpload(
+  request: Request,
+): Promise<ParsedRfiAttachmentUpload> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("multipart/form-data")) {
+    throw new RequestValidationError("A multipart/form-data body is required.");
+  }
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    throw new RequestValidationError(
+      "The multipart request body could not be parsed.",
+    );
+  }
+  const fileEntries = formData.getAll("file");
+  if (fileEntries.length === 0) {
+    throw new RequestValidationError("A file field is required.");
+  }
+  if (fileEntries.length > 1) {
+    throw new RequestValidationError("Only one file field is allowed.");
+  }
+  const value = fileEntries[0];
+  if (!(value instanceof File)) {
+    throw new RequestValidationError("The file field must be a file.");
+  }
+  const roleValue = formData.get("role");
+  if (typeof roleValue !== "string" || !isRfiAttachmentRole(roleValue)) {
+    throw new RequestValidationError(
+      "role must be supporting_attachment or reference_drawing.",
+    );
+  }
+  return {
+    role: roleValue,
+    originalFilename: value.name,
+    mediaType: value.type,
+    content: await value.arrayBuffer(),
   };
 }

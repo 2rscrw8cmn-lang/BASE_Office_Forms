@@ -36,7 +36,7 @@ export interface OverviewActiveRfi {
   rfiId: string;
   rfiNumber: string | null;
   title: string;
-  status: Extract<RfiStatus, "issued" | "answered">;
+  status: Extract<RfiStatus, "open" | "returned_for_clarification" | "response_received">;
   dueDate: string | null;
   createdAt: string;
 }
@@ -83,7 +83,7 @@ export class D1ProjectOverviewReadRepository {
              WHERE organization_id = ?1 AND project_id = ?2) AS issuances,
            (SELECT COUNT(*) FROM rfi_records
              WHERE organization_id = ?1 AND project_id = ?2
-               AND status IN ('issued', 'answered')) AS active_rfis,
+               AND status IN ('open', 'returned_for_clarification', 'response_received')) AS active_rfis,
            (SELECT COUNT(*) FROM project_memberships
              WHERE organization_id = ?1 AND project_id = ?2 AND status = 'active') AS team_members`,
       )
@@ -204,12 +204,13 @@ export class D1ProjectOverviewReadRepository {
   ): Promise<OverviewActiveRfi[]> {
     const result = await this.database
       .prepare(
-        `SELECT id AS rfi_id, rfi_number, title, status, due_date, created_at
+        `SELECT id AS rfi_id, rfi_number, subject AS title, status,
+                requested_response_date AS due_date, created_at
          FROM rfi_records
          WHERE organization_id = ? AND project_id = ?
-           AND status IN ('issued', 'answered')
-         ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
-                  due_date ASC, created_at DESC, id ASC
+           AND status IN ('open', 'returned_for_clarification', 'response_received')
+         ORDER BY CASE WHEN requested_response_date IS NULL THEN 1 ELSE 0 END,
+                  requested_response_date ASC, created_at DESC, id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
       .bind(organizationId, projectId)
@@ -217,7 +218,7 @@ export class D1ProjectOverviewReadRepository {
         rfi_id: string;
         rfi_number: string | null;
         title: string;
-        status: Extract<RfiStatus, "issued" | "answered">;
+        status: Extract<RfiStatus, "open" | "returned_for_clarification" | "response_received">;
         due_date: string | null;
         created_at: string;
       }>();

@@ -346,7 +346,7 @@ async function seed(): Promise<void> {
   ) =>
     db
       .prepare(
-        "INSERT INTO rfi_records (id, organization_id, project_id, rfi_number, status, title, question, created_at, updated_at, due_date, issued_at, answered_at) VALUES (?, ?, ?, ?, ?, ?, 'Q', ?, ?, ?, ?, ?)",
+        "INSERT INTO rfi_records (id, organization_id, project_id, rfi_number, status, subject, question, lock_version, created_at, updated_at, requested_response_date, issued_at, response_received_at) VALUES (?, ?, ?, ?, ?, ?, 'Q', 1, ?, ?, ?, ?, ?)",
       )
       .bind(
         id,
@@ -359,14 +359,20 @@ async function seed(): Promise<void> {
         createdAt,
         dueDate,
         status === "draft" ? null : createdAt,
-        status === "answered" ? createdAt : null,
+        status === "response_received" ? createdAt : null,
       );
   await db.batch([
-    rfi("rfi-issued", "proj-1", "issued", "2026-07-25", "2026-07-10T00:00:00Z"),
-    rfi("rfi-answered", "proj-1", "answered", null, "2026-07-09T00:00:00Z"),
+    rfi("rfi-issued", "proj-1", "open", "2026-07-25", "2026-07-10T00:00:00Z"),
+    rfi(
+      "rfi-answered",
+      "proj-1",
+      "response_received",
+      null,
+      "2026-07-09T00:00:00Z",
+    ),
     rfi("rfi-draft", "proj-1", "draft", null, "2026-07-08T00:00:00Z"),
     rfi("rfi-closed", "proj-1", "closed", null, "2026-07-07T00:00:00Z"),
-    rfi("rfi-2", "proj-2", "issued", null, "2026-07-06T00:00:00Z"),
+    rfi("rfi-2", "proj-2", "open", null, "2026-07-06T00:00:00Z"),
   ]);
 
   // Activity events: proj-1 (record + revision), proj-2, and cross-tenant proj-b.
@@ -505,7 +511,7 @@ describe("dashboard read model", () => {
 
     const rfis = data.activeRfis as Array<Record<string, string>>;
     const rfiStatuses = new Set(rfis.map((item) => item.status));
-    expect([...rfiStatuses].sort()).toEqual(["answered", "issued"]);
+    expect([...rfiStatuses].sort()).toEqual(["open", "response_received"]);
   });
 
   it("orders active RFIs by due date first and applies limits without pagination", async () => {

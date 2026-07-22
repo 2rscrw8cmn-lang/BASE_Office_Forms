@@ -5,7 +5,10 @@ import {
   requireProjectCreation,
 } from "../../domain/projects/authorization";
 import { hasOrganizationWideRecordManagement } from "../../domain/records/authorization";
-import { requireRfiManagement } from "../../domain/rfis/authorization";
+import {
+  hasOrganizationWideRfiManagement,
+  requireRfiManagement,
+} from "../../domain/rfis/authorization";
 import type { RfiCapability } from "../../domain/rfis/errors";
 import { requireRecordManagement } from "../../domain/records/authorization";
 import type { RecordCapability } from "../../domain/records/errors";
@@ -147,6 +150,33 @@ export class ProjectService {
       ));
     requireRfiManagement(actor, capability, isAssignedProjectManager);
     return project;
+  }
+
+  /**
+   * Resolves read access to a project's RFI register and, in the same pass,
+   * whether the actor may manage RFIs there. Access uses the same authorization
+   * as project detail, so an inaccessible or cross-tenant project yields the
+   * generic not-found result. Management follows the authoritative RFI policy
+   * (organization-wide RFI admins or the assigned project manager) — the same
+   * rule the mutation services enforce — so the browser never infers capability.
+   */
+  async resolveRfiAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<{ project: Project; canManage: boolean }> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    return {
+      project,
+      canManage:
+        hasOrganizationWideRfiManagement(actor) || isAssignedProjectManager,
+    };
   }
 
   async requireRecordAccess(

@@ -2782,8 +2782,12 @@ html {
     display: none;
   }
   .project-cards,
-  .record-cards {
+  .record-cards,
+  .rfi-cards {
     display: grid;
+  }
+  .rfi-workspace-grid {
+    grid-template-columns: 1fr;
   }
   .records-view {
     padding-bottom: 34px;
@@ -2817,5 +2821,366 @@ html {
   }
   .record-back-link {
     min-height: 38px;
+  }
+}
+
+/* ---- RFI register & workspace ---------------------------------------- */
+.rfi-table .rfi-cell-long {
+  max-width: 22ch;
+  color: var(--shell-muted);
+  font-size: 0.9em;
+}
+.rfi-table .rfi-cell-number {
+  white-space: nowrap;
+}
+.rfi-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.rfi-number-draft {
+  color: var(--shell-muted);
+  font-weight: 500;
+  font-style: italic;
+}
+.rfi-legacy {
+  display: block;
+  font-size: 0.75em;
+  color: var(--shell-muted);
+  font-weight: 400;
+}
+.rfi-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.rfi-flag-overdue {
+  background: #fbe9e7;
+  color: var(--app-error);
+}
+.rfi-flag-soon {
+  background: #fff4e0;
+  color: #8a5a00;
+}
+.rfi-editable {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.rfi-edit-trigger {
+  border: none;
+  background: none;
+  color: var(--app-accent);
+  font-size: 0.75em;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.app-data-row:hover .rfi-edit-trigger,
+.rfi-edit-trigger:focus-visible {
+  opacity: 1;
+}
+.rfi-editable.is-saving {
+  opacity: 0.6;
+}
+.rfi-inline-form {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.rfi-inline-input {
+  min-width: 8ch;
+  height: 30px;
+  padding: 2px 6px;
+  border: 1px solid var(--app-accent);
+  border-radius: 3px;
+  font: inherit;
+}
+.rfi-inline-save,
+.rfi-inline-cancel {
+  height: 30px;
+  min-width: 30px;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-panel);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.rfi-inline-save {
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+.rfi-inline-error {
+  display: block;
+  color: var(--app-error);
+  font-size: 0.75em;
+}
+.rfi-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+}
+.rfi-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+}
+.rfi-card-main {
+  display: grid;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.rfi-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rfi-card-subject {
+  font-weight: 600;
+}
+.rfi-card-question {
+  color: var(--shell-muted);
+  font-size: 0.9em;
+}
+.rfi-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82em;
+}
+.rfi-card-facts dt {
+  color: var(--shell-muted);
+}
+.rfi-card-facts dd {
+  margin: 2px 0 0;
+}
+
+/* Workspace */
+.rfi-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.rfi-workspace-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--shell-muted);
+  margin: 0 0 2px;
+}
+.rfi-workspace-project {
+  color: var(--shell-muted);
+  margin: 4px 0 0;
+}
+.rfi-workspace-header-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rfi-workspace-actions {
+  display: flex;
+  gap: 8px;
+}
+.rfi-workspace-keyfacts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+  padding: 14px 16px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+}
+.rfi-workspace-keyfacts dt {
+  font-size: 0.78em;
+  color: var(--shell-muted);
+}
+.rfi-workspace-keyfacts dd {
+  margin: 3px 0 0;
+  font-weight: 600;
+}
+.rfi-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.rfi-workspace-main,
+.rfi-workspace-aside {
+  display: grid;
+  gap: 20px;
+}
+.rfi-info-panel,
+.rfi-project-panel,
+.rfi-attachments-panel,
+.rfi-document-panel,
+.rfi-activity-panel {
+  padding: 18px 20px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+}
+.rfi-info-grid,
+.rfi-info-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 0;
+}
+.rfi-info-field.is-wide,
+.rfi-info-form .app-field.is-wide,
+.rfi-info-form .app-field-row {
+  grid-column: 1 / -1;
+}
+.rfi-info-field dt {
+  font-size: 0.78em;
+  color: var(--shell-muted);
+}
+.rfi-info-field dd {
+  margin: 3px 0 0;
+}
+.rfi-info-pre {
+  white-space: pre-wrap;
+  margin: 3px 0 0;
+}
+.rfi-info-empty {
+  color: var(--shell-muted);
+  font-style: italic;
+}
+.rfi-project-note,
+.rfi-doc-note {
+  margin: 12px 0 0;
+  font-size: 0.8em;
+  color: var(--shell-muted);
+}
+.rfi-attachment-group {
+  margin-top: 12px;
+}
+.rfi-attachment-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.85em;
+}
+.rfi-attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rfi-attachment-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 4px;
+}
+.rfi-attachment-copy {
+  display: grid;
+}
+.rfi-attachment-copy span {
+  font-size: 0.8em;
+  color: var(--shell-muted);
+}
+.rfi-attachment-empty {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+  margin: 0;
+}
+.rfi-attachment-upload {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.rfi-document {
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 4px;
+  background: #fff;
+}
+.rfi-document-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+}
+.rfi-doc-line {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.rfi-doc-line.is-pre .rfi-doc-value {
+  white-space: pre-wrap;
+}
+.rfi-doc-label {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+}
+.rfi-doc-template {
+  font-size: 0.8em;
+  color: var(--shell-muted);
+}
+.rfi-activity-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.rfi-activity-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.rfi-activity-detail {
+  display: block;
+  font-size: 0.82em;
+  color: var(--shell-muted);
+}
+.rfi-activity-meta {
+  font-size: 0.78em;
+  color: var(--shell-muted);
+  white-space: nowrap;
+}
+.secondary-button.is-quiet {
+  padding-inline: 12px;
+}
+@media (max-width: 720px) {
+  .rfi-workspace-keyfacts,
+  .rfi-info-grid,
+  .rfi-info-form {
+    grid-template-columns: 1fr;
+  }
+  .rfi-doc-line {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
