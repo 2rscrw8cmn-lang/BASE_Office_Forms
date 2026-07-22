@@ -26,6 +26,7 @@ function editorBody(): string {
 
 interface ElementLike {
   click(): void;
+  focus(): void;
   hidden: boolean;
   value: string;
   checked: boolean;
@@ -39,6 +40,7 @@ interface ElementLike {
 
 interface DocumentLike {
   body: ElementLike & { innerHTML: string };
+  activeElement: ElementLike | null;
   querySelector(selector: string): ElementLike | null;
   querySelectorAll(selector: string): ElementLike[];
 }
@@ -83,6 +85,12 @@ interface Studio {
   insertViaDrawer(noun: string, type: string, insertAt?: number): void;
   selectRow(noun: string, index: number): void;
   clickPreview(noun: string, index: number): void;
+  dispatchDrag(
+    target: ElementLike,
+    type: "dragstart" | "dragover" | "drop" | "dragend",
+    dataTransfer: { effectAllowed: string; setData: () => void },
+  ): void;
+  pressKey(target: ElementLike, key: string): void;
   save(): Promise<RendererDefinition>;
   settle(): Promise<void>;
 }
@@ -236,6 +244,25 @@ async function loadStudio(
     el(`#pv [data-preview-${noun}="${String(index)}"]`).click();
   };
 
+  const dispatchDrag = (
+    target: ElementLike,
+    type: "dragstart" | "dragover" | "drop" | "dragend",
+    dataTransfer: { effectAllowed: string; setData: () => void },
+  ) => {
+    const event = new window.Event(type, { bubbles: true, cancelable: true });
+    (event as unknown as { dataTransfer: unknown }).dataTransfer = dataTransfer;
+    target.dispatchEvent(event);
+  };
+
+  const pressKey = (target: ElementLike, key: string) => {
+    const event = new window.KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(event);
+  };
+
   const settle = () =>
     new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
@@ -268,6 +295,8 @@ async function loadStudio(
     insertViaDrawer,
     selectRow,
     clickPreview,
+    dispatchDrag,
+    pressKey,
     save,
     settle,
   };
@@ -405,10 +434,10 @@ describe("Studio workspace redesign (Issue #32, PR B)", () => {
     studio.insertViaDrawer("block", "note");
     studio.selectRow("block", 2); // the "Note" block, currently last
 
-    const moveUpButtons = studio.all(
-      '[data-action="move-up"][data-noun="block"]',
-    );
-    moveUpButtons[moveUpButtons.length - 1].click();
+    // The outline itself only supports drag-to-reorder now; the inspector's
+    // move-up/move-down buttons on the selected item remain as the
+    // non-drag fallback (keyboard/no-drag-support users).
+    studio.el('#inspector [data-action="move-up"]').click();
 
     // The Note block moved from index 2 to index 1; selection should follow
     // it (by reference), not stay pinned to index 2.
@@ -417,6 +446,69 @@ describe("Studio workspace redesign (Issue #32, PR B)", () => {
       ".outline-row.selected [data-action='select-node']",
     );
     expect(selectedButton.dataset.index).toBe("1");
+  });
+
+  it("reorders outline rows via drag-and-drop onto an insertion point", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "prose");
+    studio.insertViaDrawer("block", "note");
+
+    const labelsBefore = studio
+      .all(".outline-label")
+      .map((node) => node.textContent);
+    expect(labelsBefore[1]).toBe("New Section");
+    expect(labelsBefore[2]).toBe("Note");
+
+    // Drag the "Note" row (index 2) onto the insertion point before the
+    // "New Section" row (index 1) -- i.e. drop at insertAt=1.
+    const rows = studio.all(".outline-row");
+    const noteRow = rows[2];
+    const insertPoints = studio.all(
+      '[data-action="open-add-drawer"][data-noun="block"]',
+    );
+    const dropTarget = insertPoints.find(
+      (button) => button.dataset.insertAt === "1",
+    );
+    expect(dropTarget).toBeTruthy();
+
+    const transfer = { effectAllowed: "", setData: () => undefined };
+    studio.dispatchDrag(noteRow, "dragstart", transfer);
+    studio.dispatchDrag(
+      dropTarget as unknown as ElementLike,
+      "dragover",
+      transfer,
+    );
+    studio.dispatchDrag(dropTarget as unknown as ElementLike, "drop", transfer);
+
+    const labelsAfter = studio
+      .all(".outline-label")
+      .map((node) => node.textContent);
+    expect(labelsAfter[1]).toBe("Note");
+    expect(labelsAfter[2]).toBe("New Section");
+  });
+
+  it("moves focus between outline rows with ArrowDown/ArrowUp", async () => {
+    const studio = await loadStudio("?new=document");
+    studio.insertViaDrawer("block", "prose");
+
+    const docHeader = studio.el('[data-action="select-document"]');
+    docHeader.focus();
+    expect(studio.doc.activeElement).toBe(docHeader);
+
+    studio.pressKey(docHeader, "ArrowDown");
+    const firstRow = studio.el(
+      '[data-action="select-node"][data-noun="block"][data-index="0"]',
+    );
+    expect(studio.doc.activeElement).toBe(firstRow);
+
+    studio.pressKey(firstRow, "ArrowDown");
+    const secondRow = studio.el(
+      '[data-action="select-node"][data-noun="block"][data-index="1"]',
+    );
+    expect(studio.doc.activeElement).toBe(secondRow);
+
+    studio.pressKey(secondRow, "ArrowUp");
+    expect(studio.doc.activeElement).toBe(firstRow);
   });
 
   it("falls back to Document Settings when the selected item is deleted", async () => {

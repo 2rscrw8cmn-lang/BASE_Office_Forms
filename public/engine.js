@@ -371,13 +371,22 @@
     });
   }
 
+  // A table (bare, or wrapped in a structured-block/budget-block div) whose
+  // rows alone are too tall for one page. Returns null if the item isn't a
+  // table, or has too few rows to usefully split.
+  function tableIn(item) {
+    const table = item.tagName === "TABLE" ? item : item.querySelector(":scope table");
+    const tbody = table && table.querySelector(":scope > tbody");
+    return tbody && tbody.children.length > 1 ? tbody : null;
+  }
+
   function paginate(container) {
     if (!container || !container.querySelectorAll) return;
     [...container.querySelectorAll('.sheet[data-paginate="true"]')].forEach(source => {
       if (source.dataset.paginationReady === "true") return;
       const flow = source.querySelector(":scope > .page-flow");
       if (!flow) return;
-      const items = [...flow.children];
+      const queue = [...flow.children];
       flow.replaceChildren();
       let page = source;
       let pageFlow = flow;
@@ -398,10 +407,33 @@
         page = next;
         pageFlow = nextFlow;
       };
-      items.forEach(item => {
+      // A long table (budget, schedule, contacts, revisions, evidence, or a
+      // plain table block) used to just get flagged oversize and left to
+      // overflow the page. Instead, trim rows off the end until what's left
+      // fits, and carry the trimmed rows into a continuation item that flows
+      // through this same loop -- recursively splitting again if it's still
+      // too long for a single page.
+      const splitOverflow = item => {
+        const tbody = tableIn(item);
+        if (!tbody) return null;
+        const rows = [...tbody.children];
+        const carried = [];
+        while (rows.length - carried.length > 1 && page.scrollHeight > pageHeight + 1) {
+          carried.unshift(tbody.removeChild(rows[rows.length - 1 - carried.length]));
+        }
+        if (!carried.length) return null;
+        if (page.scrollHeight > pageHeight + 1) page.classList.add("oversize");
+        const clone = item.cloneNode(true);
+        tableIn(clone).replaceChildren(...carried);
+        const heading = clone.querySelector(":scope > h3");
+        if (heading) heading.textContent = `${heading.textContent} (continued)`;
+        return clone;
+      };
+      while (queue.length) {
+        const item = queue.shift();
         if (item.classList.contains("page-break")) {
           if (pageFlow.children.length) continuation();
-          return;
+          continue;
         }
         pageFlow.appendChild(item);
         if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length > 1) {
@@ -409,8 +441,12 @@
           continuation();
           pageFlow.appendChild(item);
         }
-        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length === 1) page.classList.add("oversize");
-      });
+        if (page.scrollHeight > pageHeight + 1 && pageFlow.children.length === 1) {
+          const remainder = splitOverflow(item);
+          if (remainder) queue.unshift(remainder);
+          else page.classList.add("oversize");
+        }
+      }
       source.dataset.paginationReady = "true";
     });
   }

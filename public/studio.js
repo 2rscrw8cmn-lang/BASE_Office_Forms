@@ -191,6 +191,10 @@
     </details>`;
   }
 
+  function fieldCell(caption, control) {
+    return `<div class="field-editor-cell"><span class="field-editor-label">${esc(caption)}</span>${control}</div>`;
+  }
+
   function fieldRows(base, fields, label, defaultAlign) {
     defaultAlign = defaultAlign || "top";
     return `<label class="lbl">${esc(label || "Fields")}</label>` + (fields || []).map((field, index) => {
@@ -198,20 +202,20 @@
       const type = field.type || (field.multiline ? "multiline" : "text");
       return `<div class="field-editor">
       <input class="in" data-path="${base}.${index}.label" value="${esc(field.label)}" placeholder="Label">
-      <input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">
-      <input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">
-      <input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">
-      <select class="sel small" data-path="${base}.${index}.type" title="Input style">
+      ${fieldCell("Width", `<input class="in small" type="number" min=".25" step=".25" data-path="${base}.${index}.w" data-value-type="number" value="${field.w || 1}" title="Relative width">`)}
+      ${fieldCell("Height", `<input class="in small" type="number" min="36" step="4" data-path="${base}.${index}.height" data-value-type="number" value="${field.height || 46}" title="Field height in pixels">`)}
+      ${fieldCell("Write-in", `<input class="in small" type="number" min="16" step="2" data-path="${base}.${index}.textHeight" data-value-type="number" value="${field.textHeight || ""}" placeholder="Auto" title="Write-in box height in pixels. Leave blank to fill the field automatically.">`)}
+      ${fieldCell("Style", `<select class="sel small" data-path="${base}.${index}.type" title="Input style">
         <option value="text"${type === "text" ? " selected" : ""}>Single line</option>
         <option value="multiline"${type === "multiline" ? " selected" : ""}>Multiline</option>
         <option value="date"${type === "date" ? " selected" : ""}>Date</option>
         <option value="number"${type === "number" ? " selected" : ""}>Number</option>
-      </select>
-      <select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
+      </select>`)}
+      ${fieldCell("Align", `<select class="sel small" data-path="${base}.${index}.align" title="Where the write-in box sits inside a taller field">
         <option value="top"${align === "top" ? " selected" : ""}>Top</option>
         <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
         <option value="bottom"${align === "bottom" ? " selected" : ""}>Bottom</option>
-      </select>
+      </select>`)}
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
     }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. The preview shows a dashed outline where it will sit.</div>`;
@@ -401,7 +405,8 @@
   function outlineRow(item, index, noun) {
     const selected = selectedItem === item;
     const req = item.req;
-    return `<div class="outline-row${selected ? " selected" : ""}">
+    return `<div class="outline-row${selected ? " selected" : ""}" draggable="true">
+      <span class="outline-drag-handle" aria-hidden="true">⠿</span>
       <button class="outline-row-body" data-action="select-node" data-noun="${noun}" data-index="${index}">
         <span class="outline-no">${String(index + 1).padStart(2, "0")}</span>
         ${blockIcon(itemType(item, noun))}
@@ -409,8 +414,6 @@
         ${req ? `<span class="outline-req">${esc(req)}</span>` : ""}
       </button>
       <span class="outline-row-actions">
-        <button class="mini" data-action="move-up" data-index="${index}" data-noun="${noun}" title="Move up">↑</button>
-        <button class="mini" data-action="move-down" data-index="${index}" data-noun="${noun}" title="Move down">↓</button>
         <button class="mini del" data-action="delete-item" data-index="${index}" data-noun="${noun}" title="Delete">×</button>
       </span>
     </div>`;
@@ -461,23 +464,28 @@
   // instead of a broken/blank preview.
   let lastGoodPreviewHtml = "";
 
+  // Every keystroke rebuilds #pv from scratch (fresh innerHTML) and
+  // re-paginates the whole thing, which can shrink/grow the scrollable
+  // height mid-edit and drag .previewpane's scroll position back toward the
+  // top. Tracking the user's real scroll position via a standing listener
+  // (rather than re-reading it inside renderPreview each time) keeps it
+  // correct even when several renders fire in quick succession -- e.g.
+  // clicking a number input's spinner -- where re-reading scrollTop
+  // mid-render could capture a transient, not-yet-settled value.
+  let lastKnownScrollTop = 0;
+  const previewPane = $(".previewpane");
+  if (previewPane) previewPane.addEventListener("scroll", () => { lastKnownScrollTop = previewPane.scrollTop; });
+
   function renderPreview() {
-    // Every keystroke rebuilds #pv from scratch (fresh innerHTML) and
-    // re-paginates the whole thing, which can shrink/grow the scrollable
-    // height mid-edit and drag .previewpane's scroll position back toward
-    // the top. Pin it to where the user actually was through both the
-    // synchronous swap and the deferred pagination pass.
-    const pane = $(".previewpane");
-    const scrollTop = pane ? pane.scrollTop : 0;
     try {
       const html = BASE.render(def, { fill: false });
       lastGoodPreviewHtml = html;
       $("#pv").innerHTML = html;
       applySelectionHighlight();
-      if (pane) pane.scrollTop = scrollTop;
+      if (previewPane) previewPane.scrollTop = lastKnownScrollTop;
       requestAnimationFrame(() => {
         BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit();
-        if (pane) pane.scrollTop = scrollTop;
+        if (previewPane) previewPane.scrollTop = lastKnownScrollTop;
       });
     } catch (error) {
       if (lastGoodPreviewHtml) $("#pv").innerHTML = lastGoodPreviewHtml;
@@ -521,13 +529,16 @@
   }
 
   function jumpToOutline(noun, index) {
+    // The row already renders with the persistent .selected style by the
+    // time this runs (selectNode() re-renders the outline first), so this
+    // only needs to scroll it into view -- flashing a second, competing
+    // outline here (like jumpToPreview's .preview-jump) used to bleed past
+    // the row's edges into the zero-margin insert points above/below it.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const rows = Array.prototype.slice.call($("#outline").querySelectorAll(`[data-action="select-node"][data-noun="${noun}"]`));
-      const target = rows.find(row => Number(row.dataset.index) === index);
-      if (!target) return;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.classList.add("preview-jump");
-      setTimeout(() => target.classList.remove("preview-jump"), 1400);
+      const button = rows.find(row => Number(row.dataset.index) === index);
+      if (!button) return;
+      (button.closest(".outline-row") || button).scrollIntoView({ behavior: "smooth", block: "center" });
     }));
   }
 
@@ -593,6 +604,35 @@
     if (noun === "section") return def.sections;
     if (noun === "block") return def.blocks;
     return def.documents;
+  }
+
+  // --- Outline drag-to-reorder -----------------------------------------
+  // Reuses the existing insertion points as drop targets, so dragging a row
+  // highlights the same "+" affordance used to insert a new block there --
+  // one consistent mental model for "this is where it lands."
+
+  let dragSource = null; // { noun, index }
+
+  function clearDragTarget() {
+    const marked = $("#outline .outline-insert.drag-target");
+    if (marked) marked.classList.remove("drag-target");
+  }
+
+  function nearestInsertPoint(row, clientY) {
+    const rect = row.getBoundingClientRect();
+    const before = clientY < rect.top + rect.height / 2;
+    const sibling = before ? row.previousElementSibling : row.nextElementSibling;
+    return sibling && sibling.classList.contains("outline-insert") ? sibling : null;
+  }
+
+  function reorderItem(noun, sourceIndex, insertAt) {
+    const array = currentArray(noun);
+    const item = array[sourceIndex];
+    if (!item) return;
+    array.splice(sourceIndex, 1);
+    const adjusted = sourceIndex < insertAt ? insertAt - 1 : insertAt;
+    array.splice(Math.max(0, Math.min(adjusted, array.length)), 0, item);
+    renderAll();
   }
 
   // --- Add Block drawer ----------------------------------------------
@@ -845,6 +885,61 @@
     if (action === "add-package-blank") return addBlankPackageDocument(button.dataset.kind);
     if (action === "open-package-templates") return openPackageTemplates();
     if (action === "open-library") return openLibrary();
+  });
+
+  $("#outline").addEventListener("dragstart", event => {
+    const row = event.target.closest(".outline-row");
+    const button = row && row.querySelector('[data-action="select-node"]');
+    if (!button) return;
+    dragSource = { noun: button.dataset.noun, index: Number(button.dataset.index) };
+    row.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "");
+  });
+
+  $("#outline").addEventListener("dragover", event => {
+    if (!dragSource) return;
+    const insertEl = event.target.closest(".outline-insert");
+    const row = event.target.closest(".outline-row");
+    let target = null;
+    if (insertEl && insertEl.dataset.noun === dragSource.noun) target = insertEl;
+    else if (row) {
+      const button = row.querySelector('[data-action="select-node"]');
+      if (button && button.dataset.noun === dragSource.noun) target = nearestInsertPoint(row, event.clientY);
+    }
+    if (!target) return;
+    event.preventDefault();
+    if (!target.classList.contains("drag-target")) { clearDragTarget(); target.classList.add("drag-target"); }
+  });
+
+  $("#outline").addEventListener("drop", event => {
+    const target = $("#outline .outline-insert.drag-target");
+    if (!target || !dragSource) return;
+    event.preventDefault();
+    reorderItem(dragSource.noun, dragSource.index, Number(target.dataset.insertAt));
+    clearDragTarget();
+    dragSource = null;
+  });
+
+  $("#outline").addEventListener("dragend", () => {
+    const dragging = $("#outline .outline-row.dragging");
+    if (dragging) dragging.classList.remove("dragging");
+    clearDragTarget();
+    dragSource = null;
+  });
+
+  // Arrow-key navigation between outline rows, mirroring the toolbar menus'
+  // keyboard pattern -- moves focus only; Enter/Space still activates.
+  $("#outline").addEventListener("keydown", event => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const focusable = Array.prototype.slice.call(
+      $("#outline").querySelectorAll('[data-action="select-document"], [data-action="select-node"]'),
+    );
+    const index = focusable.indexOf(document.activeElement);
+    if (index === -1) return;
+    event.preventDefault();
+    const nextIndex = event.key === "ArrowDown" ? Math.min(index + 1, focusable.length - 1) : Math.max(index - 1, 0);
+    focusable[nextIndex].focus();
   });
 
   $("#inspector").addEventListener("toggle", event => {
