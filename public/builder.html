@@ -40,9 +40,14 @@
   .studio-commandbar .cmd-menu-item.danger-item:hover, .studio-commandbar .cmd-menu-item.danger-item:focus-visible { background:#982329; color:#fff; }
   .cmd-menu-divider { height:1px; margin:4px 6px; background:#e7e4e1; }
   .cmd-menu-divider[hidden] { display:none; }
-  .app { display:grid; grid-template-columns:240px minmax(0, 1fr) 340px; height:calc(100vh - 130px); }
+  /* Outline and inspector sit side by side -- the two panels you actually
+     edit with -- so adding/selecting/editing a block never crosses the
+     preview. The preview is a reference pane, not a workspace, and gets the
+     rest of the width. Sidebar widths (200 + 380 = 580px) intentionally
+     match the old outline+inspector total so the preview doesn't shrink. */
+  .app { display:grid; grid-template-columns:200px 380px minmax(0, 1fr); height:calc(100vh - 130px); }
   .outline { min-width:0; overflow-y:auto; overflow-x:hidden; background:#fcfbfa; border-right:1px solid #dedbd7; }
-  .inspector { min-width:0; overflow-y:auto; overflow-x:hidden; background:#fcfbfa; border-left:1px solid #dedbd7; }
+  .inspector { min-width:0; overflow-y:auto; overflow-x:hidden; background:#fcfbfa; border-right:1px solid #dedbd7; }
   .previewpane { min-width:0; overflow:auto; padding:0 26px 36px; background:#eeece9; }
   .previewscale { transform-origin:top left; }
   .studio-head { position:sticky; top:0; z-index:18; padding:20px 22px 16px; background:rgba(252,251,250,.97); border-bottom:1px solid #e1dedb; backdrop-filter:blur(8px); }
@@ -87,8 +92,15 @@
   .spacer { flex:1; }
   .mini { width:27px; height:27px; border:1px solid #dbd8d4; background:#fff; border-radius:3px; cursor:pointer; color:#656267; }
   .mini:hover { border-color:#aaa6a2; background:#faf9f8; } .mini.del:hover,.danger:hover { background:#9b2328!important; color:#fff!important; }
-  .field-editor { display:grid; grid-template-columns:1fr 52px 62px 62px 84px 64px 27px; gap:5px; align-items:center; margin:5px 0; }
-  .field-editor .small { text-align:center; padding-inline:3px; }
+  /* Wraps instead of a fixed-column grid so the row degrades gracefully at
+     any inspector width -- the label always gets its own full-width line,
+     the rest of the controls flow onto as many lines as they need instead
+     of getting crushed or pushed off the edge. */
+  .field-editor { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0; padding:9px; border:1px solid #ece9e6; border-radius:4px; background:#fdfcfb; }
+  .field-editor > [data-path$=".label"] { flex:1 1 100%; }
+  .field-editor .small { flex:1 1 70px; min-width:58px; text-align:center; padding-inline:3px; }
+  .field-editor select.small { text-align:left; }
+  .field-editor .mini.del { flex:none; margin-left:auto; }
   .addrow { margin-top:7px; padding:8px 10px; border:1px dashed #cda9ab; color:var(--accent); background:#fff; border-radius:3px; cursor:pointer; font:600 8px/1 var(--code); }
   .outline-list { padding-bottom:12px; }
   .outline-doc-header { width:calc(100% - 24px); margin:14px 12px 4px; padding:11px 12px; display:flex; align-items:center; gap:9px; border:1px solid #dedbd7; border-radius:5px; background:#fff; cursor:pointer; text-align:left; }
@@ -105,7 +117,7 @@
   .outline-row-actions { flex:none; display:flex; align-items:center; gap:3px; padding:6px 6px 6px 0; opacity:0; transition:opacity .1s ease; }
   .outline-row:hover .outline-row-actions, .outline-row:focus-within .outline-row-actions { opacity:1; }
   .outline-row-actions .mini { width:22px; height:22px; }
-  .outline-insert { width:calc(100% - 24px); margin:0 12px; height:9px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; color:transparent; cursor:pointer; font:700 11px/1 var(--sans); }
+  .outline-insert { width:calc(100% - 24px); margin:0 12px; height:11px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; color:#cac6c2; cursor:pointer; font:700 11px/1 var(--sans); transition:color .1s ease, height .1s ease, background .1s ease; }
   .outline-insert:hover, .outline-insert:focus-visible { height:18px; color:var(--accent); background:linear-gradient(#fff0,#fbf2f1 40%,#fbf2f1 60%,#fff0); }
   .package-tools { padding:16px 22px; }
   .inspector-item { padding:8px 22px 22px; }
@@ -117,7 +129,7 @@
   .addmenu button { min-height:54px; padding:8px 9px; display:grid; grid-template-columns:25px minmax(0,1fr); gap:8px; align-items:center; border:1px solid #dcd9d5; background:#fff; border-radius:4px; cursor:pointer; text-align:left; color:#39373b; }
   .addmenu button strong { display:block; font:500 9px/1.2 var(--sans); }
   .addmenu .block-copy>span { display:block; margin-top:3px; color:#8a878b; font:400 7.5px/1.3 var(--sans); }
-  .block-icon { width:25px; height:25px; display:grid; place-items:center; margin:0; color:#646166; border:1px solid #dfdcd8; border-radius:3px; background:#fbfaf9; }
+  .block-icon { width:25px; height:25px; flex:none; display:grid; place-items:center; margin:0; color:#646166; border:1px solid #dfdcd8; border-radius:3px; background:#fbfaf9; }
   .block-icon svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
   .addmenu button:hover { border-color:#b54a4e; background:#fdf9f8; }
   .addmenu button:hover .block-icon { color:#9d2026; border-color:#d9b5b6; background:#fff; }
@@ -161,9 +173,9 @@
   /* Below this width the inspector becomes an overlay drawer instead of a
      fixed column -- opened on selection, closed via its own close button. */
   @media (max-width:1050px) {
-    .app { grid-template-columns:220px minmax(0,1fr); }
+    .app { grid-template-columns:200px minmax(0,1fr); }
     .studio-commandbar select { min-width:150px; }
-    .inspector { position:fixed; top:130px; right:0; bottom:0; width:min(340px,86vw); z-index:120; border-left:1px solid #dedbd7; box-shadow:-16px 0 40px rgba(25,23,22,.16); transform:translateX(100%); transition:transform .2s ease; }
+    .inspector { position:fixed; top:130px; right:0; bottom:0; width:min(380px,86vw); z-index:120; border-right:0; border-left:1px solid #dedbd7; box-shadow:-16px 0 40px rgba(25,23,22,.16); transform:translateX(100%); transition:transform .2s ease; }
     .inspector.open { transform:translateX(0); }
     .inspector-close { display:block; }
   }
@@ -255,11 +267,11 @@
     <div class="studio-head"><div class="head-row"><strong>Outline</strong><span id="kindBadge"></span></div><div id="draftState" class="draft-state" data-state="draft" role="status">Draft</div></div>
     <div id="outline"></div>
   </section>
-  <main class="previewpane"><div class="preview-head"><strong>Live preview</strong><span>Changes save locally</span></div><div class="previewscale" id="pv"></div></main>
   <aside class="inspector" aria-label="Inspector">
     <div class="studio-head inspector-head"><div class="head-row"><strong id="inspectorTitle">Document Settings</strong></div><button class="inspector-close" type="button" aria-label="Close inspector">×</button></div>
     <div id="inspector"></div>
   </aside>
+  <main class="previewpane"><div class="preview-head"><strong>Live preview</strong><span>Changes save locally</span></div><div class="previewscale" id="pv"></div></main>
 </div>
 <div class="add-block-drawer" id="addBlockDrawer" hidden>
   <div class="drawer-backdrop" data-action="close-drawer"></div>

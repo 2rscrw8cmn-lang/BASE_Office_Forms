@@ -462,12 +462,23 @@
   let lastGoodPreviewHtml = "";
 
   function renderPreview() {
+    // Every keystroke rebuilds #pv from scratch (fresh innerHTML) and
+    // re-paginates the whole thing, which can shrink/grow the scrollable
+    // height mid-edit and drag .previewpane's scroll position back toward
+    // the top. Pin it to where the user actually was through both the
+    // synchronous swap and the deferred pagination pass.
+    const pane = $(".previewpane");
+    const scrollTop = pane ? pane.scrollTop : 0;
     try {
       const html = BASE.render(def, { fill: false });
       lastGoodPreviewHtml = html;
       $("#pv").innerHTML = html;
       applySelectionHighlight();
-      requestAnimationFrame(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit(); });
+      if (pane) pane.scrollTop = scrollTop;
+      requestAnimationFrame(() => {
+        BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); fit();
+        if (pane) pane.scrollTop = scrollTop;
+      });
     } catch (error) {
       if (lastGoodPreviewHtml) $("#pv").innerHTML = lastGoodPreviewHtml;
       status(`Could not render the preview: ${error.message}. Showing the last valid version.`, "error");
