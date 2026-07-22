@@ -31,12 +31,12 @@ export function createAddDocumentForm({
   overlay.className = "app-dialog-overlay";
 
   function choiceMarkup() {
-    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><div class="app-dialog-head"><div><h2 id="add-document-title" tabindex="-1">Add document</h2><p id="add-document-desc">Start with the actual project document, or reserve an empty document identity.</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><div class="app-dialog-body add-document-choices"><button type="button" class="add-document-choice is-primary" data-mode="upload"><strong>Upload a document</strong><span>Create its document identity, first draft, and file in one guided flow.</span></button><button type="button" class="add-document-choice" data-mode="empty"><strong>Create an empty document record</strong><span>Reserve a document identity and begin an empty draft for later upload.</span></button><p class="add-document-library-note">Library masters cannot yet be instantiated as project-specific documents.</p></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button></div></div>`;
+    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><div class="app-dialog-head"><div><h2 id="add-document-title" tabindex="-1">Add document</h2><p id="add-document-desc">Start with the original document, or reserve an empty document identity.</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><div class="app-dialog-body add-document-choices"><button type="button" class="add-document-choice is-primary" data-mode="upload"><strong>Upload original</strong><span>Create its document identity, original draft, and file in one guided flow.</span></button><button type="button" class="add-document-choice" data-mode="empty"><strong>Create original</strong><span>Reserve a document identity and begin an empty original draft for later upload.</span></button><p class="add-document-library-note">Library masters cannot yet be instantiated as project-specific documents.</p></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button></div></div>`;
   }
 
   function formMarkup() {
     const uploading = mode === "upload";
-    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><form novalidate><div class="app-dialog-head"><div><button class="text-link add-document-back" type="button" data-back>← Choose another option</button><h2 id="add-document-title" tabindex="-1">${uploading ? "Upload a document" : "Create an empty document"}</h2><p id="add-document-desc">${uploading ? "Add document details and the first file. A draft revision will be created automatically." : "Reserve the identity now. An empty draft will be ready for upload."}</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><p class="app-dialog-error" role="alert" hidden></p><div class="app-dialog-body"><div class="app-field-row"><div class="app-field"><label for="add-type">Document type</label><select id="add-type" name="recordType">${TYPE_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></div><div class="app-field"><label for="add-discipline">Discipline</label><select id="add-discipline" name="discipline"><option value="">Select discipline</option>${DISCIPLINE_OPTIONS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("")}</select></div></div><div class="app-field"><label for="add-title">Title <span aria-hidden="true">*</span></label><input id="add-title" name="title" required autocomplete="off" aria-describedby="add-title-error"><p class="app-field-error" id="add-title-error" hidden></p></div><div class="app-field"><label for="add-description">Description</label><textarea id="add-description" name="description" rows="2"></textarea></div><div class="app-field"><label for="add-summary">Initial change summary <span aria-hidden="true">*</span></label><textarea id="add-summary" name="changeSummary" rows="2" required aria-describedby="add-summary-error">Initial document</textarea><p class="app-field-error" id="add-summary-error" hidden></p></div>${uploading ? '<div class="app-field add-document-file"><label for="add-file">Document file <span aria-hidden="true">*</span></label><input id="add-file" name="file" type="file" required aria-describedby="add-file-error"><p class="app-field-error" id="add-file-error" hidden></p></div>' : ""}<div class="add-document-recovery" hidden></div></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button" data-submit>${uploading ? "Create document and upload" : "Create document"}</button></div></form></div>`;
+    return `<div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="add-document-title" aria-describedby="add-document-desc"><form novalidate><div class="app-dialog-head"><div><button class="text-link add-document-back" type="button" data-back>← Choose another option</button><h2 id="add-document-title" tabindex="-1">${uploading ? "Upload original" : "Create original"}</h2><p id="add-document-desc">${uploading ? "Add document details and the original file. An original draft will be created automatically." : "Reserve the identity now. An empty original draft will be ready for upload."}</p></div><button type="button" class="app-dialog-close" data-close aria-label="Close dialog">×</button></div><p class="app-dialog-error" role="alert" hidden></p><div class="app-dialog-body"><div class="app-field-row"><div class="app-field"><label for="add-type">Document type</label><select id="add-type" name="recordType">${TYPE_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></div><div class="app-field"><label for="add-discipline">Discipline</label><select id="add-discipline" name="discipline"><option value="">Select discipline</option>${DISCIPLINE_OPTIONS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("")}</select></div></div><div class="app-field"><label for="add-title">Title <span aria-hidden="true">*</span></label><input id="add-title" name="title" required autocomplete="off" aria-describedby="add-title-error"><p class="app-field-error" id="add-title-error" hidden></p></div><div class="app-field"><label for="add-description">Description</label><textarea id="add-description" name="description" rows="2"></textarea></div><div class="app-field"><label for="add-summary">Original change summary <span aria-hidden="true">*</span></label><textarea id="add-summary" name="changeSummary" rows="2" required aria-describedby="add-summary-error">Initial document</textarea><p class="app-field-error" id="add-summary-error" hidden></p></div>${uploading ? '<div class="app-field add-document-file"><label for="add-file">Original file <span aria-hidden="true">*</span></label><input id="add-file" name="file" type="file" required aria-describedby="add-file-error"><p class="app-field-error" id="add-file-error" hidden></p></div>' : ""}<div class="add-document-recovery" hidden></div></div><div class="app-dialog-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button" data-submit>${uploading ? "Create original and upload" : "Create original"}</button></div></form></div>`;
   }
 
   function renderChoice() {
@@ -125,10 +125,10 @@ export function createAddDocumentForm({
     button.disabled = value;
     button.setAttribute("aria-busy", String(value));
     button.textContent = value
-      ? "Creating document…"
+      ? "Creating original…"
       : mode === "upload"
-        ? "Create document and upload"
-        : "Create document";
+        ? "Create original and upload"
+        : "Create original";
   }
 
   async function submit(event) {
@@ -171,7 +171,7 @@ export function createAddDocumentForm({
       announce?.(
         mode === "upload"
           ? `Document ${createdRecord.recordNumber} created and uploaded.`
-          : `Document ${createdRecord.recordNumber} and draft created.`,
+          : `Document ${createdRecord.recordNumber} and original draft created.`,
       );
       close({ restoreFocus: false });
       onSuccess?.({ record: createdRecord, revision: createdRevision });
@@ -180,14 +180,14 @@ export function createAddDocumentForm({
       setSubmitting(false);
       if (createdRevision) {
         showError(
-          "The draft was created, but the file could not be uploaded. Open the draft to retry the upload.",
+          "The original draft was created, but the file could not be uploaded. Open the original to retry the upload.",
           error?.requestId,
           `/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(createdRecord.id)}/revisions/${encodeURIComponent(createdRevision.id)}`,
-          "Open draft and retry upload",
+          "Open original and retry upload",
         );
       } else if (createdRecord) {
         showError(
-          "The document identity was created, but its first draft could not be created.",
+          "The document identity was created, but its original draft could not be created.",
           error?.requestId,
           `/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(createdRecord.id)}`,
           "Open document",

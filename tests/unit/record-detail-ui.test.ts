@@ -237,19 +237,19 @@ describe("record detail workspace", () => {
     ).toContain("Documents");
     expect(
       document.querySelector(".document-work-panel")?.textContent,
-    ).toContain("Rev 2 · B");
+    ).toContain("Rev 1 · B");
     expect(
       document.querySelector(".document-work-panel")?.textContent,
     ).toContain("A-201-coordination.pdf");
     expect(document.querySelector(".document-history")?.textContent).toContain(
-      "Rev 0 · PRELIMINARY",
+      "Version · PRELIMINARY",
     );
     expect(
       document.querySelector(".document-history")?.textContent,
-    ).not.toContain("Rev 2 · B");
+    ).not.toContain("Rev 1 · B");
     expect(
       document.querySelector(".document-history")?.textContent,
-    ).not.toContain("Rev 1 · A");
+    ).not.toContain("Original · A");
     expect(
       document
         .querySelector(".document-revision-table")
@@ -258,15 +258,53 @@ describe("record detail workspace", () => {
     expect(
       document.querySelector(".document-revision-table .open-link"),
     ).not.toBeNull();
-    expect(document.body.textContent.match(/Rev 2 · B/g)).toHaveLength(2);
+    expect(document.body.textContent.match(/Rev 1 · B/g)).toHaveLength(2);
     expect(document.body.textContent).not.toContain("Create draft");
     expect(document.body.textContent).not.toContain("Issue revision");
     expect(
       document.querySelector(".document-history thead")?.textContent,
     ).toContain("Created");
+    expect(document.querySelector(".document-history")?.textContent).toContain(
+      "Version history",
+    );
+    expect(document.querySelector(".document-history")?.textContent).toContain(
+      "1 previous version",
+    );
+    expect(
+      document.querySelector(".document-history thead")?.textContent,
+    ).toContain("Version");
     expect(
       document.querySelector(".document-history thead")?.textContent,
     ).not.toContain("Published");
+    expect(
+      document.querySelector(".document-history .open-link")?.textContent,
+    ).toContain("View →");
+    expect(
+      document
+        .querySelector(".document-history .open-link")
+        ?.getAttribute("aria-label"),
+    ).toContain("View Version");
+    expect(document.querySelector(".document-details")).toBeNull();
+    expect(document.body.textContent).not.toContain("Document details");
+    expect(
+      document.querySelector(".document-title-row")?.textContent,
+    ).not.toContain("Active");
+    expect(
+      document.querySelector(".document-header-facts")?.textContent,
+    ).not.toContain("Status");
+    expect(
+      document.querySelector(".document-header-facts")?.textContent,
+    ).not.toContain("Issuance");
+    expect(
+      document.querySelector(".document-header-context")?.textContent,
+    ).toContain("Architectural plan record");
+    expect(
+      document.querySelector(".document-header-context")?.textContent,
+    ).toContain("Source Consultant");
+    expect(
+      document.querySelector(".document-file-card")?.textContent,
+    ).toContain("PDF document");
+    expect(document.body.textContent).not.toContain("application/pdf");
     expect(
       document.querySelector(
         'a[href="/projects/proj-1/records/rec-1/revisions/rev-2"]',
@@ -310,6 +348,51 @@ describe("record detail workspace", () => {
       document.querySelector(".document-primary-action")?.textContent,
     ).toBe("Upload document");
     expect(document.querySelector("[data-create-revision]")).toBeNull();
+  });
+
+  it("uses Original terminology before a document has any version", async () => {
+    const { document } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok({ ...workspace, currentRevision: null, revisions: [] }),
+    });
+    expect(
+      document.querySelector(".document-empty-work")?.textContent,
+    ).toContain("No original yet");
+    expect(
+      document.querySelector(".document-primary-action")?.textContent,
+    ).toBe("Create original");
+  });
+
+  it("uses Upload original for an empty Original draft", async () => {
+    const { document } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok({
+          ...workspace,
+          revisions: [
+            {
+              ...workspace.revisions[0],
+              revisionNumber: 1,
+              revisionLabel: null,
+              fileCount: 0,
+              files: [],
+            },
+          ],
+        }),
+    });
+    expect(
+      document.querySelector(".document-primary-action")?.textContent,
+    ).toBe("Upload original");
+  });
+
+  it("omits empty description and source from the header", async () => {
+    const { document } = await mount({
+      "GET /api/v2/projects/proj-1/records/rec-1/workspace": () =>
+        ok({
+          ...workspace,
+          record: { ...workspace.record, description: "  ", source: null },
+        }),
+    });
+    expect(document.querySelector(".document-header-context")).toBeNull();
   });
 
   it("edits only mutable fields and reloads after server confirmation", async () => {
@@ -426,6 +509,12 @@ describe("record detail workspace", () => {
     expect(
       document.querySelector(".document-read-only")?.textContent,
     ).toContain("read-only");
+    expect(
+      document.querySelector(".document-read-only")?.textContent,
+    ).toContain("Archived July 2, 2026");
+    expect(
+      document.querySelector(".document-title-row")?.textContent,
+    ).toContain("Archived");
     expect(
       document.querySelector(
         "[data-edit-record], [data-archive-record], [data-create-revision]",

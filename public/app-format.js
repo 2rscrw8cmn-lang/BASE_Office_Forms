@@ -131,13 +131,47 @@ export function revisionName(revision) {
   if (!revision) return "";
   const number = Number(revision.revisionNumber);
   const label = String(revision.revisionLabel ?? "").trim();
-  const numbered = Number.isFinite(number) ? `Rev ${number}` : "Revision";
+  const numbered =
+    number === 1
+      ? "Original"
+      : Number.isInteger(number) && number > 1
+        ? `Rev ${number - 1}`
+        : "Version";
   return label ? `${numbered} · ${label}` : numbered;
 }
 
 export function currentRevisionText(currentRevision) {
   if (!currentRevision) return null;
   return revisionName(currentRevision);
+}
+
+const FILE_TYPE_LABELS = {
+  "image/png": "PNG image",
+  "image/jpeg": "JPEG image",
+  "image/jpg": "JPEG image",
+  "application/pdf": "PDF document",
+  "application/msword": "Word document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "Word document",
+  "application/vnd.ms-excel": "Excel workbook",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+    "Excel workbook",
+  "application/acad": "DWG drawing",
+  "application/dwg": "DWG drawing",
+  "application/x-dwg": "DWG drawing",
+  "application/vnd.dwg": "DWG drawing",
+  "image/vnd.dwg": "DWG drawing",
+  "image/x-dwg": "DWG drawing",
+};
+
+export function fileTypeLabel(mediaType) {
+  return (
+    FILE_TYPE_LABELS[
+      String(mediaType ?? "")
+        .trim()
+        .toLowerCase()
+    ] || "File"
+  );
 }
 
 export function actorLabel(event) {

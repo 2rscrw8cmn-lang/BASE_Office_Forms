@@ -182,7 +182,7 @@ describe("revision document workspace", () => {
         () => response(workspace(withFile)),
     });
     expect(document.querySelector("#page-title")?.textContent).toBe(
-      "Rev 2 · B",
+      "Rev 1 · B",
     );
     expect(
       document
@@ -191,7 +191,7 @@ describe("revision document workspace", () => {
     ).toBe(true);
     expect(
       document.querySelector(".document-breadcrumbs")?.textContent,
-    ).toContain("Documents/Second Floor Plan/Rev 2 · B");
+    ).toContain("Documents/Second Floor Plan/Rev 1 · B");
     expect(
       document.querySelector(".document-file-card")?.textContent,
     ).toContain("A-201-rev-B.pdf");
@@ -203,6 +203,10 @@ describe("revision document workspace", () => {
     expect(document.querySelector(".document-file-card a")?.textContent).toBe(
       "View file",
     );
+    expect(
+      document.querySelector(".document-file-card")?.textContent,
+    ).toContain("PDF document");
+    expect(document.body.textContent).not.toContain("application/pdf");
     expect(document.querySelector(".revision-summary")?.textContent).toContain(
       "Not issued",
     );
@@ -314,7 +318,7 @@ describe("revision document workspace", () => {
     await waitFor(() => {
       expect(
         document.querySelector(".document-read-only")?.textContent,
-      ).toContain("Read-only revision");
+      ).toContain("Read-only version");
       expect(document.querySelector("#revision-file")).toBeNull();
       expect(document.querySelector("[data-publish]")).toBeNull();
     });

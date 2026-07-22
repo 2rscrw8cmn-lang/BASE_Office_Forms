@@ -311,7 +311,7 @@ describe("records register view", () => {
   it("shows the current revision, no-revision state, draft presence, and file count", async () => {
     const { document } = await mountRecords();
     const firstRow = grab(document, ".records-table tbody tr");
-    expect(firstRow.textContent).toContain("Rev 1");
+    expect(firstRow.textContent).toContain("Original");
     expect(firstRow.textContent).toContain("Published");
     expect(firstRow.textContent).toContain("Draft in progress");
     expect(firstRow.querySelector(".cell-files")?.textContent).toBe("2");
@@ -722,7 +722,7 @@ describe("records create authorization and dialog", () => {
       );
     });
     expect(textOf(document, ".add-document-recovery")).toContain(
-      "Open draft and retry upload",
+      "Open original and retry upload",
     );
     expect(
       document.querySelector("[data-recovery]")?.getAttribute("href"),
