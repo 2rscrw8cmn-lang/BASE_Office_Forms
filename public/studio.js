@@ -1145,7 +1145,18 @@
   $("#shareButton").addEventListener("click", copyShareLink);
   $("#aiButton").addEventListener("click", copyAIKit);
   $("#aiImportButton").addEventListener("click", importAI);
-  $("#printButton").addEventListener("click", () => { renderPreview(); setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140); });
+  $("#printButton").addEventListener("click", () => {
+    const target = rootDefinition();
+    if (target.kind === "form") {
+      status("Generating fillable PDF…");
+      BASE_PDF.downloadFormPdf(clean(target))
+        .then(() => status("PDF downloaded"))
+        .catch(error => status(error.message || "Could not export PDF", "error"));
+      return;
+    }
+    renderPreview();
+    setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140);
+  });
   setupToolbarMenus();
   window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
