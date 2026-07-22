@@ -30,9 +30,10 @@
   <form class="global-search" action="/library" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg><label class="sr-only" for="viewerSearch">Search the document workspace</label><input id="viewerSearch" name="q" type="search" placeholder="Search documents, templates, or records"></form>
   <a class="legacy-shell-return" href="/dashboard">Back to app</a>
 </header>
-<div class="viewerbar"><strong id="label">Shared BASE document</strong><span id="fillStatus" class="fill-status" hidden></span><a id="editLink" href="builder.html">Edit a copy</a><button id="resetAnswers" hidden>Reset answers</button><button id="answers" hidden>Export answers</button><button id="download">Export backup</button><button class="accent" onclick="window.print()">Export PDF</button></div>
+<div class="viewerbar"><strong id="label">Shared BASE document</strong><span id="fillStatus" class="fill-status" hidden></span><a id="editLink" href="builder.html">Edit a copy</a><button id="resetAnswers" hidden>Reset answers</button><button id="answers" hidden>Export answers</button><button id="download">Export backup</button><button id="exportPdf" class="accent">Export PDF</button></div>
 <main id="root"></main>
 <script src="engine.js"></script>
+<script src="pdf-export.js"></script>
 <script src="form-fill.js"></script>
 <script src="library-api.js"></script>
 <script src="global-search.js"></script>
@@ -71,10 +72,11 @@
     document.getElementById("editLink").textContent = id && BASE_LIBRARY.editKey(id) ? "Edit document" : "Edit a copy";
     document.getElementById("download").onclick = () => download(`${definition.no || "BASE-document"}.json`, definition);
 
+    let fill = null;
     const targets = BASE.formFillTargets(definition);
     if (targets.length) {
       const storageKey = `viewer:${id || match[1]}`;
-      const fill = BASE_FILL.attach(root, definition, storageKey);
+      fill = BASE_FILL.attach(root, definition, storageKey);
       updateFillStatus(fill);
       root.addEventListener("input", () => updateFillStatus(fill));
       root.addEventListener("change", () => updateFillStatus(fill));
@@ -91,6 +93,23 @@
         updateFillStatus(fill);
       };
     }
+    const exportPdfButton = document.getElementById("exportPdf");
+    exportPdfButton.onclick = async () => {
+      if (definition.kind !== "form") { window.print(); return; }
+      const button = exportPdfButton;
+      button.disabled = true;
+      const originalLabel = button.textContent;
+      button.textContent = "Generating…";
+      try {
+        const answers = fill ? fill.flush().answers : {};
+        await BASE_PDF.downloadFormPdf(definition, { answers });
+      } catch (error) {
+        window.alert(error.message || "Could not export a PDF.");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    };
     window.addEventListener("beforeprint", () => { BASE.paginate(root); BASE.updatePackageIndex(root); });
   } catch (error) {
     document.getElementById("root").innerHTML = `<div class="error"><h1>Document unavailable</h1><p>${BASE.esc(error.message)}</p></div>`;
