@@ -28,7 +28,7 @@ export interface RfiWriteInput {
   contractorSuggestion: string | null;
   drawingReferences: string | null;
   specificationReferences: string | null;
-  responsibleParty: string | null;
+  responsiblePartyId: string | null;
   submittedBy: string | null;
   requestedResponseDate: string | null;
   costImpact: string | null;
@@ -48,12 +48,16 @@ export interface Rfi {
   contractorSuggestion: string | null;
   drawingReferences: string | null;
   specificationReferences: string | null;
+  responsiblePartyId: string | null;
   responsibleParty: string | null;
+  responsiblePartyLegacyText: string | null;
   submittedBy: string | null;
   requestedResponseDate: string | null;
   costImpact: string | null;
   scheduleImpact: string | null;
   issuedNumberSequence: number | null;
+  draftRevisionId: string;
+  issuanceReconciliationState: "not_issued" | "legacy_incomplete";
   issuedAt: string | null;
   responseReceivedAt: string | null;
   closedAt: string | null;
@@ -77,6 +81,7 @@ export interface RfiAttachment {
   organizationId: string;
   projectId: string;
   rfiId: string;
+  revisionId: string;
   role: RfiAttachmentRole;
   storageKey: string;
   originalFilename: string;

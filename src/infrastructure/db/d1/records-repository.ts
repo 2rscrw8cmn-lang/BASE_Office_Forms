@@ -186,8 +186,8 @@ export class D1RecordsRepository {
       this.sequences.advanceStatement(organizationId, projectId, now),
       this.database
         .prepare(
-          `INSERT INTO records (${RECORD_COLUMNS})
-           SELECT ?, ?, ?, ?, printf('%04d', last_number), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          `INSERT INTO records (${RECORD_COLUMNS}, record_type_key)
+           SELECT ?, ?, ?, ?, printf('%04d', last_number), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
            FROM project_record_sequences
            WHERE organization_id = ? AND project_id = ?`,
         )
@@ -206,6 +206,7 @@ export class D1RecordsRepository {
           record.archivedAt,
           record.createdAt,
           record.updatedAt,
+          record.recordType,
           record.organizationId,
           record.projectId,
         ),

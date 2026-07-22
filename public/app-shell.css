@@ -3184,3 +3184,259 @@ html {
     gap: 2px;
   }
 }
+
+/* Corrective RFI working-register and record-workspace overrides. */
+.rfi-register-hint {
+  margin: 5px 0 0;
+  color: var(--shell-muted);
+  font-size: 0.82rem;
+}
+.rfi-table {
+  min-width: 1780px;
+  table-layout: fixed;
+}
+.rfi-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.rfi-table th:nth-child(1) {
+  width: 132px;
+}
+.rfi-table th:nth-child(2) {
+  width: 260px;
+}
+.rfi-table th:nth-child(3) {
+  width: 150px;
+}
+.rfi-table th:nth-child(4) {
+  width: 220px;
+}
+.rfi-table th:nth-child(5) {
+  width: 150px;
+}
+.rfi-table th:nth-child(6),
+.rfi-table th:nth-child(7) {
+  width: 280px;
+}
+.rfi-table th:nth-child(8),
+.rfi-table th:nth-child(9) {
+  width: 190px;
+}
+.rfi-table th:nth-child(10) {
+  width: 240px;
+}
+.rfi-table th:nth-child(11),
+.rfi-table th:nth-child(12) {
+  width: 130px;
+}
+.rfi-table th:nth-child(13) {
+  width: 92px;
+}
+.rfi-table .rfi-grid-cell {
+  position: relative;
+  height: 64px;
+  padding: 0;
+  color: var(--shell-ink);
+  cursor: cell;
+  vertical-align: top;
+  outline: none;
+}
+.rfi-grid-cell .rfi-cell-text {
+  display: -webkit-box;
+  min-height: 63px;
+  padding: 14px 15px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+.rfi-grid-cell.is-selected {
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px var(--app-accent);
+  background: #fffdfd;
+}
+.rfi-grid-cell.is-editing {
+  z-index: 3;
+  box-shadow: inset 0 0 0 2px var(--app-accent);
+  background: #fff;
+}
+.rfi-cell-editor {
+  width: 100%;
+  min-height: 63px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: var(--shell-ink);
+  font: inherit;
+  resize: vertical;
+  outline: none;
+}
+select.rfi-cell-editor,
+input.rfi-cell-editor[type="date"] {
+  min-height: 63px;
+}
+.rfi-cell-save-state {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--shell-muted);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+.rfi-cell-save-state.is-saved {
+  color: #27613b;
+}
+.rfi-cell-save-state.is-failed {
+  left: 6px;
+  right: 6px;
+  color: var(--app-error);
+  white-space: normal;
+}
+.rfi-table .rfi-cell-status .status-badge {
+  white-space: nowrap;
+}
+.rfi-table .cell-open {
+  text-align: right;
+}
+
+.rfi-workspace-view {
+  display: grid;
+  gap: 22px;
+  padding-bottom: 48px;
+}
+.rfi-document-identity {
+  align-items: end;
+}
+.rfi-metadata-strip strong .status-badge {
+  vertical-align: middle;
+}
+.document-read-only.is-warning {
+  border-color: #dfb45c;
+  background: #fff9ed;
+}
+.rfi-current-version {
+  display: grid;
+  gap: 22px;
+}
+.rfi-authoritative-content {
+  padding-top: 18px;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.rfi-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 14px 0 0;
+  background: var(--shell-border-soft);
+  border: 1px solid var(--shell-border-soft);
+}
+.rfi-content-field {
+  min-height: 92px;
+  padding: 16px;
+  background: var(--shell-panel);
+}
+.rfi-content-field.is-wide {
+  grid-column: 1 / -1;
+}
+.rfi-content-field dt,
+.rfi-response-facts dt {
+  margin-bottom: 7px;
+  color: var(--shell-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rfi-content-field dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.rfi-current-version .document-files {
+  display: grid;
+  gap: 10px;
+}
+.rfi-render-panel,
+.rfi-response-panel,
+.rfi-activity-panel {
+  padding: 22px;
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+  background: var(--shell-panel);
+}
+.rfi-render-preview {
+  max-height: 760px;
+  margin-top: 14px;
+  overflow: auto;
+  background: #e9e7e3;
+  border: 1px solid var(--shell-border-soft);
+}
+.rfi-render-preview .sheet {
+  margin: 20px auto;
+  zoom: 0.72;
+  box-shadow: 0 8px 24px rgba(34, 31, 28, 0.14);
+}
+.rfi-response-text {
+  padding: 18px;
+  white-space: pre-wrap;
+  background: #faf9f8;
+  border-left: 3px solid var(--app-accent);
+}
+.rfi-response-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.rfi-response-facts dd {
+  margin: 0;
+}
+.rfi-activity-panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.rfi-activity-panel > summary span {
+  margin-left: 6px;
+  color: var(--shell-muted);
+}
+.rfi-activity-list li div {
+  display: grid;
+  gap: 3px;
+}
+.rfi-activity-list li small {
+  color: var(--shell-muted);
+  white-space: nowrap;
+}
+.rfi-legacy-note {
+  display: block;
+  margin-top: 6px;
+  color: #8a5a00;
+}
+
+@media (max-width: 760px) {
+  .rfi-table-wrap {
+    display: none;
+  }
+  .rfi-cards {
+    display: grid;
+  }
+  .rfi-register-hint {
+    display: none;
+  }
+  .rfi-content-grid,
+  .rfi-response-facts {
+    grid-template-columns: 1fr;
+  }
+  .rfi-content-field.is-wide {
+    grid-column: auto;
+  }
+  .rfi-render-preview .sheet {
+    zoom: 0.42;
+  }
+  .rfi-document-identity {
+    align-items: stretch;
+  }
+}

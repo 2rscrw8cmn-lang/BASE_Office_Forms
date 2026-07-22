@@ -181,23 +181,24 @@ while Question/Response summaries wrap or truncate intentionally, with full text
 in the workspace. Mobile renders RFI cards, not a compressed table. Status is
 always conveyed with text (never color alone).
 
-## 11. Documented architectural deviations (known gaps)
+## 11. Architecture boundary
 
-Two deliberate deviations from the aspirational data model are recorded here so
-they are not silently contradicted:
+1. **Storage model.** Every RFI is a stable `records` row with a one-to-one
+   `rfi_details` extension. Common identity, title, workflow, responsible
+   contact, dates, template binding, and lock state are authoritative on the
+   record. RFI-specific question, suggestion, references, response, and impact
+   fields remain in the extension. Draft and supporting files use the existing
+   `record_revisions` and `revision_files` spine with explicit file roles.
+   Migration 0014 preserves the prior RFI id as the record id and records a
+   permanent reconciliation map.
 
-1. **Storage model.** `DATA_MODEL.md §4` models an RFI as a unified `records` row
-   plus a one-to-one `rfi_details` extension, sharing the record/revision/file
-   spine. The shipped code instead has (a) a document-control `records` spine
-   with no workflow/lock/template columns and (b) a standalone `rfi_records`
-   table. This slice **extends `rfi_records`** (adding `lock_version`,
-   `template_version_id`, the binding lifecycle enum, snapshot columns, and a
-   dedicated `rfi_attachments` table) rather than folding RFIs into the
-   document-control spine — per the directive to reuse the existing RFI
-   foundation and not redesign Studio/Document Library. Unifying RFIs onto
-   `records` + `rfi_details` remains future work.
+2. **Issuance boundary.** Slice 1 does not expose issue or ready actions. The
+   server fails issue closed without assigning a number or changing workflow
+   state until Slice 2 can atomically create the immutable issued revision,
+   artifact, recipients, timestamp, and activity event. Previously consumed
+   legacy numbers remain preserved but are labelled as requiring reconciliation.
 
-2. **Template governance.** Full Phase-3 template governance (versioned template
+3. **Template governance.** Full Phase-3 template governance (versioned template
    migrations, template lifecycle management, per-project template selection) is
    not built here. The RFI slice introduces only the narrow binding boundary: an
    RFI draft binds to the published `base-rfi` template version, seeded per
@@ -211,8 +212,10 @@ they are not silently contradicted:
 3. An authorized user can create an unnumbered RFI draft.
 4. The new draft is associated with the approved/default RFI template binding.
 5. The register and full workspace display the same authoritative data.
-6. Short, permitted draft fields can be edited directly from the register.
-7. Long-form information can be edited in the RFI workspace.
+6. All permitted structured draft fields can be edited directly from the
+   keyboard-accessible spreadsheet register.
+7. The RFI workspace presents the same authoritative content using the Documents
+   hierarchy and a read-only renderer preview.
 8. Project information populates from the project record and is not duplicated.
 9. Supporting attachments remain associated with the exact RFI draft context and
    carry an explicit role.

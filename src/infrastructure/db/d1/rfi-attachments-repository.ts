@@ -8,7 +8,8 @@ interface RfiAttachmentRow {
   id: string;
   organization_id: string;
   project_id: string;
-  rfi_id: string;
+  record_id: string;
+  revision_id: string;
   role: RfiAttachmentRole;
   storage_key: string;
   original_filename: string;
@@ -19,7 +20,7 @@ interface RfiAttachmentRow {
   uploaded_at: string;
 }
 
-const ATTACHMENT_COLUMNS = `id, organization_id, project_id, rfi_id, role, storage_key,
+const ATTACHMENT_COLUMNS = `id, organization_id, project_id, record_id, revision_id, role, storage_key,
   original_filename, media_type, byte_size, sha256, uploaded_by, uploaded_at`;
 
 function mapAttachment(row: RfiAttachmentRow): RfiAttachment {
@@ -27,7 +28,8 @@ function mapAttachment(row: RfiAttachmentRow): RfiAttachment {
     id: row.id,
     organizationId: row.organization_id,
     projectId: row.project_id,
-    rfiId: row.rfi_id,
+    rfiId: row.record_id,
+    revisionId: row.revision_id,
     role: row.role,
     storageKey: row.storage_key,
     originalFilename: row.original_filename,
@@ -73,8 +75,9 @@ export class D1RfiAttachmentsRepository {
   async list(organizationId: string, rfiId: string): Promise<RfiAttachment[]> {
     const result = await this.database
       .prepare(
-        `SELECT ${ATTACHMENT_COLUMNS} FROM rfi_attachments
-         WHERE organization_id = ? AND rfi_id = ?
+        `SELECT ${ATTACHMENT_COLUMNS} FROM revision_files
+         WHERE organization_id = ? AND record_id = ?
+           AND role IN ('supporting_attachment', 'reference_drawing', 'response_attachment', 'generated_artifact')
          ORDER BY role ASC, uploaded_at ASC, id ASC`,
       )
       .bind(organizationId, rfiId)
@@ -89,8 +92,9 @@ export class D1RfiAttachmentsRepository {
   ): Promise<RfiAttachment | null> {
     const row = await this.database
       .prepare(
-        `SELECT ${ATTACHMENT_COLUMNS} FROM rfi_attachments
-         WHERE organization_id = ? AND rfi_id = ? AND id = ?`,
+        `SELECT ${ATTACHMENT_COLUMNS} FROM revision_files
+         WHERE organization_id = ? AND record_id = ? AND id = ?
+           AND role IN ('supporting_attachment', 'reference_drawing', 'response_attachment', 'generated_artifact')`,
       )
       .bind(organizationId, rfiId, attachmentId)
       .first<RfiAttachmentRow>();
@@ -114,12 +118,18 @@ export class D1RfiAttachmentsRepository {
     const results = await this.database.batch([
       this.database
         .prepare(
-          `INSERT INTO rfi_attachments (${ATTACHMENT_COLUMNS})
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          `INSERT INTO revision_files (${ATTACHMENT_COLUMNS})
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
            WHERE EXISTS (
-             SELECT 1 FROM rfi_records
-             WHERE id = ? AND organization_id = ?
-               AND status IN ('draft', 'ready_to_issue')
+             SELECT 1 FROM records record
+             JOIN record_revisions revision
+               ON revision.id = ? AND revision.record_id = record.id
+              AND revision.organization_id = record.organization_id
+              AND revision.project_id = record.project_id
+             WHERE record.id = ? AND record.organization_id = ?
+               AND record.project_id = ? AND record.record_type_key = 'rfi'
+               AND record.workflow_status IN ('draft', 'ready_to_issue')
+               AND revision.status = 'draft'
            )`,
         )
         .bind(
@@ -127,6 +137,7 @@ export class D1RfiAttachmentsRepository {
           attachment.organizationId,
           attachment.projectId,
           attachment.rfiId,
+          attachment.revisionId,
           attachment.role,
           attachment.storageKey,
           attachment.originalFilename,
@@ -135,8 +146,10 @@ export class D1RfiAttachmentsRepository {
           attachment.sha256,
           attachment.uploadedBy,
           attachment.uploadedAt,
+          attachment.revisionId,
           attachment.rfiId,
           attachment.organizationId,
+          attachment.projectId,
         ),
       eventStatement(this.database, {
         ...event,

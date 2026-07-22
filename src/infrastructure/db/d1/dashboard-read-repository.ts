@@ -350,9 +350,10 @@ export class D1DashboardReadRepository {
     return this.database
       .prepare(
         `SELECT COUNT(*) AS n
-         FROM rfi_records
+         FROM records
          WHERE organization_id = ?
-           AND status IN ('open', 'returned_for_clarification', 'response_received')
+           AND record_type_key = 'rfi'
+           AND workflow_status IN ('open', 'returned_for_clarification', 'response_received')
            AND project_id IN (${placeholders(projectIds.length)})`,
       )
       .bind(organizationId, ...projectIds);
@@ -422,17 +423,18 @@ export class D1DashboardReadRepository {
   ): D1PreparedStatement {
     return this.database
       .prepare(
-        `SELECT r.id AS rfi_id, r.rfi_number, r.subject AS title, r.status,
-                r.requested_response_date AS due_date,
+        `SELECT r.id AS rfi_id, r.record_number AS rfi_number,
+                r.title, r.workflow_status AS status, r.due_date,
                 r.project_id, p.project_number, p.name AS project_name, r.created_at
-         FROM rfi_records r
+         FROM records r
          JOIN projects p
            ON p.id = r.project_id AND p.organization_id = r.organization_id
          WHERE r.organization_id = ?
-           AND r.status IN ('open', 'returned_for_clarification', 'response_received')
+           AND r.record_type_key = 'rfi'
+           AND r.workflow_status IN ('open', 'returned_for_clarification', 'response_received')
            AND r.project_id IN (${placeholders(projectIds.length)})
-         ORDER BY CASE WHEN r.requested_response_date IS NULL THEN 1 ELSE 0 END,
-                  r.requested_response_date ASC, r.created_at DESC, r.id ASC
+         ORDER BY CASE WHEN r.due_date IS NULL THEN 1 ELSE 0 END,
+                  r.due_date ASC, r.created_at DESC, r.id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
       .bind(organizationId, ...projectIds);

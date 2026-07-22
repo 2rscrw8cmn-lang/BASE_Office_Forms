@@ -26,6 +26,11 @@ export interface ProjectRfisReadModel {
     name: string;
     status: string;
   };
+  responsibleContacts: {
+    id: string;
+    name: string;
+    companyName: string | null;
+  }[];
   rfis: RfiListItem[];
   capabilities: { createRfi: boolean };
 }
@@ -51,7 +56,10 @@ export class ProjectRfisReadModelService {
       actor,
       projectId,
     );
-    const summaries = await this.reads.list(actor.organizationId, project.id);
+    const [summaries, responsibleContacts] = await Promise.all([
+      this.reads.list(actor.organizationId, project.id),
+      this.reads.listResponsibleContacts(actor.organizationId, project.id),
+    ]);
     const today = currentIsoDate();
     return {
       project: {
@@ -60,6 +68,7 @@ export class ProjectRfisReadModelService {
         name: project.name,
         status: project.status,
       },
+      responsibleContacts,
       rfis: summaries.map((summary) => {
         const flags = rfiScheduleFlags(
           summary.status,

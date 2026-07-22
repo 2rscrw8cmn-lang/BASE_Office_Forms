@@ -84,9 +84,10 @@ export class D1ProjectOverviewReadRepository {
              WHERE organization_id = ?1 AND project_id = ?2) AS files,
            (SELECT COUNT(*) FROM issuances
              WHERE organization_id = ?1 AND project_id = ?2) AS issuances,
-           (SELECT COUNT(*) FROM rfi_records
+           (SELECT COUNT(*) FROM records
              WHERE organization_id = ?1 AND project_id = ?2
-               AND status IN ('open', 'returned_for_clarification', 'response_received')) AS active_rfis,
+               AND record_type_key = 'rfi'
+               AND workflow_status IN ('open', 'returned_for_clarification', 'response_received')) AS active_rfis,
            (SELECT COUNT(*) FROM project_memberships
              WHERE organization_id = ?1 AND project_id = ?2 AND status = 'active') AS team_members`,
       )
@@ -207,13 +208,14 @@ export class D1ProjectOverviewReadRepository {
   ): Promise<OverviewActiveRfi[]> {
     const result = await this.database
       .prepare(
-        `SELECT id AS rfi_id, rfi_number, subject AS title, status,
-                requested_response_date AS due_date, created_at
-         FROM rfi_records
+        `SELECT id AS rfi_id, record_number AS rfi_number, title,
+                workflow_status AS status, due_date, created_at
+         FROM records
          WHERE organization_id = ? AND project_id = ?
-           AND status IN ('open', 'returned_for_clarification', 'response_received')
-         ORDER BY CASE WHEN requested_response_date IS NULL THEN 1 ELSE 0 END,
-                  requested_response_date ASC, created_at DESC, id ASC
+           AND record_type_key = 'rfi'
+           AND workflow_status IN ('open', 'returned_for_clarification', 'response_received')
+         ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
+                  due_date ASC, created_at DESC, id ASC
          LIMIT ${String(ATTENTION_LIMIT)}`,
       )
       .bind(organizationId, projectId)
@@ -264,8 +266,9 @@ export class D1ProjectOverviewReadRepository {
                SELECT id FROM revision_files WHERE organization_id = ?1 AND project_id = ?2))
              OR (e.object_type = 'issuance' AND e.object_id IN (
                SELECT id FROM issuances WHERE organization_id = ?1 AND project_id = ?2))
-             OR (e.object_type = 'rfi' AND e.object_id IN (
-               SELECT id FROM rfi_records WHERE organization_id = ?1 AND project_id = ?2))
+              OR (e.object_type = 'rfi' AND e.object_id IN (
+                SELECT id FROM records
+                WHERE organization_id = ?1 AND project_id = ?2 AND record_type_key = 'rfi'))
              OR (e.object_type = 'project_contact' AND e.object_id IN (
                SELECT id FROM project_contacts WHERE organization_id = ?1 AND project_id = ?2))
            )

@@ -69,17 +69,18 @@ export class RfiTemplateBindingService {
     organizationId: string,
     templateVersionId: string | null,
   ): Promise<BoundRfiTemplate | null> {
-    // The bound version is discoverable from the current published template.
-    // (Historical/retired versions are out of scope for the Slice-1 read model.)
     const template = await this.templates.findByKey(
       organizationId,
       BASE_RFI_TEMPLATE_KEY,
     );
     if (!template) return null;
-    const bound = this.toBound(template.publishedVersion);
-    return templateVersionId && templateVersionId !== bound.templateVersionId
-      ? { ...bound, templateVersionId }
-      : bound;
+    if (!templateVersionId) return this.toBound(template.publishedVersion);
+    const exact = await this.templates.findVersionById(
+      organizationId,
+      templateVersionId,
+    );
+    if (!exact || exact.templateId !== template.id) return null;
+    return this.toBound(exact);
   }
 
   private toBound(version: TemplateVersion): BoundRfiTemplate {

@@ -22,6 +22,20 @@ export class RfiConflictError extends Error {
   }
 }
 
+export class RfiIssuanceUnavailableError extends Error {
+  constructor() {
+    super(
+      "RFI issuance is unavailable until the immutable revision and official artifact transaction is complete.",
+    );
+  }
+}
+
+export class RfiResponsibleContactError extends Error {
+  constructor() {
+    super("Responsible party must be an active contact for this project.");
+  }
+}
+
 // Normalized, server-derived RFI capabilities. Only capabilities that are
 // actually implemented and authoritative are ever returned to the browser.
 export type RfiCapability =

@@ -34,7 +34,6 @@ import { D1ProjectRfisReadRepository } from "../../infrastructure/db/d1/project-
 import { D1ProjectRecordSequencesRepository } from "../../infrastructure/db/d1/project-record-sequences-repository";
 import { D1RecordWorkspaceReadRepository } from "../../infrastructure/db/d1/record-workspace-read-repository";
 import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
-import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { D1RfiWorkspaceReadRepository } from "../../infrastructure/db/d1/rfi-workspace-read-repository";
@@ -85,16 +84,14 @@ export function createV2RouteDependencies(
     new D1ProjectsRepository(environment.DB),
     new D1ProjectMembershipsRepository(environment.DB),
   );
-  const rfiSequences = new D1RfiNumberSequencesRepository(environment.DB);
+  const projectContactsRepository = new D1ProjectContactsRepository(
+    environment.DB,
+  );
   const rfiResponses = new D1RfiResponsesRepository(environment.DB);
   const rfiAttachmentsRepository = new D1RfiAttachmentsRepository(
     environment.DB,
   );
-  const rfiRecords = new D1RfiRecordsRepository(
-    environment.DB,
-    rfiSequences,
-    rfiResponses,
-  );
+  const rfiRecords = new D1RfiRecordsRepository(environment.DB, rfiResponses);
   const templatesRepository = new D1TemplatesRepository(environment.DB);
   const rfiTemplateBinding = new RfiTemplateBindingService(templatesRepository);
   const recordRevisionSequences = new D1RecordRevisionSequencesRepository(
@@ -133,7 +130,7 @@ export function createV2RouteDependencies(
     projects,
     projectContacts: new ProjectContactService(
       projects,
-      new D1ProjectContactsRepository(environment.DB),
+      projectContactsRepository,
     ),
     rfis: new RfiService(
       projects,
@@ -141,6 +138,7 @@ export function createV2RouteDependencies(
       rfiResponses,
       rfiAttachmentsRepository,
       rfiTemplateBinding,
+      projectContactsRepository,
     ),
     rfiAttachments: new RfiAttachmentService(
       projects,

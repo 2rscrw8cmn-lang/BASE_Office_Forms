@@ -111,35 +111,61 @@ pagination.
     },
     "draftRevisions": [
       {
-        "revisionId": "uuid", "revisionNumber": 2, "revisionLabel": null,
-        "title": "…", "recordId": "uuid", "recordNumber": "R-001",
-        "recordTitle": "…", "projectId": "uuid", "projectNumber": "P-001",
-        "projectName": "…", "createdAt": "2026-07-20T10:00:00Z"
+        "revisionId": "uuid",
+        "revisionNumber": 2,
+        "revisionLabel": null,
+        "title": "…",
+        "recordId": "uuid",
+        "recordNumber": "R-001",
+        "recordTitle": "…",
+        "projectId": "uuid",
+        "projectNumber": "P-001",
+        "projectName": "…",
+        "createdAt": "2026-07-20T10:00:00Z"
       }
     ],
     "readyToIssue": [{ "…": "draft-revision fields", "fileCount": 3 }],
     "activeRfis": [
       {
-        "rfiId": "uuid", "rfiNumber": "RFI-014", "title": "…",
-        "status": "issued", "dueDate": "2026-07-27", "projectId": "uuid",
-        "projectNumber": "P-001", "projectName": "…", "createdAt": "…"
+        "rfiId": "uuid",
+        "rfiNumber": "RFI-014",
+        "title": "…",
+        "status": "issued",
+        "dueDate": "2026-07-27",
+        "projectId": "uuid",
+        "projectNumber": "P-001",
+        "projectName": "…",
+        "createdAt": "…"
       }
     ],
     "recentFiles": [
       {
-        "fileId": "uuid", "originalFilename": "…", "uploadedAt": "…",
-        "revisionId": "uuid", "revisionNumber": 2, "recordId": "uuid",
-        "recordTitle": "…", "projectId": "uuid", "projectNumber": "P-001",
+        "fileId": "uuid",
+        "originalFilename": "…",
+        "uploadedAt": "…",
+        "revisionId": "uuid",
+        "revisionNumber": 2,
+        "recordId": "uuid",
+        "recordTitle": "…",
+        "projectId": "uuid",
+        "projectNumber": "P-001",
         "projectName": "…"
       }
     ],
     "recentIssuances": [
       {
-        "issuanceId": "uuid", "issueNumber": "ISS-014",
-        "purpose": "for_construction", "issuedAt": "…",
-        "issuedByName": "…", "fileCount": 2, "recordId": "uuid",
-        "recordTitle": "…", "revisionId": "uuid", "projectId": "uuid",
-        "projectNumber": "P-001", "projectName": "…"
+        "issuanceId": "uuid",
+        "issueNumber": "ISS-014",
+        "purpose": "for_construction",
+        "issuedAt": "…",
+        "issuedByName": "…",
+        "fileCount": 2,
+        "recordId": "uuid",
+        "recordTitle": "…",
+        "revisionId": "uuid",
+        "projectId": "uuid",
+        "projectNumber": "P-001",
+        "projectName": "…"
       }
     ]
   }
@@ -163,18 +189,29 @@ capped at 5 items and recent activity at 10, all deterministically ordered.
   "data": {
     "project": { "…": "same shape as GET /api/v2/projects/{id}" },
     "counts": {
-      "records": 0, "draftRevisions": 0, "publishedRevisions": 0,
-      "files": 0, "issuances": 0, "activeRfis": 0, "teamMembers": 0
+      "records": 0,
+      "draftRevisions": 0,
+      "publishedRevisions": 0,
+      "files": 0,
+      "issuances": 0,
+      "activeRfis": 0,
+      "teamMembers": 0
     },
     "attention": {
-      "draftRevisions": [], "readyToIssue": [], "activeRfis": []
+      "draftRevisions": [],
+      "readyToIssue": [],
+      "activeRfis": []
     },
     "recentActivity": [
       {
-        "id": "uuid", "action": "revision.published",
-        "objectType": "revision", "objectId": "uuid",
-        "actorUserId": "uuid", "actorType": "user",
-        "actorDisplayName": "…", "occurredAt": "…"
+        "id": "uuid",
+        "action": "revision.published",
+        "objectType": "revision",
+        "objectId": "uuid",
+        "actorUserId": "uuid",
+        "actorType": "user",
+        "actorDisplayName": "…",
+        "occurredAt": "…"
       }
     ]
   }
@@ -347,9 +384,7 @@ Creates an unnumbered draft.
   "subject": "Hard Ceiling Lighting Quantity",
   "question": "The RCP shows three fixtures while the lighting plan shows two.",
   "suggestion": "Confirm the required quantity.",
-  "references": [
-    { "type": "drawing", "value": "A6.01" }
-  ],
+  "references": [{ "type": "drawing", "value": "A6.01" }],
   "responseDueDate": "2026-07-27",
   "responsiblePartyId": "contact_uuid",
   "templateVersionId": "template_version_uuid"
@@ -369,6 +404,10 @@ Updates a draft or fields explicitly mutable in the current state.
 Validates the draft and transitions to `ready_to_issue`.
 
 ### `POST /rfis/{rfiId}/issue`
+
+This route is fail-closed during Slice 1 and returns
+`RFI_ISSUANCE_NOT_AVAILABLE` without consuming a number or changing the record.
+It may be enabled only when the complete transaction below is implemented.
 
 Requires `Idempotency-Key`.
 

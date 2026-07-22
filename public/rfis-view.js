@@ -1,25 +1,12 @@
-// Project RFI register feature module. Renders below the shell-owned project
-// header/tabs: an authorized list of the project's RFIs as a semantic data table
-// on desktop and dedicated RFI cards on mobile, with a toolbar for search,
-// status / responsible-party / overdue filters, sorting, a live result count,
-// and a capability-gated "New RFI" action.
-//
-// One server read model (`getProjectRfis`) returns every row plus per-row
-// capabilities, lockVersion, and server-computed overdue/due-soon flags — the
-// table never issues a request per row. Search/filter/sort run in the browser
-// over that already-authorized data and are mirrored into the URL query string.
-// Short draft fields (subject, responsible party, requested response date) are
-// inline-editable in place through the authoritative RFI update service under
-// optimistic concurrency (lockVersion); long-form fields are edited in the
-// workspace. The table and workspace read the same authoritative RFI record.
+// Spreadsheet-style project RFI register. Draft cells commit deliberately on
+// Enter, Tab, Shift+Tab, or blur; optimistic-concurrency failures keep URL
+// state and keyboard focus intact while the latest row is reloaded.
 import {
   escapeHtml,
   formatDate,
   rfiStatusLabel,
   rfiStatusTone,
-  rfiNumberLabel,
 } from "./app-format.js";
-import { createRfiCreateForm } from "./rfi-create-form.js";
 
 const SORT_KEYS = {
   number: { label: "RFI number", defaultDir: "asc" },
@@ -37,9 +24,17 @@ const DUE_OPTIONS = [
 
 const EDITABLE_FIELDS = {
   subject: { label: "Subject", type: "text" },
-  responsibleParty: { label: "Responsible party", type: "text" },
-  requestedResponseDate: { label: "Requested response date", type: "date" },
+  responsiblePartyId: { label: "Responsible party", type: "contact" },
+  requestedResponseDate: { label: "Response due", type: "date" },
+  question: { label: "Question", type: "textarea" },
+  contractorSuggestion: { label: "Contractor suggestion", type: "textarea" },
+  drawingReferences: { label: "Drawing references", type: "text" },
+  specificationReferences: {
+    label: "Specification references",
+    type: "text",
+  },
 };
+const EDITABLE_ORDER = Object.keys(EDITABLE_FIELDS);
 
 function defaultFilters() {
   return {
@@ -66,13 +61,10 @@ function collateNumber(a, b) {
 function compareDate(a, b) {
   return (Date.parse(a || "") || 0) - (Date.parse(b || "") || 0);
 }
-
 function truncate(value, max = 140) {
   const text = String(value || "").trim();
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
-
 function rfiWorkspaceHref(projectId, rfiId) {
   return `/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`;
 }
@@ -89,18 +81,20 @@ export function createRfisView({
   let controller = null;
   let destroyed = false;
   let appWindow = null;
-  let openForm = null;
-  let editing = null; // { id, field }
-  const saving = new Set();
-  let rowError = null; // { id, message }
+  let editing = null; // { id, field, original, initialText, committing }
+  let selected = null; // { id, field }
+  let creating = false;
+  const cellStates = new Map(); // row:field -> { status, message }
 
-  async function reload() {
-    if (controller) controller.abort();
+  async function reload({ quiet = false } = {}) {
+    controller?.abort();
     controller = new AbortController();
-    state = { status: "loading", data: null, error: null };
-    editing = null;
-    rowError = null;
-    requestRender();
+    if (!quiet) {
+      state = { status: "loading", data: null, error: null };
+      editing = null;
+      selected = null;
+      requestRender();
+    }
     try {
       const { data } = await api.getProjectRfis(projectId, {
         signal: controller.signal,
@@ -111,6 +105,9 @@ export function createRfisView({
         data: {
           project: data?.project || null,
           rfis: Array.isArray(data?.rfis) ? data.rfis : [],
+          responsibleContacts: Array.isArray(data?.responsibleContacts)
+            ? data.responsibleContacts
+            : [],
           capabilities: data?.capabilities || {},
         },
         error: null,
@@ -118,6 +115,7 @@ export function createRfisView({
       requestRender();
     } catch (error) {
       if (destroyed || error.aborted) return;
+      if (quiet) throw error;
       state = {
         status:
           error.status === 403 || error.status === 404 ? "missing" : "error",
@@ -136,15 +134,21 @@ export function createRfisView({
   }
 
   function responsibleOptions(rfis) {
-    const present = [
-      ...new Set(rfis.map((rfi) => rfi.responsibleParty).filter(Boolean)),
-    ];
-    return present.sort(collate).map((value) => [value, value]);
+    const ids = new Set(
+      rfis.map((rfi) => rfi.responsiblePartyId).filter(Boolean),
+    );
+    const options = state.data.responsibleContacts
+      .filter((contact) => ids.has(contact.id))
+      .map((contact) => [contact.id, contact.name]);
+    if (rfis.some((rfi) => rfi.responsiblePartyLegacyText)) {
+      options.push(["unresolved", "Unresolved legacy value"]);
+    }
+    return options;
   }
 
   function statusOptions(rfis) {
-    const present = [...new Set(rfis.map((rfi) => rfi.status))];
-    const order = [
+    const present = new Set(rfis.map((rfi) => rfi.status));
+    return [
       "draft",
       "ready_to_issue",
       "open",
@@ -152,9 +156,8 @@ export function createRfisView({
       "returned_for_clarification",
       "closed",
       "void",
-    ];
-    return order
-      .filter((value) => present.includes(value))
+    ]
+      .filter((value) => present.has(value))
       .map((value) => [value, rfiStatusLabel(value)]);
   }
 
@@ -169,123 +172,150 @@ export function createRfisView({
 
   function applyFilters(rfis) {
     const query = filters.q.trim().toLowerCase();
-    const filtered = rfis.filter((rfi) => {
-      if (filters.status !== "all" && rfi.status !== filters.status)
-        return false;
-      if (
-        filters.responsible !== "all" &&
-        (rfi.responsibleParty || "") !== filters.responsible
-      )
-        return false;
-      if (filters.due === "overdue" && !rfi.isOverdue) return false;
-      if (filters.due === "due_soon" && !rfi.dueSoon) return false;
-      if (!query) return true;
-      const haystack = [
-        rfi.rfiNumber || "",
-        rfi.subject,
-        rfi.question,
-        rfi.responsibleParty || "",
-        rfi.latestResponse || "",
-        rfi.legacyReference || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-    return sortRfis(filtered);
+    return sortRfis(
+      rfis.filter((rfi) => {
+        if (filters.status !== "all" && rfi.status !== filters.status)
+          return false;
+        if (
+          filters.responsible !== "all" &&
+          (filters.responsible === "unresolved"
+            ? !rfi.responsiblePartyLegacyText
+            : rfi.responsiblePartyId !== filters.responsible)
+        )
+          return false;
+        if (filters.due === "overdue" && !rfi.isOverdue) return false;
+        if (filters.due === "due_soon" && !rfi.dueSoon) return false;
+        if (!query) return true;
+        return [
+          rfi.rfiNumber,
+          rfi.subject,
+          rfi.question,
+          rfi.contractorSuggestion,
+          rfi.drawingReferences,
+          rfi.specificationReferences,
+          rfi.responsibleParty,
+          rfi.latestResponse,
+          rfi.legacyReference,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
+      }),
+    );
   }
 
   function sortRfis(rfis) {
-    const dir = filters.direction === "asc" ? 1 : -1;
-    const key = filters.sort;
+    const direction = filters.direction === "asc" ? 1 : -1;
     return [...rfis].sort((a, b) => {
-      let cmp = 0;
-      if (key === "subject") cmp = collate(a.subject, b.subject);
-      else if (key === "updated") cmp = compareDate(a.updatedAt, b.updatedAt);
-      else if (key === "created") cmp = compareDate(a.createdAt, b.createdAt);
-      else if (key === "due")
-        cmp = compareDate(a.requestedResponseDate, b.requestedResponseDate);
-      else cmp = collateNumber(a.rfiNumber || "~", b.rfiNumber || "~");
-      const primary = cmp * dir;
-      if (primary !== 0) return primary;
-      return String(a.id).localeCompare(String(b.id));
+      let comparison = 0;
+      if (filters.sort === "subject")
+        comparison = collate(a.subject, b.subject);
+      else if (filters.sort === "updated")
+        comparison = compareDate(a.updatedAt, b.updatedAt);
+      else if (filters.sort === "created")
+        comparison = compareDate(a.createdAt, b.createdAt);
+      else if (filters.sort === "due")
+        comparison = compareDate(
+          a.requestedResponseDate,
+          b.requestedResponseDate,
+        );
+      else comparison = collateNumber(a.rfiNumber || "~", b.rfiNumber || "~");
+      return comparison
+        ? comparison * direction
+        : String(a.id).localeCompare(String(b.id));
     });
   }
 
-  // ---- markup -----------------------------------------------------------
-
-  function statusCell(rfi) {
-    const flags = [];
-    if (rfi.isOverdue)
-      flags.push(`<span class="rfi-flag rfi-flag-overdue">Overdue</span>`);
-    else if (rfi.dueSoon)
-      flags.push(`<span class="rfi-flag rfi-flag-soon">Due soon</span>`);
-    return `<span class="status-badge status-${rfiStatusTone(rfi.status)}">${escapeHtml(rfiStatusLabel(rfi.status))}</span>${flags.join("")}`;
-  }
-
   function numberCell(rfi) {
+    const reserved = rfi.issuanceReconciliationState === "legacy_incomplete";
     const number = rfi.rfiNumber
-      ? `<span class="rfi-number">${escapeHtml(rfi.rfiNumber)}</span>`
-      : `<span class="rfi-number rfi-number-draft">Unnumbered Draft</span>`;
+      ? `<span class="rfi-number">${reserved ? "Reserved " : ""}${escapeHtml(rfi.rfiNumber)}</span>`
+      : '<span class="rfi-number rfi-number-draft">Unnumbered Draft</span>';
     const legacy = rfi.legacyReference
-      ? `<span class="rfi-legacy" title="Imported legacy reference">Legacy ${escapeHtml(rfi.legacyReference)}</span>`
+      ? `<span class="rfi-legacy">Legacy ${escapeHtml(rfi.legacyReference)}</span>`
       : "";
     return `${number}${legacy}`;
   }
 
-  // An editable short-field cell. When this cell is the active edit target it
-  // renders an input; otherwise the value plus an edit affordance (draft rows
-  // with update capability only). Non-editable rows render plain text.
-  function editableCell(rfi, field) {
-    const meta = EDITABLE_FIELDS[field];
-    const raw = rfi[field];
-    const display =
-      field === "requestedResponseDate"
-        ? formatDate(raw) || "—"
-        : escapeHtml(raw || "—");
-    const editable = rfi.capabilities?.updateDraft === true;
-    if (editing && editing.id === rfi.id && editing.field === field) {
-      const value = escapeHtml(raw || "");
-      const inputType = meta.type === "date" ? "date" : "text";
-      return `<form class="rfi-inline-form" data-inline-form data-id="${escapeHtml(rfi.id)}" data-field="${field}">
-        <input class="rfi-inline-input" type="${inputType}" name="value" value="${value}"
-          aria-label="${escapeHtml(meta.label)}" />
-        <button type="submit" class="rfi-inline-save" aria-label="Save">✓</button>
-        <button type="button" class="rfi-inline-cancel" data-inline-cancel aria-label="Cancel">✕</button>
-      </form>`;
+  function statusCell(rfi) {
+    if (rfi.issuanceReconciliationState === "legacy_incomplete") {
+      return '<span class="status-badge status-attention">Needs issue repair</span>';
     }
-    const busy = saving.has(`${rfi.id}:${field}`);
-    const error =
-      rowError && rowError.id === rfi.id && rowError.field === field
-        ? `<span class="rfi-inline-error" role="alert">${escapeHtml(rowError.message)}</span>`
+    const flag = rfi.isOverdue
+      ? '<span class="rfi-flag rfi-flag-overdue">Overdue</span>'
+      : rfi.dueSoon
+        ? '<span class="rfi-flag rfi-flag-soon">Due soon</span>'
         : "";
-    if (!editable) {
-      return field === "requestedResponseDate"
-        ? `${display}`
-        : `<span class="rfi-cell-text">${display}</span>`;
+    return `<span class="status-badge status-${rfiStatusTone(rfi.status)}">${escapeHtml(rfiStatusLabel(rfi.status))}</span>${flag}`;
+  }
+
+  function rawValue(rfi, field) {
+    return rfi[field] ?? "";
+  }
+
+  function displayValue(rfi, field) {
+    if (field === "responsiblePartyId") {
+      if (rfi.responsiblePartyLegacyText)
+        return `${rfi.responsiblePartyLegacyText} (unresolved)`;
+      return rfi.responsibleParty || "—";
     }
-    return `<span class="rfi-editable${busy ? " is-saving" : ""}">
-      <span class="rfi-cell-text">${display}</span>
-      <button type="button" class="rfi-edit-trigger" data-edit="${escapeHtml(rfi.id)}" data-field="${field}"
-        aria-label="Edit ${escapeHtml(meta.label)}"${busy ? " disabled" : ""}>${busy ? "…" : "Edit"}</button>
-      ${error}
-    </span>`;
+    if (field === "requestedResponseDate") return formatDate(rfi[field]) || "—";
+    return rfi[field] || "—";
+  }
+
+  function editorMarkup(rfi, field) {
+    const meta = EDITABLE_FIELDS[field];
+    const value = rawValue(rfi, field);
+    if (meta.type === "contact") {
+      return `<select class="rfi-cell-editor" data-cell-editor aria-label="${escapeHtml(meta.label)}">
+        <option value="">Unassigned</option>
+        ${state.data.responsibleContacts
+          .map(
+            (contact) =>
+              `<option value="${escapeHtml(contact.id)}"${contact.id === value ? " selected" : ""}>${escapeHtml(contact.name)}${contact.companyName ? ` — ${escapeHtml(contact.companyName)}` : ""}</option>`,
+          )
+          .join("")}
+      </select>`;
+    }
+    if (meta.type === "textarea") {
+      return `<textarea class="rfi-cell-editor" data-cell-editor rows="3" aria-label="${escapeHtml(meta.label)}">${escapeHtml(editing?.initialText ?? value)}</textarea>`;
+    }
+    return `<input class="rfi-cell-editor" data-cell-editor type="${meta.type}" value="${escapeHtml(editing?.initialText ?? value)}" aria-label="${escapeHtml(meta.label)}">`;
+  }
+
+  function editableCell(rfi, field, className = "") {
+    const active = selected?.id === rfi.id && selected?.field === field;
+    const isEditing = editing?.id === rfi.id && editing?.field === field;
+    const cellState = cellStates.get(`${rfi.id}:${field}`);
+    const editable = rfi.capabilities?.updateDraft === true;
+    const status = cellState
+      ? `<span class="rfi-cell-save-state is-${cellState.status}" role="${cellState.status === "failed" ? "alert" : "status"}">${escapeHtml(cellState.message)}</span>`
+      : "";
+    return `<td class="rfi-grid-cell ${className}${active ? " is-selected" : ""}${isEditing ? " is-editing" : ""}" data-cell data-id="${escapeHtml(rfi.id)}" data-field="${field}" tabindex="${editable ? "0" : "-1"}" aria-readonly="${editable ? "false" : "true"}"${active ? ' aria-selected="true"' : ""}>
+      ${isEditing ? editorMarkup(rfi, field) : `<span class="rfi-cell-text" title="${escapeHtml(displayValue(rfi, field))}">${escapeHtml(displayValue(rfi, field))}</span>`}
+      ${status}
+    </td>`;
   }
 
   function tableRows(rfis) {
     return rfis
       .map((rfi) => {
         const href = rfiWorkspaceHref(projectId, rfi.id);
-        return `<tr class="app-data-row" data-app-row data-href="${href}">
-          <th scope="row" class="rfi-cell-number">${numberCell(rfi)}</th>
-          <td class="rfi-cell-subject"><a href="${href}" data-app-link>${editableCell(rfi, "subject")}</a></td>
+        return `<tr class="app-data-row" data-rfi-row="${escapeHtml(rfi.id)}">
+          <th scope="row" class="rfi-cell-number"><a href="${href}" data-app-link>${numberCell(rfi)}</a></th>
+          ${editableCell(rfi, "subject", "rfi-cell-subject")}
           <td class="rfi-cell-status">${statusCell(rfi)}</td>
-          <td class="rfi-cell-responsible">${editableCell(rfi, "responsibleParty")}</td>
+          ${editableCell(rfi, "responsiblePartyId", "rfi-cell-responsible")}
+          ${editableCell(rfi, "requestedResponseDate", "rfi-cell-due")}
+          ${editableCell(rfi, "question", "rfi-cell-long")}
+          ${editableCell(rfi, "contractorSuggestion", "rfi-cell-long")}
+          ${editableCell(rfi, "drawingReferences", "rfi-cell-reference")}
+          ${editableCell(rfi, "specificationReferences", "rfi-cell-reference")}
+          <td class="rfi-cell-long"><span class="rfi-cell-text" title="${escapeHtml(rfi.latestResponse || "")}">${escapeHtml(truncate(rfi.latestResponse) || "—")}</span></td>
           <td class="cell-date">${escapeHtml(formatDate(rfi.issuedAt) || "—")}</td>
-          <td class="rfi-cell-due">${editableCell(rfi, "requestedResponseDate")}</td>
-          <td class="rfi-cell-long">${escapeHtml(truncate(rfi.question)) || "—"}</td>
-          <td class="rfi-cell-long">${rfi.latestResponse ? escapeHtml(truncate(rfi.latestResponse)) : "—"}</td>
           <td class="cell-date">${escapeHtml(formatDate(rfi.updatedAt) || "—")}</td>
+          <td class="cell-open"><a class="open-link" href="${href}" data-app-link aria-label="Open ${escapeHtml(rfi.subject)}">Open <span aria-hidden="true">→</span></a></td>
         </tr>`;
       })
       .join("");
@@ -296,14 +326,14 @@ export function createRfisView({
       .map((rfi) => {
         const href = rfiWorkspaceHref(projectId, rfi.id);
         return `<li class="rfi-card">
-          <a class="rfi-card-main" href="${href}" data-app-link aria-label="Open RFI ${escapeHtml(rfi.subject)}">
-            <span class="rfi-card-top">${numberCell(rfi)}<span class="status-badge status-${rfiStatusTone(rfi.status)}">${escapeHtml(rfiStatusLabel(rfi.status))}</span></span>
+          <a class="rfi-card-main" href="${href}" data-app-link>
+            <span class="rfi-card-top">${numberCell(rfi)}${statusCell(rfi)}</span>
             <span class="rfi-card-subject">${escapeHtml(rfi.subject)}</span>
-            <span class="rfi-card-question">${escapeHtml(truncate(rfi.question, 120)) || ""}</span>
+            <span class="rfi-card-question">${escapeHtml(truncate(rfi.question, 120))}</span>
           </a>
           <dl class="rfi-card-facts">
-            <div><dt>Responsible</dt><dd>${escapeHtml(rfi.responsibleParty || "—")}</dd></div>
-            <div><dt>Response due</dt><dd>${escapeHtml(formatDate(rfi.requestedResponseDate) || "—")}${rfi.isOverdue ? ' <span class="rfi-flag rfi-flag-overdue">Overdue</span>' : rfi.dueSoon ? ' <span class="rfi-flag rfi-flag-soon">Due soon</span>' : ""}</dd></div>
+            <div><dt>Responsible</dt><dd>${escapeHtml(displayValue(rfi, "responsiblePartyId"))}</dd></div>
+            <div><dt>Response due</dt><dd>${escapeHtml(formatDate(rfi.requestedResponseDate) || "—")}</dd></div>
             <div><dt>Updated</dt><dd>${escapeHtml(formatDate(rfi.updatedAt) || "—")}</dd></div>
           </dl>
         </li>`;
@@ -314,124 +344,82 @@ export function createRfisView({
   function resultsMarkup(rfis) {
     const filtered = applyFilters(rfis);
     if (!rfis.length) {
-      return `<div class="records-empty"><h3>No RFIs yet</h3><p class="section-empty">Create the first RFI draft for this project to begin tracking questions and responses.</p>${
-        canCreate()
-          ? `<button class="secondary-button" type="button" data-create-rfi>New RFI</button>`
-          : ""
-      }</div>`;
+      return `<div class="records-empty"><h3>No RFIs yet</h3><p>Create the first working draft.</p>${canCreate() ? '<button class="secondary-button" type="button" data-create-rfi>Add RFI</button>' : ""}</div>`;
     }
     if (!filtered.length) {
-      return `<div class="records-empty" role="status"><p class="section-empty">No RFIs match these filters.</p>
-        <button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>`;
+      return '<div class="records-empty" role="status"><p>No RFIs match these filters.</p><button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>';
     }
-    return `<div class="records-table-wrap rfi-table-wrap" role="region" aria-label="Project RFIs" tabindex="0">
-        <table class="records-table app-data-table rfi-table">
-          <caption class="sr-only">RFIs you can access in this project</caption>
-          <thead><tr>
-            <th scope="col">RFI No.</th>
-            <th scope="col">Subject</th>
-            <th scope="col">Status</th>
-            <th scope="col">Responsible Party</th>
-            <th scope="col">Issued</th>
-            <th scope="col">Response Due</th>
-            <th scope="col">Question</th>
-            <th scope="col">Response</th>
-            <th scope="col">Updated</th>
-          </tr></thead>
-          <tbody>${tableRows(filtered)}</tbody>
-        </table>
-      </div>
-      <ul class="rfi-cards" aria-label="Project RFIs">${cards(filtered)}</ul>`;
+    return `<div class="records-table-wrap rfi-table-wrap" role="region" aria-label="Project RFI working register" tabindex="0">
+      <table class="records-table app-data-table rfi-table" role="grid">
+        <caption class="sr-only">Editable project RFI register</caption>
+        <thead><tr>
+          <th>RFI No.</th><th>Subject</th><th>Status</th><th>Responsible Party</th>
+          <th>Response Due</th><th>Question</th><th>Contractor Suggestion</th>
+          <th>Drawing References</th><th>Specification References</th>
+          <th>Response</th><th>Issued</th><th>Updated</th><th><span class="sr-only">Open</span></th>
+        </tr></thead>
+        <tbody>${tableRows(filtered)}</tbody>
+      </table>
+    </div>
+    <ul class="rfi-cards" aria-label="Project RFIs">${cards(filtered)}</ul>`;
   }
 
-  function selectMarkup(id, label, options, selected) {
-    return `<div class="app-field app-filter-field app-register-control">
-        <label class="sr-only" for="${id}">${escapeHtml(label)}</label>
-        <select id="${id}">
-          <option value="all"${selected === "all" ? " selected" : ""}>${escapeHtml(label)}</option>
-          ${options
-            .map(
-              ([value, text]) =>
-                `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(text)}</option>`,
-            )
-            .join("")}
-        </select>
-      </div>`;
+  function selectMarkup(id, label, options, value) {
+    return `<div class="app-field app-filter-field app-register-control"><label class="sr-only" for="${id}">${escapeHtml(label)}</label><select id="${id}"><option value="all">${escapeHtml(label)}</option>${options.map(([key, text]) => `<option value="${escapeHtml(key)}"${key === value ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></div>`;
   }
 
   function toolbar(rfis) {
     return `<div class="app-register-toolbar rfi-toolbar">
       <div class="app-register-controls">
-        <div class="app-field app-search-field app-register-search app-register-control">
-          <label class="sr-only" for="rfi-search">Search RFIs</label>
-          <input id="rfi-search" type="search" placeholder="Search RFIs..." autocomplete="off" value="${escapeHtml(filters.q)}" />
-        </div>
+        <div class="app-field app-search-field app-register-search app-register-control"><label class="sr-only" for="rfi-search">Search RFIs</label><input id="rfi-search" type="search" placeholder="Search RFIs…" value="${escapeHtml(filters.q)}"></div>
         <div class="app-register-filters">
           ${selectMarkup("rfi-status", "All statuses", statusOptions(rfis), filters.status)}
           ${selectMarkup("rfi-responsible", "All responsible parties", responsibleOptions(rfis), filters.responsible)}
-          <div class="app-field app-filter-field app-register-control">
-            <label class="sr-only" for="rfi-due">Due status</label>
-            <select id="rfi-due">
-              ${DUE_OPTIONS.map(([value, text]) => `<option value="${value}"${value === filters.due ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="app-field app-filter-field app-register-control app-register-sort">
-            <label class="sr-only" for="rfi-sort">Sort RFIs</label>
-            <select id="rfi-sort">
-              ${Object.entries(SORT_KEYS).map(([value, { label }]) => `<option value="${value}"${value === filters.sort ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-            </select>
-          </div>
+          ${selectMarkup("rfi-due", "Any due status", DUE_OPTIONS.slice(1), filters.due)}
+          ${selectMarkup(
+            "rfi-sort",
+            "Sort",
+            Object.entries(SORT_KEYS).map(([key, meta]) => [key, meta.label]),
+            filters.sort,
+          )}
         </div>
       </div>
-      <div class="app-register-filter-state">
-        <button class="text-link" type="button" data-clear-filters${hasActiveFilters() ? "" : " hidden"}>Clear all</button>
-        <p class="app-register-result-count" aria-live="polite" data-result-count></p>
-      </div>
+      <div class="app-register-filter-state"><button class="text-link" type="button" data-clear-filters${hasActiveFilters() ? "" : " hidden"}>Clear all</button><p class="app-register-result-count" aria-live="polite" data-result-count></p></div>
     </div>`;
   }
 
   function heading() {
     const total = state.status === "loaded" ? state.data.rfis.length : null;
-    return `<header class="app-register-header rfi-heading app-container-register">
-        <div class="app-register-title">
-          <h2 id="rfis-title" tabindex="-1">RFIs</h2>
-          ${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}
-        </div>${
-          canCreate()
-            ? `<button class="primary-button" type="button" data-create-rfi>New RFI</button>`
-            : ""
-        }
-      </header>`;
-  }
-
-  function loadingSkeleton() {
-    const rows = Array.from({ length: 5 })
-      .map(
-        () =>
-          `<div class="records-skeleton-row"><span class="skeleton-line skeleton-medium"></span><span class="skeleton-line skeleton-short"></span></div>`,
-      )
-      .join("");
-    return `<section class="records-loading" aria-busy="true" aria-label="Loading RFIs">${rows}</section>`;
+    return `<header class="app-register-header rfi-heading app-container-register"><div class="app-register-title"><div><h2 id="rfis-title" tabindex="-1">RFIs</h2><p class="rfi-register-hint">Select a draft cell, then press Enter or type to edit.</p></div>${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}</div>${canCreate() ? `<button class="primary-button" type="button" data-create-rfi${creating ? " disabled" : ""}>${creating ? "Adding…" : "Add RFI"}</button>` : ""}</header>`;
   }
 
   function body() {
     if (state.status === "loading")
-      return `<div class="records-body app-container-register">${loadingSkeleton()}</div>`;
+      return '<div class="records-body app-container-register"><section class="records-loading" aria-busy="true"><span class="skeleton-line"></span><span class="skeleton-line"></span></section></div>';
     if (state.status === "missing")
-      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
-          <p class="app-eyebrow">Unavailable</p>
-          <p>These RFIs are unavailable or you do not have access to this project.</p>
-        </section></div>`;
-    if (state.status === "error") {
-      const requestId = state.error?.requestId;
-      return `<div class="records-body app-container-register"><section class="inline-error" role="alert">
-          <p class="app-eyebrow">Unable to load</p>
-          <p>The RFIs could not be loaded. No changes were made.</p>
-          ${requestId ? `<p class="request-id">Request ID <code>${escapeHtml(requestId)}</code></p>` : ""}
-          <div class="state-actions"><button class="secondary-button" type="button" data-rfis-retry>Try again</button></div>
-        </section></div>`;
-    }
+      return '<div class="records-body app-container-register"><section class="inline-error" role="alert"><p>These RFIs are unavailable or you do not have access.</p></section></div>';
+    if (state.status === "error")
+      return `<div class="records-body app-container-register"><section class="inline-error" role="alert"><p>The RFIs could not be loaded. No changes were made.</p><button class="secondary-button" type="button" data-rfis-retry>Try again</button></section></div>`;
     return `<div class="records-body app-container-register">${toolbar(state.data.rfis)}<div class="records-results" data-results></div></div>`;
+  }
+
+  function focusActive(container) {
+    const matchingCell = (reference) =>
+      [...container.querySelectorAll("[data-cell]")].find(
+        (candidate) =>
+          candidate.getAttribute("data-id") === reference.id &&
+          candidate.getAttribute("data-field") === reference.field,
+      );
+    if (editing) {
+      const editor = matchingCell(editing)?.querySelector("[data-cell-editor]");
+      editor?.focus();
+      if (editor && editing.initialText == null && editor.select)
+        editor.select();
+      return;
+    }
+    if (selected) {
+      matchingCell(selected)?.focus();
+    }
   }
 
   function updateResults(container) {
@@ -440,142 +428,241 @@ export function createRfisView({
     if (region) region.innerHTML = resultsMarkup(state.data.rfis);
     const filtered = applyFilters(state.data.rfis);
     const total = state.data.rfis.length;
-    const countEl = container.querySelector("[data-result-count]");
-    if (countEl)
-      countEl.textContent = hasActiveFilters()
+    const count = container.querySelector("[data-result-count]");
+    if (count)
+      count.textContent = hasActiveFilters()
         ? `${filtered.length} of ${total} RFI${total === 1 ? "" : "s"}`
         : "";
-    const clear = container.querySelector(".rfi-toolbar [data-clear-filters]");
-    if (clear) clear.hidden = !hasActiveFilters();
+    const headingCount = container.querySelector(".app-register-count");
+    if (headingCount)
+      headingCount.textContent = `${total} RFI${total === 1 ? "" : "s"}`;
     bindResults(container);
-    // Focus an active inline-edit input after re-render.
-    const activeInput = container.querySelector("[data-inline-form] input");
-    if (activeInput) {
-      activeInput.focus();
-      activeInput.select?.();
-    }
+    focusActive(container);
   }
 
-  // ---- inline editing ---------------------------------------------------
-
-  function startEdit(container, id, field) {
-    if (saving.size) return;
-    editing = { id, field };
-    rowError = null;
+  function startEdit(container, id, field, initialText = null) {
+    const rfi = state.data.rfis.find((item) => item.id === id);
+    if (!rfi?.capabilities?.updateDraft) return;
+    selected = { id, field };
+    editing = {
+      id,
+      field,
+      original: String(rawValue(rfi, field)),
+      initialText,
+      committing: false,
+    };
+    cellStates.delete(`${id}:${field}`);
     updateResults(container);
   }
 
   function cancelEdit(container) {
+    if (!editing) return;
+    selected = { id: editing.id, field: editing.field };
     editing = null;
     updateResults(container);
   }
 
-  async function commitEdit(container, form) {
-    const id = form.getAttribute("data-id");
-    const field = form.getAttribute("data-field");
-    const rfi = state.data.rfis.find((item) => item.id === id);
-    if (!rfi) return;
-    const input = form.querySelector("input[name=value]");
-    const nextValue = input.value.trim();
-    const currentValue = rfi[field] || "";
-    editing = null;
-    if (nextValue === currentValue) {
+  function orderedCellRefs() {
+    const rows = applyFilters(state.data.rfis).filter(
+      (rfi) => rfi.capabilities?.updateDraft,
+    );
+    return rows.flatMap((rfi) =>
+      EDITABLE_ORDER.map((field) => ({ id: rfi.id, field })),
+    );
+  }
+
+  function adjacentCell(id, field, direction) {
+    const cells = orderedCellRefs();
+    const index = cells.findIndex(
+      (cell) => cell.id === id && cell.field === field,
+    );
+    return cells[index + direction] || cells[index] || null;
+  }
+
+  function validationMessage(field, value) {
+    if ((field === "subject" || field === "question") && !value) {
+      return `${EDITABLE_FIELDS[field].label} is required.`;
+    }
+    if (
+      field === "requestedResponseDate" &&
+      value &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) {
+      return "Response due must be a valid date.";
+    }
+    return null;
+  }
+
+  async function refreshLatestRows() {
+    const { data } = await api.getProjectRfis(projectId);
+    state.data.rfis = Array.isArray(data?.rfis) ? data.rfis : state.data.rfis;
+    state.data.responsibleContacts = Array.isArray(data?.responsibleContacts)
+      ? data.responsibleContacts
+      : state.data.responsibleContacts;
+  }
+
+  async function commitEdit(container, { move = 0, target = null } = {}) {
+    if (!editing || editing.committing) return;
+    const edit = editing;
+    const cell = [...container.querySelectorAll("[data-cell]")].find(
+      (candidate) =>
+        candidate.getAttribute("data-id") === edit.id &&
+        candidate.getAttribute("data-field") === edit.field,
+    );
+    const editor = cell?.querySelector("[data-cell-editor]");
+    if (!editor) return;
+    const nextValue = String(editor.value ?? "").trim();
+    const normalized = nextValue || null;
+    const current = edit.original || null;
+    const destination =
+      target || (move ? adjacentCell(edit.id, edit.field, move) : selected);
+    const validation = validationMessage(edit.field, nextValue);
+    if (validation) {
+      cellStates.set(`${edit.id}:${edit.field}`, {
+        status: "failed",
+        message: validation,
+      });
+      announce?.(validation);
       updateResults(container);
       return;
     }
-    const key = `${id}:${field}`;
-    saving.add(key);
-    rowError = null;
+    editing.committing = true;
+    if (normalized === current) {
+      editing = null;
+      selected = destination || { id: edit.id, field: edit.field };
+      updateResults(container);
+      return;
+    }
+    const key = `${edit.id}:${edit.field}`;
+    const rfi = state.data.rfis.find((item) => item.id === edit.id);
+    editing = null;
+    selected = destination || { id: edit.id, field: edit.field };
+    cellStates.set(key, { status: "saving", message: "Saving…" });
     updateResults(container);
     announce?.("Saving…");
     try {
-      const { data } = await api.updateRfi(projectId, id, {
-        [field]: nextValue || null,
+      const { data } = await api.updateRfi(projectId, edit.id, {
+        [edit.field]: normalized,
         lockVersion: rfi.lockVersion,
       });
-      saving.delete(key);
-      Object.assign(rfi, {
-        [field]: data?.[field] ?? (nextValue || null),
-        lockVersion: data?.lockVersion ?? rfi.lockVersion,
-        updatedAt: data?.updatedAt ?? rfi.updatedAt,
-      });
-      announce?.(`${EDITABLE_FIELDS[field].label} saved.`);
+      Object.assign(rfi, data || {});
+      cellStates.set(key, { status: "saved", message: "Saved" });
+      announce?.(`${EDITABLE_FIELDS[edit.field].label} saved.`);
       updateResults(container);
+      appWindow?.setTimeout(() => {
+        if (cellStates.get(key)?.status === "saved") {
+          cellStates.delete(key);
+          if (!destroyed) updateResults(container);
+        }
+      }, 1400);
     } catch (error) {
-      saving.delete(key);
+      let message = error.message || "Could not save. Try again.";
       if (error.status === 409) {
-        announce?.("This RFI changed elsewhere. Reloading the latest.");
-        await reload();
-        return;
+        try {
+          await refreshLatestRows();
+        } catch {
+          // Keep the current row if the refresh itself fails.
+        }
+        message = "Changed elsewhere. Latest value loaded; review and retry.";
+      } else if (error.status === 403) {
+        message = "You no longer have permission to edit this draft.";
       }
-      rowError = {
-        id,
-        field,
-        message: error.message || "Could not save. Try again.",
-      };
-      announce?.("The change could not be saved.");
+      cellStates.set(key, { status: "failed", message });
+      announce?.(message);
       updateResults(container);
     }
   }
 
+  function moveSelection(container, id, field, key) {
+    const cells = orderedCellRefs();
+    const index = cells.findIndex(
+      (cell) => cell.id === id && cell.field === field,
+    );
+    if (index < 0) return;
+    const columns = EDITABLE_ORDER.length;
+    const delta =
+      key === "ArrowLeft"
+        ? -1
+        : key === "ArrowRight"
+          ? 1
+          : key === "ArrowUp"
+            ? -columns
+            : columns;
+    selected = cells[index + delta] || cells[index];
+    updateResults(container);
+  }
+
   function bindResults(container) {
-    container.querySelectorAll("[data-results] a[data-app-link]").forEach((link) =>
-      link.addEventListener("click", (event) => {
-        if (
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey ||
-          event.target.closest("[data-edit], [data-inline-form]")
-        )
-          return;
-        event.preventDefault();
-        navigate(link.getAttribute("href"));
-      }),
-    );
-    container.querySelectorAll("[data-results] [data-app-row]").forEach((row) =>
-      row.addEventListener("click", (event) => {
-        if (
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey ||
-          event.target.closest(
-            "a, button, input, select, textarea, label, [data-inline-form]",
+    container
+      .querySelectorAll("[data-results] a[data-app-link]")
+      .forEach((link) =>
+        link.addEventListener("click", (event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey
           )
-        )
+            return;
+          event.preventDefault();
+          navigate(link.getAttribute("href"));
+        }),
+      );
+    container.querySelectorAll("[data-cell]").forEach((cell) => {
+      const id = cell.getAttribute("data-id");
+      const field = cell.getAttribute("data-field");
+      cell.addEventListener("click", () => {
+        if (editing && (editing.id !== id || editing.field !== field)) {
+          commitEdit(container, { target: { id, field } });
           return;
-        const selection = row.ownerDocument.defaultView?.getSelection?.();
-        if (selection && !selection.isCollapsed && selection.toString()) return;
-        navigate(row.getAttribute("data-href"));
-      }),
-    );
-    container.querySelectorAll("[data-edit]").forEach((button) =>
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        startEdit(
-          container,
-          button.getAttribute("data-edit"),
-          button.getAttribute("data-field"),
-        );
-      }),
-    );
-    container.querySelectorAll("[data-inline-form]").forEach((form) => {
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        commitEdit(container, form);
+        }
+        if (!editing) {
+          selected = { id, field };
+          updateResults(container);
+        }
       });
-      form
-        .querySelector("[data-inline-cancel]")
-        ?.addEventListener("click", () => cancelEdit(container));
-      form.querySelector("input")?.addEventListener("keydown", (event) => {
+      cell.addEventListener("keydown", (event) => {
+        if (editing?.id === id && editing?.field === field) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          startEdit(container, id, field);
+        } else if (
+          ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(
+            event.key,
+          )
+        ) {
+          event.preventDefault();
+          moveSelection(container, id, field, event.key);
+        } else if (
+          event.key.length === 1 &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          EDITABLE_FIELDS[field].type !== "contact" &&
+          EDITABLE_FIELDS[field].type !== "date"
+        ) {
+          event.preventDefault();
+          startEdit(container, id, field, event.key);
+        }
+      });
+    });
+    container.querySelectorAll("[data-cell-editor]").forEach((editor) => {
+      editor.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           event.preventDefault();
           cancelEdit(container);
+        } else if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          commitEdit(container);
+        } else if (event.key === "Tab") {
+          event.preventDefault();
+          commitEdit(container, { move: event.shiftKey ? -1 : 1 });
         }
+      });
+      editor.addEventListener("blur", () => {
+        appWindow?.setTimeout(() => {
+          if (editing && !editing.committing) commitEdit(container);
+        }, 0);
       });
     });
     container
@@ -585,10 +672,8 @@ export function createRfisView({
       );
     container
       .querySelector("[data-results] [data-create-rfi]")
-      ?.addEventListener("click", () => openCreate(container));
+      ?.addEventListener("click", () => addRfi(container));
   }
-
-  // ---- URL sync ---------------------------------------------------------
 
   function readFiltersFromUrl() {
     const params = new URLSearchParams(appWindow?.location.search || "");
@@ -596,23 +681,20 @@ export function createRfisView({
     next.q = params.get("q") ?? "";
     next.status = params.get("status") ?? "all";
     next.responsible = params.get("responsible") ?? "all";
-    const due = params.get("due");
-    next.due = due === "overdue" || due === "due_soon" ? due : "all";
-    const sort = params.get("sort");
-    next.sort = SORT_KEYS[sort] ? sort : "number";
-    const direction = params.get("direction");
-    next.direction =
-      direction === "asc" || direction === "desc"
-        ? direction
-        : SORT_KEYS[next.sort].defaultDir;
+    next.due = ["overdue", "due_soon"].includes(params.get("due"))
+      ? params.get("due")
+      : "all";
+    next.sort = SORT_KEYS[params.get("sort")] ? params.get("sort") : "number";
+    next.direction = ["asc", "desc"].includes(params.get("direction"))
+      ? params.get("direction")
+      : SORT_KEYS[next.sort].defaultDir;
     filters = next;
   }
 
   function syncUrl(push) {
     if (!appWindow) return;
     const params = new URLSearchParams();
-    const trimmed = filters.q.trim();
-    if (trimmed) params.set("q", trimmed);
+    if (filters.q.trim()) params.set("q", filters.q.trim());
     if (filters.status !== "all") params.set("status", filters.status);
     if (filters.responsible !== "all")
       params.set("responsible", filters.responsible);
@@ -621,8 +703,11 @@ export function createRfisView({
     if (filters.direction !== SORT_KEYS[filters.sort].defaultDir)
       params.set("direction", filters.direction);
     const query = params.toString();
-    const url = `${appWindow.location.pathname}${query ? `?${query}` : ""}${appWindow.location.hash}`;
-    appWindow.history[push ? "pushState" : "replaceState"]({}, "", url);
+    appWindow.history[push ? "pushState" : "replaceState"](
+      {},
+      "",
+      `${appWindow.location.pathname}${query ? `?${query}` : ""}${appWindow.location.hash}`,
+    );
   }
 
   function clearFilters(container) {
@@ -630,42 +715,66 @@ export function createRfisView({
     filters = { ...defaultFilters(), sort, direction };
     syncUrl(true);
     updateResults(container);
-    announce?.("Filters cleared.");
   }
 
-  function openCreate(container) {
-    if (!canCreate() || openForm) return;
-    openForm = createRfiCreateForm({
-      api,
-      projectId,
-      document: container.ownerDocument,
-      announce,
-      onSuccess: (rfi) => {
-        openForm = null;
-        if (rfi?.id) navigate(rfiWorkspaceHref(projectId, rfi.id));
-      },
-      onClose: () => {
-        openForm = null;
-      },
-    });
+  async function addRfi(container) {
+    if (!canCreate() || creating) return;
+    creating = true;
+    requestRender();
+    try {
+      const { data } = await api.createRfi(projectId, {
+        subject: "Untitled RFI",
+        question: "Describe the question",
+        contractorSuggestion: null,
+        drawingReferences: null,
+        specificationReferences: null,
+        responsiblePartyId: null,
+        submittedBy: null,
+        requestedResponseDate: null,
+        costImpact: null,
+        scheduleImpact: null,
+      });
+      state.data.rfis.push({
+        ...data,
+        latestResponse: null,
+        attachmentCount: 0,
+        isOverdue: false,
+        dueSoon: false,
+        capabilities: { updateDraft: true },
+      });
+      filters.status = "all";
+      filters.q = "";
+      syncUrl(false);
+      selected = { id: data.id, field: "subject" };
+      creating = false;
+      updateResults(container);
+      startEdit(container, data.id, "subject");
+      announce?.("New RFI draft added. Subject is ready to edit.");
+    } catch (error) {
+      creating = false;
+      announce?.(error.message || "The RFI draft could not be added.");
+      requestRender();
+    }
   }
 
   function bindToolbar(container) {
-    container.querySelector("#rfi-search")?.addEventListener("input", (event) => {
-      filters.q = event.target.value;
-      syncUrl(false);
-      updateResults(container);
-    });
-    const bindSelect = (id, apply) =>
-      container.querySelector(id)?.addEventListener("change", (event) => {
+    container
+      .querySelector("#rfi-search")
+      ?.addEventListener("input", (event) => {
+        filters.q = event.target.value;
+        syncUrl(false);
+        updateResults(container);
+      });
+    const bind = (selector, apply) =>
+      container.querySelector(selector)?.addEventListener("change", (event) => {
         apply(event.target.value);
         syncUrl(true);
         updateResults(container);
       });
-    bindSelect("#rfi-status", (value) => (filters.status = value));
-    bindSelect("#rfi-responsible", (value) => (filters.responsible = value));
-    bindSelect("#rfi-due", (value) => (filters.due = value));
-    bindSelect("#rfi-sort", (value) => {
+    bind("#rfi-status", (value) => (filters.status = value));
+    bind("#rfi-responsible", (value) => (filters.responsible = value));
+    bind("#rfi-due", (value) => (filters.due = value));
+    bind("#rfi-sort", (value) => {
       filters.sort = SORT_KEYS[value] ? value : "number";
       filters.direction = SORT_KEYS[filters.sort].defaultDir;
     });
@@ -684,7 +793,7 @@ export function createRfisView({
       ?.addEventListener("click", () => reload());
     container
       .querySelector(".rfi-heading [data-create-rfi]")
-      ?.addEventListener("click", () => openCreate(container));
+      ?.addEventListener("click", () => addRfi(container));
     if (state.status === "loaded") {
       bindToolbar(container);
       updateResults(container);
@@ -693,8 +802,7 @@ export function createRfisView({
 
   function destroy() {
     destroyed = true;
-    if (controller) controller.abort();
-    if (openForm) openForm.close({ restoreFocus: false });
+    controller?.abort();
   }
 
   return { mount, reload, destroy };

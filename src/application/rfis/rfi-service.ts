@@ -1,9 +1,12 @@
 import type { AppSession } from "../../auth/authentication-adapter";
-import { RfiNotFoundError } from "../../domain/rfis/errors";
+import {
+  RfiIssuanceUnavailableError,
+  RfiNotFoundError,
+  RfiResponsibleContactError,
+} from "../../domain/rfis/errors";
 import {
   assertCanUpdateDraft,
   closeStatus,
-  issueStatus,
   markReadyStatus,
   reopenStatus,
   respondStatus,
@@ -18,6 +21,7 @@ import type {
   RfiWriteInput,
 } from "../../domain/rfis/rfi";
 import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
+import { D1ProjectContactsRepository } from "../../infrastructure/db/d1/project-contacts-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import {
   D1RfiResponsesRepository,
@@ -41,7 +45,7 @@ const TRACKED_FIELDS: readonly (keyof RfiWriteInput)[] = [
   "contractorSuggestion",
   "drawingReferences",
   "specificationReferences",
-  "responsibleParty",
+  "responsiblePartyId",
   "submittedBy",
   "requestedResponseDate",
   "costImpact",
@@ -61,6 +65,7 @@ export class RfiService {
     private readonly responses: D1RfiResponsesRepository,
     private readonly attachments: D1RfiAttachmentsRepository,
     private readonly templateBinding: RfiTemplateBindingService,
+    private readonly contacts: D1ProjectContactsRepository,
   ) {}
 
   async list(actor: AppSession, projectId: string): Promise<Rfi[]> {
@@ -97,6 +102,11 @@ export class RfiService {
       actor.userId,
       input.correlationId,
     );
+    await this.requireResponsibleContact(
+      actor,
+      projectId,
+      input.responsiblePartyId,
+    );
     return this.records.createWithActivity(
       actor.organizationId,
       projectId,
@@ -131,6 +141,11 @@ export class RfiService {
     );
     const rfi = await this.find(actor, projectId, rfiId);
     assertCanUpdateDraft(rfi.status);
+    await this.requireResponsibleContact(
+      actor,
+      projectId,
+      input.responsiblePartyId,
+    );
     return this.records.updateDraftWithActivity(
       rfi,
       toWriteInput(input),
@@ -170,16 +185,9 @@ export class RfiService {
     correlationId: string,
   ): Promise<Rfi> {
     await this.projects.requireRfiManagement(actor, projectId, "rfis:issue");
-    const rfi = await this.find(actor, projectId, rfiId);
-    issueStatus(rfi.status);
-    return this.records.issueWithActivity(rfi, {
-      actorUserId: actor.userId,
-      actorType: "user",
-      objectType: "rfi",
-      action: "rfi.issued",
-      metadata: {},
-      correlationId,
-    });
+    await this.find(actor, projectId, rfiId);
+    void correlationId;
+    throw new RfiIssuanceUnavailableError();
   }
 
   async respond(
@@ -311,6 +319,20 @@ export class RfiService {
     if (!rfi) throw new RfiNotFoundError();
     return rfi;
   }
+
+  private async requireResponsibleContact(
+    actor: AppSession,
+    projectId: string,
+    contactId: string | null,
+  ): Promise<void> {
+    if (!contactId) return;
+    const contact = await this.contacts.findById(
+      actor.organizationId,
+      projectId,
+      contactId,
+    );
+    if (!contact || contact.archivedAt) throw new RfiResponsibleContactError();
+  }
 }
 
 export type { RfiAttachment };
@@ -322,7 +344,7 @@ function toWriteInput(input: RfiWriteInput): RfiWriteInput {
     contractorSuggestion: input.contractorSuggestion,
     drawingReferences: input.drawingReferences,
     specificationReferences: input.specificationReferences,
-    responsibleParty: input.responsibleParty,
+    responsiblePartyId: input.responsiblePartyId,
     submittedBy: input.submittedBy,
     requestedResponseDate: input.requestedResponseDate,
     costImpact: input.costImpact,

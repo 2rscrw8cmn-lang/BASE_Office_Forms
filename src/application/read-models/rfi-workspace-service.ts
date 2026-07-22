@@ -3,8 +3,6 @@ import { RfiNotFoundError } from "../../domain/rfis/errors";
 import {
   canAttach,
   canClose,
-  canIssue,
-  canMarkReady,
   canReopen,
   canRespond,
   canReturnForClarification,
@@ -42,6 +40,8 @@ export interface RfiWorkspaceCapabilities {
 interface WorkspaceAttachment {
   id: string;
   role: RfiAttachmentRole;
+  revisionId: string;
+  revisionLabel: string;
   originalFilename: string;
   mediaType: string;
   byteSize: number;
@@ -61,6 +61,8 @@ export interface RfiWorkspaceReadModel {
     drawingReferences: string | null;
     specificationReferences: string | null;
     responsibleParty: string | null;
+    responsiblePartyId: string | null;
+    responsiblePartyLegacyText: string | null;
     submittedBy: string | null;
     requestedResponseDate: string | null;
     costImpact: string | null;
@@ -73,7 +75,18 @@ export interface RfiWorkspaceReadModel {
     updatedAt: string;
     isOverdue: boolean;
     dueSoon: boolean;
+    issuanceReconciliationState: "not_issued" | "legacy_incomplete";
   };
+  currentVersion: {
+    id: string;
+    label: string;
+    status: "draft";
+  };
+  responsibleContacts: {
+    id: string;
+    name: string;
+    companyName: string | null;
+  }[];
   // Project-populated context comes from the authoritative project/organization
   // records — never duplicated as manually typed RFI fields.
   project: {
@@ -117,6 +130,8 @@ function toWorkspaceAttachment(attachment: RfiAttachment): WorkspaceAttachment {
   return {
     id: attachment.id,
     role: attachment.role,
+    revisionId: attachment.revisionId,
+    revisionLabel: "Current Draft",
     originalFilename: attachment.originalFilename,
     mediaType: attachment.mediaType,
     byteSize: attachment.byteSize,
@@ -158,17 +173,24 @@ export class RfiWorkspaceReadModelService {
     );
     if (!rfi) throw new RfiNotFoundError();
 
-    const [attachments, responses, activity, organizationName, template] =
-      await Promise.all([
-        this.attachments.list(actor.organizationId, rfi.id),
-        this.responses.list(actor.organizationId, rfi.id),
-        this.reads.listActivity(actor.organizationId, rfi.id),
-        this.reads.findOrganizationName(actor.organizationId),
-        this.templateBinding.describe(
-          actor.organizationId,
-          rfi.templateVersionId,
-        ),
-      ]);
+    const [
+      attachments,
+      responses,
+      activity,
+      organizationName,
+      template,
+      responsibleContacts,
+    ] = await Promise.all([
+      this.attachments.list(actor.organizationId, rfi.id),
+      this.responses.list(actor.organizationId, rfi.id),
+      this.reads.listActivity(actor.organizationId, rfi.id),
+      this.reads.findOrganizationName(actor.organizationId),
+      this.templateBinding.describe(
+        actor.organizationId,
+        rfi.templateVersionId,
+      ),
+      this.reads.listResponsibleContacts(actor.organizationId, project.id),
+    ]);
 
     const flags = rfiScheduleFlags(
       rfi.status,
@@ -188,6 +210,8 @@ export class RfiWorkspaceReadModelService {
         drawingReferences: rfi.drawingReferences,
         specificationReferences: rfi.specificationReferences,
         responsibleParty: rfi.responsibleParty,
+        responsiblePartyId: rfi.responsiblePartyId,
+        responsiblePartyLegacyText: rfi.responsiblePartyLegacyText,
         submittedBy: rfi.submittedBy,
         requestedResponseDate: rfi.requestedResponseDate,
         costImpact: rfi.costImpact,
@@ -200,7 +224,14 @@ export class RfiWorkspaceReadModelService {
         updatedAt: rfi.updatedAt,
         isOverdue: flags.isOverdue,
         dueSoon: flags.dueSoon,
+        issuanceReconciliationState: rfi.issuanceReconciliationState,
       },
+      currentVersion: {
+        id: rfi.draftRevisionId,
+        label: "Current Draft",
+        status: "draft",
+      },
+      responsibleContacts,
       project: {
         id: project.id,
         projectNumber: project.projectNumber,
@@ -237,8 +268,10 @@ export class RfiWorkspaceReadModelService {
       capabilities: {
         updateDraft: canManage && canUpdateDraft(rfi.status),
         uploadAttachment: canManage && canAttach(rfi.status),
-        markReady: canManage && canMarkReady(rfi.status),
-        issue: canManage && canIssue(rfi.status),
+        // Slice 1 deliberately exposes no issue/ready action. The complete
+        // immutable revision + artifact + recipient transaction lands in Slice 2.
+        markReady: false,
+        issue: false,
         recordResponse: canManage && canRespond(rfi.status),
         returnForClarification:
           canManage && canReturnForClarification(rfi.status),

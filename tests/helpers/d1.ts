@@ -33,16 +33,16 @@ export async function resetIdentityFoundation(): Promise<void> {
     env.DB.prepare("DELETE FROM issuances"),
     env.DB.prepare("DELETE FROM project_issuance_sequences"),
     env.DB.prepare("DELETE FROM revision_files"),
+    env.DB.prepare("DELETE FROM rfi_responses"),
+    env.DB.prepare("DELETE FROM rfi_details"),
+    env.DB.prepare("DELETE FROM rfi_0014_reconciliation"),
     env.DB.prepare("DELETE FROM record_revisions"),
     env.DB.prepare("DELETE FROM record_revision_sequences"),
     env.DB.prepare("DELETE FROM project_record_sequences"),
+    env.DB.prepare("DELETE FROM project_record_type_sequences"),
     env.DB.prepare("DELETE FROM records"),
-    // RFI rows reference template_versions, so they must be cleared before the
-    // templates they bind to.
-    env.DB.prepare("DELETE FROM rfi_attachments"),
-    env.DB.prepare("DELETE FROM rfi_responses"),
-    env.DB.prepare("DELETE FROM rfi_records"),
-    env.DB.prepare("DELETE FROM rfi_number_sequences"),
+    // RFI records reference template_versions, so records are cleared before
+    // the templates they bind to.
     env.DB.prepare("DELETE FROM template_versions"),
     env.DB.prepare("DELETE FROM template_version_sequences"),
     env.DB.prepare("DELETE FROM templates"),

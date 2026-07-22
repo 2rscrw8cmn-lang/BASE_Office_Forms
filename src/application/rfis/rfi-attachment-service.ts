@@ -101,8 +101,9 @@ export class RfiAttachmentService {
     const storageKey =
       `organizations/${actor.organizationId}` +
       `/projects/${rfi.projectId}` +
-      `/rfis/${rfi.id}` +
-      `/attachments/${attachmentId}`;
+      `/records/${rfi.id}` +
+      `/revisions/${rfi.draftRevisionId}` +
+      `/files/${attachmentId}`;
 
     try {
       await this.storage.put(storageKey, input.content, {
@@ -110,8 +111,8 @@ export class RfiAttachmentService {
         originalFilename,
         organizationId: actor.organizationId,
         projectId: rfi.projectId,
-        recordId: `rfi:${rfi.id}`,
-        revisionId: `role:${input.role}`,
+        recordId: rfi.id,
+        revisionId: rfi.draftRevisionId,
         fileId: attachmentId,
         sha256,
       });
@@ -124,6 +125,7 @@ export class RfiAttachmentService {
       organizationId: actor.organizationId,
       projectId: rfi.projectId,
       rfiId: rfi.id,
+      revisionId: rfi.draftRevisionId,
       role: input.role,
       storageKey,
       originalFilename,

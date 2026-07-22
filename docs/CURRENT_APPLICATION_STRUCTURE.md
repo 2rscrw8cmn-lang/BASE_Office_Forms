@@ -569,10 +569,13 @@ authorization live in the new `src/application/identity`, `src/domain/identity`,
 `src/infrastructure/db/d1` modules. PR 3 adds `src/domain/projects`,
 `src/application/projects`, D1 project repositories, and explicit role plus
 project-membership authorization. PR 4 adds `src/domain/rfis`,
-`src/application/rfis`, and D1 RFI record, response, and number-sequence
-repositories. RFI numbers are assigned only by the atomic draft-to-issued database
-transition, are scoped to a project, and are never changed. Project, contact, and
-RFI lifecycle mutations append durable activity events. PR 5 adds `src/domain/records`,
+`src/application/rfis`, and RFI-specific repositories over the shared
+Records → Revisions → Files spine. Each RFI uses a stable `records` identity, a
+one-to-one `rfi_details` extension, a current draft revision, and revision-scoped
+files. Issue remains fail-closed until the complete immutable-revision and
+official-artifact transaction is implemented; no Slice 1 request can consume a
+number or present a draft as Open. Project, contact, and RFI lifecycle mutations
+append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,
 metadata-update, and archive activity events. PR 6 adds `src/domain/revisions`,

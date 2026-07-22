@@ -42,7 +42,9 @@ const SCHEMA_STATEMENTS = [
   "INSERT OR IGNORE INTO folders (id, name, parent_id, sort_order, created_at) VALUES ('proposals', 'Proposals', NULL, 30, datetime('now'))",
   "INSERT OR IGNORE INTO folders (id, name, parent_id, sort_order, created_at) VALUES ('safety', 'Safety', NULL, 40, datetime('now'))",
   "INSERT OR IGNORE INTO folders (id, name, parent_id, sort_order, created_at) VALUES ('manuals', 'Manuals & Procedures', NULL, 50, datetime('now'))",
-  "INSERT OR REPLACE INTO app_meta (id, schema_version) VALUES (1, 1)",
+  // This legacy bootstrap may run after the relational migrations. Never
+  // replace the migration-owned schema marker with the legacy value.
+  "INSERT OR IGNORE INTO app_meta (id, schema_version) VALUES (1, 1)",
 ];
 
 function json(data: unknown, status = 200): Response {

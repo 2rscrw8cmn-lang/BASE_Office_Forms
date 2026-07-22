@@ -20,10 +20,10 @@ import type {
 import { D1MembershipsRepository } from "../../src/infrastructure/db/d1/memberships-repository";
 import { D1OrganizationsRepository } from "../../src/infrastructure/db/d1/organizations-repository";
 import { D1ProjectMembershipsRepository } from "../../src/infrastructure/db/d1/project-memberships-repository";
+import { D1ProjectContactsRepository } from "../../src/infrastructure/db/d1/project-contacts-repository";
 import { D1ProjectRfisReadRepository } from "../../src/infrastructure/db/d1/project-rfis-read-repository";
 import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-repository";
 import { D1RfiAttachmentsRepository } from "../../src/infrastructure/db/d1/rfi-attachments-repository";
-import { D1RfiNumberSequencesRepository } from "../../src/infrastructure/db/d1/rfi-number-sequences-repository";
 import { D1RfiRecordsRepository } from "../../src/infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../src/infrastructure/db/d1/rfi-responses-repository";
 import { D1RfiWorkspaceReadRepository } from "../../src/infrastructure/db/d1/rfi-workspace-read-repository";
@@ -127,11 +127,7 @@ function dependencies(): V2RouteDependencies {
   );
   const responses = new D1RfiResponsesRepository(database);
   const attachmentsRepo = new D1RfiAttachmentsRepository(database);
-  const records = new D1RfiRecordsRepository(
-    database,
-    new D1RfiNumberSequencesRepository(database),
-    responses,
-  );
+  const records = new D1RfiRecordsRepository(database, responses);
   const templateBinding = new RfiTemplateBindingService(
     new D1TemplatesRepository(database),
   );
@@ -148,6 +144,7 @@ function dependencies(): V2RouteDependencies {
       responses,
       attachmentsRepo,
       templateBinding,
+      new D1ProjectContactsRepository(database),
     ),
     rfiAttachments: new RfiAttachmentService(
       projects,
@@ -254,6 +251,9 @@ interface ApiRfi {
   subject: string;
   templateVersionId: string | null;
   lockVersion: number;
+  responsiblePartyId?: string | null;
+  responsibleParty?: string | null;
+  draftRevisionId?: string;
 }
 
 interface RfiRowLite {
@@ -267,6 +267,7 @@ interface ListModel {
   project: { projectNumber: string; name: string };
   rfis: RfiRowLite[];
   capabilities: { createRfi: boolean };
+  responsibleContacts: { id: string; name: string }[];
 }
 interface WorkspaceModel {
   rfi: {
@@ -274,6 +275,7 @@ interface WorkspaceModel {
     rfiNumber: string | null;
     subject: string;
     drawingReferences: string | null;
+    responsiblePartyId?: string | null;
   };
   project: { name: string; projectNumber: string };
   organization: { name: string | null };
@@ -282,6 +284,8 @@ interface WorkspaceModel {
     supporting_attachment: unknown[];
     reference_drawing: unknown[];
   };
+  currentVersion?: { id: string; label: string; status: string };
+  capabilities?: { issue: boolean; recordResponse: boolean };
 }
 
 async function createProject(number: string): Promise<ApiProject> {
@@ -308,7 +312,7 @@ async function createDraft(
       subject,
       question: "Please confirm the required footing detail.",
       contractorSuggestion: "Use detail S-4.",
-      responsibleParty: "Architect",
+      responsiblePartyId: null,
       requestedResponseDate: "2026-08-01",
     }),
     dependencies(),
@@ -360,11 +364,11 @@ describe("RFI register & workspace (Slice 1)", () => {
     await seed();
   });
 
-  it("applies migration 0013 (schema version 11)", async () => {
+  it("applies corrective migration 0014 (schema version 12)", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(11);
+    expect(version?.schema_version).toBe(12);
   });
 
   it("creates an unnumbered draft bound to the default BASE RFI template", async () => {
@@ -385,6 +389,32 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(typeof model.template?.name).toBe("string");
     expect(model.template?.definition.kind).toBe("form");
     expect(model.rfi.rfiNumber).toBeNull();
+    expect(model.currentVersion).toMatchObject({ status: "draft" });
+
+    const spine = await testDatabase()
+      .prepare(
+        `SELECT record.id, record.record_type_key, record.workflow_status,
+           details.record_id AS details_id, revision.record_id AS revision_record_id
+         FROM records record
+         JOIN rfi_details details ON details.record_id = record.id
+         JOIN record_revisions revision ON revision.id = record.current_revision_id
+         WHERE record.id = ? AND record.organization_id = 'org-a'`,
+      )
+      .bind(draft.id)
+      .first<{
+        id: string;
+        record_type_key: string;
+        workflow_status: string;
+        details_id: string;
+        revision_record_id: string;
+      }>();
+    expect(spine).toEqual({
+      id: draft.id,
+      record_type_key: "rfi",
+      workflow_status: "draft",
+      details_id: draft.id,
+      revision_record_id: draft.id,
+    });
   });
 
   it("returns one register read model with rows and capabilities", async () => {
@@ -451,6 +481,15 @@ describe("RFI register & workspace (Slice 1)", () => {
   it("edits short draft fields inline and keeps official number null", async () => {
     const project = await createProject("P-RFI-4");
     const draft = await createDraft(project.id);
+    const now = new Date().toISOString();
+    await testDatabase()
+      .prepare(
+        `INSERT INTO project_contacts
+          (id, organization_id, project_id, contact_name, contact_type, created_at, updated_at)
+         VALUES ('contact-engineer', 'org-a', ?, 'Structural Engineer', 'engineer', ?, ?)`,
+      )
+      .bind(project.id, now, now)
+      .run();
 
     const subjectPatch = await patch(project.id, draft.id, {
       subject: "Revised footing",
@@ -463,13 +502,14 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(afterSubject.data.lockVersion).toBe(draft.lockVersion + 1);
 
     const responsiblePatch = await patch(project.id, draft.id, {
-      responsibleParty: "Structural Engineer",
+      responsiblePartyId: "contact-engineer",
       lockVersion: afterSubject.data.lockVersion,
     });
     expect(responsiblePatch.status).toBe(200);
     const afterResp: { data: ApiRfi & { responsibleParty: string } } =
       await responsiblePatch.json();
     expect(afterResp.data.responsibleParty).toBe("Structural Engineer");
+    expect(afterResp.data.responsiblePartyId).toBe("contact-engineer");
 
     const datePatch = await patch(project.id, draft.id, {
       requestedResponseDate: "2026-09-15",
@@ -505,6 +545,33 @@ describe("RFI register & workspace (Slice 1)", () => {
     );
     const listBody = await readJson<{ data: ListModel }>(list);
     expect(listBody.data.rfis[0].subject).toBe("Full edit subject");
+  });
+
+  it("rejects responsible contacts from another project", async () => {
+    const project = await createProject("P-RFI-CONTACT-A");
+    const other = await createProject("P-RFI-CONTACT-B");
+    const draft = await createDraft(project.id);
+    const now = new Date().toISOString();
+    await testDatabase()
+      .prepare(
+        `INSERT INTO project_contacts
+          (id, organization_id, project_id, contact_name, contact_type, created_at, updated_at)
+         VALUES ('contact-other', 'org-a', ?, 'Other Architect', 'architect', ?, ?)`,
+      )
+      .bind(other.id, now, now)
+      .run();
+    const response = await patch(project.id, draft.id, {
+      responsiblePartyId: "contact-other",
+      lockVersion: draft.lockVersion,
+    });
+    expect(response.status).toBe(400);
+    const stored = await testDatabase()
+      .prepare(
+        "SELECT current_responsible_contact_id FROM records WHERE id = ?",
+      )
+      .bind(draft.id)
+      .first<{ current_responsible_contact_id: string | null }>();
+    expect(stored?.current_responsible_contact_id).toBeNull();
   });
 
   it("rejects a stale optimistic-concurrency update with 409", async () => {
@@ -578,9 +645,31 @@ describe("RFI register & workspace (Slice 1)", () => {
       dependencies(),
     );
     expect(upload.status).toBe(201);
-    const uploaded: { data: { id: string; role: string } } =
+    const uploaded: { data: { id: string; role: string; revisionId: string } } =
       await upload.json();
     expect(uploaded.data.role).toBe("reference_drawing");
+    expect(uploaded.data.revisionId).toBe(draft.draftRevisionId);
+
+    const association = await testDatabase()
+      .prepare(
+        `SELECT record_id, revision_id, role, original_filename, sha256
+         FROM revision_files WHERE id = ?`,
+      )
+      .bind(uploaded.data.id)
+      .first<{
+        record_id: string;
+        revision_id: string;
+        role: string;
+        original_filename: string;
+        sha256: string;
+      }>();
+    expect(association).toMatchObject({
+      record_id: draft.id,
+      revision_id: draft.draftRevisionId,
+      role: "reference_drawing",
+      original_filename: "detail.pdf",
+    });
+    expect(association?.sha256).toHaveLength(64);
 
     const model = await workspace(project.id, draft.id);
     expect(model.attachments.reference_drawing).toHaveLength(1);
@@ -607,7 +696,11 @@ describe("RFI register & workspace (Slice 1)", () => {
   it("rejects attachments once the RFI leaves the draft/ready context", async () => {
     const project = await createProject("P-RFI-ATT2");
     const draft = await createDraft(project.id);
-    await issue(project.id, draft.id);
+    await invokeV2Api(
+      `/api/v2/projects/${project.id}/rfis/${draft.id}/void`,
+      request("admin", "POST"),
+      dependencies(),
+    );
     const form = new FormData();
     form.append("role", "supporting_attachment");
     form.append(
@@ -650,136 +743,95 @@ describe("RFI register & workspace (Slice 1)", () => {
   });
 
   it("issues permanently numbered RFIs (draft → open) and blocks post-issue edits", async () => {
-    const project = await createProject("P-RFI-ISSUE");
+    const project = await createProject("P-RFI-ISSUE-GATE");
     const draft = await createDraft(project.id);
     const issued = await issue(project.id, draft.id);
-    expect(issued.status).toBe(200);
-    await expect(issued.json()).resolves.toMatchObject({
-      data: { status: "open", rfiNumber: "RFI-001" },
-    });
-    const again = await issue(project.id, draft.id);
-    expect(again.status).toBe(409);
-    const edit = await patch(project.id, draft.id, {
-      subject: "No longer editable",
-      lockVersion: draft.lockVersion,
-    });
-    expect(edit.status).toBe(409);
-  });
-
-  it("uses project-scoped, concurrent-safe issue numbering", async () => {
-    const first = await createProject("P-RFI-SEQ-A");
-    const second = await createProject("P-RFI-SEQ-B");
-    const a1 = await createDraft(first.id, "First");
-    const a2 = await createDraft(first.id, "Second");
-    const b1 = await createDraft(second.id, "Other");
-    const issued = await Promise.all([
-      issue(first.id, a1.id),
-      issue(first.id, a2.id),
-      issue(second.id, b1.id),
-    ]);
-    const payloads: { data: { rfiNumber: string } }[] = await Promise.all(
-      issued.map((response) =>
-        readJson<{ data: { rfiNumber: string } }>(response),
-      ),
-    );
-    expect(
-      payloads
-        .slice(0, 2)
-        .map((payload) => payload.data.rfiNumber)
-        .sort(),
-    ).toEqual(["RFI-001", "RFI-002"]);
-    expect(payloads[2].data.rfiNumber).toBe("RFI-001");
-  });
-
-  it("responds, closes, reopens with binding states and required activity", async () => {
-    const project = await createProject("P-RFI-RESP");
-    const draft = await createDraft(project.id);
-    await issue(project.id, draft.id);
-    const response = await invokeV2Api(
-      `/api/v2/projects/${project.id}/rfis/${draft.id}/respond`,
-      request("admin", "POST", {
-        response: "Use detail S-4 as suggested.",
-        respondedBy: "Architect",
-      }),
-      dependencies(),
-    );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: {
-        status: "response_received",
-        response: { response: "Use detail S-4 as suggested." },
-      },
-    });
-    const closed = await invokeV2Api(
-      `/api/v2/projects/${project.id}/rfis/${draft.id}/close`,
-      request("admin", "POST"),
-      dependencies(),
-    );
-    expect(closed.status).toBe(200);
-    await expect(closed.json()).resolves.toMatchObject({
-      data: { status: "closed" },
-    });
-    const reopened = await invokeV2Api(
-      `/api/v2/projects/${project.id}/rfis/${draft.id}/reopen`,
-      request("admin", "POST"),
-      dependencies(),
-    );
-    await expect(reopened.json()).resolves.toMatchObject({
-      data: { status: "open" },
-    });
-    const events = await testDatabase()
+    expect(issued.status).toBe(409);
+    const error = await readJson<{ error: { code: string } }>(issued);
+    expect(error.error.code).toBe("RFI_ISSUANCE_NOT_AVAILABLE");
+    const record = await testDatabase()
       .prepare(
-        "SELECT action FROM activity_events WHERE object_id = ? ORDER BY created_at ASC",
+        `SELECT record_number, sequence_no, workflow_status, issued_at
+         FROM records WHERE id = ?`,
       )
       .bind(draft.id)
-      .all<{ action: string }>();
-    expect(events.results.map((event) => event.action)).toEqual(
-      expect.arrayContaining([
-        "rfi.created",
-        "rfi.issued",
-        "rfi.responded",
-        "rfi.closed",
-        "rfi.reopened",
-      ]),
-    );
+      .first<{
+        record_number: string | null;
+        sequence_no: number | null;
+        workflow_status: string;
+        issued_at: string | null;
+      }>();
+    expect(record).toEqual({
+      record_number: null,
+      sequence_no: null,
+      workflow_status: "draft",
+      issued_at: null,
+    });
   });
 
-  it("rolls back a response and its transition when the activity event fails", async () => {
-    const project = await createProject("P-RFI-AUDIT");
+  it("does not consume a number across repeated issue retries", async () => {
+    const project = await createProject("P-RFI-ISSUE-RETRY");
     const draft = await createDraft(project.id);
-    await issue(project.id, draft.id);
+    const attempts = await Promise.all([
+      issue(project.id, draft.id),
+      issue(project.id, draft.id),
+      issue(project.id, draft.id),
+    ]);
+    expect(attempts.map((response) => response.status)).toEqual([
+      409, 409, 409,
+    ]);
+    const sequence = await testDatabase()
+      .prepare(
+        `SELECT last_number FROM project_record_type_sequences
+         WHERE organization_id = 'org-a' AND project_id = ? AND record_type_key = 'rfi'`,
+      )
+      .bind(project.id)
+      .first<{ last_number: number }>();
+    expect(sequence).toBeNull();
+  });
+
+  it("hides incomplete issue and response capabilities from the workspace", async () => {
+    const project = await createProject("P-RFI-CAPS");
+    const draft = await createDraft(project.id);
+    const model = await workspace(project.id, draft.id);
+    expect(model.capabilities).toMatchObject({
+      issue: false,
+      recordResponse: false,
+    });
+  });
+
+  it("rolls back record, details, and revision when creation activity fails", async () => {
+    const project = await createProject("P-RFI-AUDIT");
     const database = testDatabase();
     await database
       .prepare(
-        `CREATE TRIGGER fail_rfi_responded_activity
+        `CREATE TRIGGER fail_rfi_created_activity
          BEFORE INSERT ON activity_events
-         WHEN NEW.action = 'rfi.responded'
+         WHEN NEW.action = 'rfi.created'
          BEGIN SELECT RAISE(ABORT, 'forced RFI audit failure'); END`,
       )
       .run();
     try {
       await expect(
         invokeV2Api(
-          `/api/v2/projects/${project.id}/rfis/${draft.id}/respond`,
-          request("admin", "POST", { response: "This must roll back." }),
+          `/api/v2/projects/${project.id}/rfis`,
+          request("admin", "POST", {
+            subject: "Must roll back",
+            question: "Was the record rolled back?",
+          }),
           dependencies(),
         ),
       ).rejects.toThrow(/forced RFI audit failure/);
-      const rfi = await database
+      const records = await database
         .prepare(
-          "SELECT status, response_received_at FROM rfi_records WHERE id = ?",
+          "SELECT COUNT(*) AS count FROM records WHERE project_id = ? AND record_type_key = 'rfi'",
         )
-        .bind(draft.id)
-        .first<{ status: string; response_received_at: string | null }>();
-      expect(rfi).toEqual({ status: "open", response_received_at: null });
-      const responses = await database
-        .prepare("SELECT COUNT(*) AS count FROM rfi_responses WHERE rfi_id = ?")
-        .bind(draft.id)
+        .bind(project.id)
         .first<{ count: number }>();
-      expect(responses?.count).toBe(0);
+      expect(records?.count).toBe(0);
     } finally {
       await database
-        .prepare("DROP TRIGGER IF EXISTS fail_rfi_responded_activity")
+        .prepare("DROP TRIGGER IF EXISTS fail_rfi_created_activity")
         .run();
     }
   });
@@ -801,7 +853,7 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(close.status).toBe(409);
   });
 
-  it("enforces project-role authorization for create and issue", async () => {
+  it("enforces project-role authorization while issue remains gated", async () => {
     const project = await createProject("P-RFI-ROLE");
     const draft = await createDraft(project.id);
     const now = new Date().toISOString();
@@ -836,6 +888,10 @@ describe("RFI register & workspace (Slice 1)", () => {
       request("manager", "POST"),
       dependencies(),
     );
-    expect(managerAllowed.status).toBe(200);
+    expect(managerAllowed.status).toBe(409);
+    const managerError = await readJson<{ error: { code: string } }>(
+      managerAllowed,
+    );
+    expect(managerError.error.code).toBe("RFI_ISSUANCE_NOT_AVAILABLE");
   });
 });

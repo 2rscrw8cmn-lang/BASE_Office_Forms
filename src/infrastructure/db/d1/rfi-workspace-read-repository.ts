@@ -76,4 +76,23 @@ export class D1RfiWorkspaceReadRepository {
       .first<{ name: string }>();
     return row?.name ?? null;
   }
+
+  async listResponsibleContacts(
+    organizationId: string,
+    projectId: string,
+  ): Promise<{ id: string; name: string; companyName: string | null }[]> {
+    const result = await this.database
+      .prepare(
+        `SELECT id, contact_name, company_name FROM project_contacts
+         WHERE organization_id = ? AND project_id = ? AND archived_at IS NULL
+         ORDER BY contact_name COLLATE NOCASE, id`,
+      )
+      .bind(organizationId, projectId)
+      .all<{ id: string; contact_name: string; company_name: string | null }>();
+    return result.results.map((row) => ({
+      id: row.id,
+      name: row.contact_name,
+      companyName: row.company_name,
+    }));
+  }
 }

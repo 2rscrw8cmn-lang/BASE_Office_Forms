@@ -23,31 +23,49 @@ export function buildBaseRfiTemplateDefinition(): Record<string, unknown> {
       {
         name: "RFI",
         fields: [
-          { label: "Subject", w: 12 },
-          { label: "Responsible Party", w: 6 },
-          { label: "Requested Response Date", w: 6 },
+          { id: "subject", label: "Subject", w: 12 },
+          { id: "responsible_party", label: "Responsible Party", w: 6 },
+          {
+            id: "requested_response_date",
+            label: "Requested Response Date",
+            w: 6,
+          },
         ],
       },
       {
         name: "Question",
-        fields: [{ label: "Question", w: 12, multiline: true, h: 28 }],
+        fields: [
+          { id: "question", label: "Question", w: 12, multiline: true, h: 28 },
+        ],
       },
       {
         name: "Contractor Suggestion",
         fields: [
-          { label: "Contractor Suggestion", w: 12, multiline: true, h: 20 },
+          {
+            id: "contractor_suggestion",
+            label: "Contractor Suggestion",
+            w: 12,
+            multiline: true,
+            h: 20,
+          },
         ],
       },
       {
         name: "References",
         fields: [
-          { label: "Drawing References", w: 6 },
-          { label: "Specification References", w: 6 },
+          { id: "drawing_references", label: "Drawing References", w: 6 },
+          {
+            id: "specification_references",
+            label: "Specification References",
+            w: 6,
+          },
         ],
       },
       {
         name: "Response",
-        fields: [{ label: "Response", w: 12, multiline: true, h: 28 }],
+        fields: [
+          { id: "response", label: "Response", w: 12, multiline: true, h: 28 },
+        ],
       },
     ],
     footnotes: [

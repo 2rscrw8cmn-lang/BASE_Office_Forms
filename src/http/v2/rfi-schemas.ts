@@ -75,8 +75,8 @@ function rfiInput(value: unknown, fallback?: RfiWriteInput): RfiWriteInput {
       () =>
         optionalText(source.specificationReferences, "specificationReferences"),
     ),
-    responsibleParty: resolve(source, "responsibleParty", fallback, () =>
-      optionalText(source.responsibleParty, "responsibleParty"),
+    responsiblePartyId: resolve(source, "responsiblePartyId", fallback, () =>
+      optionalText(source.responsiblePartyId, "responsiblePartyId"),
     ),
     submittedBy: resolve(source, "submittedBy", fallback, () =>
       optionalText(source.submittedBy, "submittedBy"),

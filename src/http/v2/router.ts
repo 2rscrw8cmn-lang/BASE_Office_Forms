@@ -11,6 +11,8 @@ import {
   RfiIllegalTransitionError,
   RfiAuthorizationError,
   RfiConflictError,
+  RfiIssuanceUnavailableError,
+  RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
 import { RfiAttachmentRejectedError } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import {
@@ -673,6 +675,7 @@ async function handleRfiRoute(
         return apiSuccess(context, {
           project: model.project,
           rfis: model.rfis.map(serializeRfiListItem),
+          responsibleContacts: model.responsibleContacts,
           capabilities: model.capabilities,
         });
       }
@@ -1270,6 +1273,15 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
   if (error instanceof RfiConflictError)
     return apiError(context, 409, "RFI_VERSION_CONFLICT", error.message);
+  if (error instanceof RfiIssuanceUnavailableError)
+    return apiError(context, 409, "RFI_ISSUANCE_NOT_AVAILABLE", error.message);
+  if (error instanceof RfiResponsibleContactError)
+    return apiError(
+      context,
+      400,
+      "RFI_RESPONSIBLE_CONTACT_INVALID",
+      error.message,
+    );
   if (error instanceof RfiAttachmentRejectedError)
     return apiError(context, 409, "RFI_ATTACHMENT_REJECTED", error.message);
   if (error instanceof RevisionNotFoundError)
@@ -1456,7 +1468,9 @@ function serializeRfi(rfi: Rfi) {
     contractorSuggestion: rfi.contractorSuggestion,
     drawingReferences: rfi.drawingReferences,
     specificationReferences: rfi.specificationReferences,
+    responsiblePartyId: rfi.responsiblePartyId,
     responsibleParty: rfi.responsibleParty,
+    responsiblePartyLegacyText: rfi.responsiblePartyLegacyText,
     submittedBy: rfi.submittedBy,
     requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
@@ -1465,6 +1479,8 @@ function serializeRfi(rfi: Rfi) {
     responseReceivedAt: rfi.responseReceivedAt,
     closedAt: rfi.closedAt,
     lockVersion: rfi.lockVersion,
+    draftRevisionId: rfi.draftRevisionId,
+    issuanceReconciliationState: rfi.issuanceReconciliationState,
     createdAt: rfi.createdAt,
     updatedAt: rfi.updatedAt,
   };
@@ -1479,7 +1495,12 @@ function serializeRfiListItem(item: RfiListItem) {
     status: item.status,
     subject: item.subject,
     question: item.question,
+    contractorSuggestion: item.contractorSuggestion,
+    drawingReferences: item.drawingReferences,
+    specificationReferences: item.specificationReferences,
+    responsiblePartyId: item.responsiblePartyId,
     responsibleParty: item.responsibleParty,
+    responsiblePartyLegacyText: item.responsiblePartyLegacyText,
     submittedBy: item.submittedBy,
     requestedResponseDate: item.requestedResponseDate,
     issuedAt: item.issuedAt,
@@ -1489,6 +1510,8 @@ function serializeRfiListItem(item: RfiListItem) {
     isOverdue: item.isOverdue,
     dueSoon: item.dueSoon,
     lockVersion: item.lockVersion,
+    draftRevisionId: item.draftRevisionId,
+    issuanceReconciliationState: item.issuanceReconciliationState,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     capabilities: { updateDraft: item.capabilities.updateDraft },
@@ -1497,6 +1520,7 @@ function serializeRfiListItem(item: RfiListItem) {
 function serializeRfiAttachment(attachment: {
   id: string;
   rfiId: string;
+  revisionId: string;
   role: string;
   originalFilename: string;
   mediaType: string;
@@ -1507,6 +1531,7 @@ function serializeRfiAttachment(attachment: {
   return {
     id: attachment.id,
     rfiId: attachment.rfiId,
+    revisionId: attachment.revisionId,
     role: attachment.role,
     originalFilename: attachment.originalFilename,
     mediaType: attachment.mediaType,
@@ -1713,6 +1738,7 @@ function serializeRfiDetail(
     attachments: {
       id: string;
       rfiId: string;
+      revisionId: string;
       role: string;
       originalFilename: string;
       mediaType: string;
@@ -1758,7 +1784,7 @@ function toRfiWriteInput(rfi: Rfi) {
     contractorSuggestion: rfi.contractorSuggestion,
     drawingReferences: rfi.drawingReferences,
     specificationReferences: rfi.specificationReferences,
-    responsibleParty: rfi.responsibleParty,
+    responsiblePartyId: rfi.responsiblePartyId,
     submittedBy: rfi.submittedBy,
     requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
