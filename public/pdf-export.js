@@ -294,6 +294,23 @@
     return Math.min(10, Math.max(7, boxHeight * 0.28));
   }
 
+  // In the HTML/CSS rendering, a field's write-in element gets an explicit
+  // `height:${textHeight}px` (see writeBox/CSS `.field`, `.sign`) which can
+  // grow the box well past its own nominal `height` -- CSS block/flex flow
+  // just expands to fit. A vector-drawn box has no such auto-growth, so the
+  // outer box height must be computed the same way everywhere it's used
+  // (row-height aggregation AND the individual box/widget placement), or
+  // the widget ends up taller than the box drawn around it.
+  const LABEL_RESERVE_PX = 28;
+  function fieldBoxHeightPx(field, tall) {
+    const nominal = tall ? Math.max(76, field.height) : field.height;
+    return field.textHeight ? Math.max(nominal, field.textHeight + LABEL_RESERVE_PX) : nominal;
+  }
+  function signBoxHeightPx(field) {
+    const nominal = Math.max(54, field.height);
+    return field.textHeight ? Math.max(nominal, field.textHeight + LABEL_RESERVE_PX) : nominal;
+  }
+
   function placeTextField(ctx, placer, page, field, x, yFromTop, w, h, answer) {
     const isMultiline = field.type === "multiline" || Boolean(field.multiline);
     ctx.rect(x, yFromTop, w, h, { border: FIELD_BORDER, borderWidth: 1 });
@@ -339,14 +356,16 @@
     rows.forEach((row, ri) => {
       const totalFr = row.reduce((sum, f) => sum + (Number(f.w) || 1), 0);
       const contentW = ctx.pageW - 2 * ctx.marginX;
-      const rowH = Math.max(...row.map(f => (tall ? Math.max(76, f.height) : f.height))) * PX;
+      // CSS Grid stretches every cell in a row to the tallest cell's height
+      // (align-items: stretch is the default) -- draw every box in the row
+      // at rowH, not each field's own height, so bottoms line up.
+      const rowH = Math.max(...row.map(f => fieldBoxHeightPx(f, tall))) * PX;
       ctx.ensureRoom(rowH + (ri > 0 ? 4.5 : 0), form);
       if (ri > 0) ctx.cursor += 4.5;
       let x = ctx.marginX;
       row.forEach(field => {
         const w = contentW * ((Number(field.w) || 1) / totalFr);
-        const h = (tall ? Math.max(76, field.height) : field.height) * PX;
-        placeTextField(ctx, placer, ctx.page, field, x, ctx.cursor, w, h, answers && answers[field.id]);
+        placeTextField(ctx, placer, ctx.page, field, x, ctx.cursor, w, rowH, answers && answers[field.id]);
         x += w;
       });
       ctx.cursor += rowH;
@@ -358,14 +377,13 @@
     rows.forEach((row, ri) => {
       const totalFr = row.reduce((sum, f) => sum + (Number(f.w) || 1), 0);
       const contentW = ctx.pageW - 2 * ctx.marginX;
-      const rowH = Math.max(...row.map(f => Math.max(54, f.height))) * PX;
+      const rowH = Math.max(...row.map(f => signBoxHeightPx(f))) * PX;
       ctx.ensureRoom(rowH + (ri > 0 ? 4.5 : 0), form);
       if (ri > 0) ctx.cursor += 4.5;
       let x = ctx.marginX;
       row.forEach(field => {
         const w = contentW * ((Number(field.w) || 1) / totalFr);
-        const h = Math.max(54, field.height) * PX;
-        placeSignField(ctx, placer, ctx.page, field, x, ctx.cursor, w, h, answers && answers[field.id]);
+        placeSignField(ctx, placer, ctx.page, field, x, ctx.cursor, w, rowH, answers && answers[field.id]);
         x += w;
       });
       ctx.cursor += rowH;
