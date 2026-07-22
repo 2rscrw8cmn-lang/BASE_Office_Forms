@@ -9,9 +9,13 @@ import { requireRfiManagement } from "../../domain/rfis/authorization";
 import type { RfiCapability } from "../../domain/rfis/errors";
 import { requireRecordManagement } from "../../domain/records/authorization";
 import type { RecordCapability } from "../../domain/records/errors";
-import { requireRevisionManagement } from "../../domain/revisions/authorization";
+import {
+  hasOrganizationWideRevisionManagement,
+  requireRevisionManagement,
+} from "../../domain/revisions/authorization";
 import type { RevisionCapability } from "../../domain/revisions/errors";
 import { requireFileManagement } from "../../domain/files/authorization";
+import { hasOrganizationWideFileManagement } from "../../domain/files/authorization";
 import type { FileCapability } from "../../domain/files/errors";
 import { requireIssuanceManagement } from "../../domain/issuances/authorization";
 import type { IssuanceCapability } from "../../domain/issuances/errors";
@@ -204,6 +208,26 @@ export class ProjectService {
     return this.get(actor, projectId);
   }
 
+  async resolveRevisionAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<{ project: Project; canManage: boolean }> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    return {
+      project,
+      canManage:
+        hasOrganizationWideRevisionManagement(actor) ||
+        isAssignedProjectManager,
+    };
+  }
+
   async requireRevisionManagement(
     actor: AppSession,
     projectId: string,
@@ -226,6 +250,25 @@ export class ProjectService {
     projectId: string,
   ): Promise<Project> {
     return this.get(actor, projectId);
+  }
+
+  async resolveFileAccess(
+    actor: AppSession,
+    projectId: string,
+  ): Promise<{ project: Project; canManage: boolean }> {
+    const project = await this.get(actor, projectId);
+    const isAssignedProjectManager =
+      actor.membershipRole === "project_manager" &&
+      (await this.memberships.isActiveMember(
+        actor.organizationId,
+        projectId,
+        actor.userId,
+      ));
+    return {
+      project,
+      canManage:
+        hasOrganizationWideFileManagement(actor) || isAssignedProjectManager,
+    };
   }
 
   async requireFileManagement(

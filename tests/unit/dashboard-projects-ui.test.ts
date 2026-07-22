@@ -365,6 +365,8 @@ describe("dashboard view", () => {
     expect(metrics).toEqual(["2", "1", "1", "1"]);
 
     const text = textOf(document, ".dashboard-view");
+    expect(text).toContain("Rev 1");
+    expect(text).toContain("Original");
     expect(text).toContain("Draft revision");
     expect(text).toContain("Published with 3 files and not yet issued");
     expect(text).toContain("RFI awaiting response");
@@ -696,6 +698,7 @@ describe("project overview view", () => {
     expect(counts).toEqual(["4", "1", "2", "6", "3", "1"]);
 
     const overviewText = textOf(document, ".overview-view");
+    expect(overviewText).toContain("Rev 1");
     expect(overviewText).toContain("Draft revision");
     expect(overviewText).toContain("RFI answered and awaiting close");
     expect(overviewText).toContain("Revision published");

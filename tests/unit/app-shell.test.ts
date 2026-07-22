@@ -148,9 +148,9 @@ describe("application shell", () => {
     expect(
       document.querySelector('.project-tabs a[aria-current="page"]')
         ?.textContent,
-    ).toBe("Records");
+    ).toBe("Documents");
     expect(document.querySelector("#page-title")?.textContent).toBe(
-      "Revision detail",
+      "Revision not found",
     );
   });
 

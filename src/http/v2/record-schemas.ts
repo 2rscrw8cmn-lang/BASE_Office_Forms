@@ -1,6 +1,6 @@
 import type {
+  RecordCreateInput,
   RecordUpdateInput,
-  RecordWriteInput,
 } from "../../domain/records/record";
 import {
   RecordValidationError,
@@ -19,34 +19,35 @@ function object(value: unknown): JsonRecord {
 
 function recordInput(
   value: unknown,
-  fallback?: RecordWriteInput,
-): RecordWriteInput {
+  fallback?: RecordCreateInput,
+): RecordCreateInput {
   const source = object(value);
   try {
-    return validateRecordMetadata({
-      recordType:
-        source.recordType === undefined && fallback
-          ? fallback.recordType
-          : source.recordType,
-      recordNumber:
-        source.recordNumber === undefined && fallback
-          ? fallback.recordNumber
-          : source.recordNumber,
-      title:
-        source.title === undefined && fallback ? fallback.title : source.title,
-      description:
-        source.description === undefined && fallback
-          ? fallback.description
-          : source.description,
-      discipline:
-        source.discipline === undefined && fallback
-          ? fallback.discipline
-          : source.discipline,
-      source:
-        source.source === undefined && fallback
-          ? fallback.source
-          : source.source,
-    });
+    return validateRecordMetadata(
+      {
+        recordType:
+          source.recordType === undefined && fallback
+            ? fallback.recordType
+            : source.recordType,
+        title:
+          source.title === undefined && fallback
+            ? fallback.title
+            : source.title,
+        description:
+          source.description === undefined && fallback
+            ? fallback.description
+            : source.description,
+        discipline:
+          source.discipline === undefined && fallback
+            ? fallback.discipline
+            : source.discipline,
+        source:
+          source.source === undefined && fallback
+            ? fallback.source
+            : source.source,
+      },
+      { existingDiscipline: fallback?.discipline },
+    );
   } catch (error) {
     if (error instanceof RecordValidationError)
       throw new RequestValidationError(error.message);
@@ -54,11 +55,10 @@ function recordInput(
   }
 }
 
-export function parseRecordCreate(value: unknown): RecordWriteInput {
+export function parseRecordCreate(value: unknown): RecordCreateInput {
   const source = object(value);
   const allowed = new Set([
     "recordType",
-    "recordNumber",
     "title",
     "description",
     "discipline",
@@ -72,25 +72,18 @@ export function parseRecordCreate(value: unknown): RecordWriteInput {
 
 export function parseRecordUpdate(
   value: unknown,
-  current: RecordWriteInput,
+  current: RecordCreateInput,
 ): RecordUpdateInput {
   const source = object(value);
   if (Object.keys(source).length === 0) {
     throw new RequestValidationError("At least one field is required.");
   }
-  const allowed = new Set([
-    "recordNumber",
-    "title",
-    "description",
-    "discipline",
-    "source",
-  ]);
+  const allowed = new Set(["title", "description", "discipline", "source"]);
   if (Object.keys(source).some((key) => !allowed.has(key))) {
     throw new RequestValidationError("One or more fields are not allowed.");
   }
   const metadata = recordInput(source, current);
   return {
-    recordNumber: metadata.recordNumber,
     title: metadata.title,
     description: metadata.description,
     discipline: metadata.discipline,

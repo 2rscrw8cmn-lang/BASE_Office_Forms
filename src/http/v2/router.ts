@@ -177,7 +177,7 @@ export async function routeV2Request(
     );
   }
   const recordRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/records(?:\/([^/]+)(?:\/(archive|workspace))?)?$/,
   );
   if (recordRoute && dependencies) {
     return handleRecordRoute(
@@ -190,7 +190,7 @@ export async function routeV2Request(
     );
   }
   const revisionRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions(?:\/([^/]+)(?:\/(publish))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/records\/([^/]+)\/revisions(?:\/([^/]+)(?:\/(publish|workspace))?)?$/,
   );
   if (revisionRoute && dependencies) {
     return handleRevisionRoute(
@@ -262,7 +262,9 @@ async function handleRecordRoute(
   action: string | undefined,
 ): Promise<Response> {
   const allowedMethods = action
-    ? ["POST"]
+    ? action === "workspace"
+      ? ["GET"]
+      : ["POST"]
     : recordId
       ? ["GET", "PATCH"]
       : ["GET", "POST"];
@@ -312,6 +314,14 @@ async function handleRecordRoute(
         ),
       );
     }
+    if (action === "workspace") {
+      const workspace = dependencies.recordWorkspace;
+      if (!workspace) return unavailable(context);
+      return apiSuccess(
+        context,
+        await workspace.load(authenticated.session, projectId, recordId),
+      );
+    }
     if (request.method === "GET") {
       return apiSuccess(
         context,
@@ -332,7 +342,7 @@ async function handleRecordRoute(
       {
         ...parseRecordUpdate(
           await parseJsonRequest(request),
-          toRecordWriteInput(current),
+          toRecordMetadataInput(current),
         ),
         correlationId: context.requestId,
       },
@@ -421,7 +431,9 @@ async function handleRevisionRoute(
   action: string | undefined,
 ): Promise<Response> {
   const allowedMethods = action
-    ? ["POST"]
+    ? action === "workspace"
+      ? ["GET"]
+      : ["POST"]
     : revisionId
       ? ["GET"]
       : ["GET", "POST"];
@@ -432,6 +444,24 @@ async function handleRevisionRoute(
     allowedMethods,
   );
   if (authenticated instanceof Response) return authenticated;
+  if (action === "workspace") {
+    if (!revisionId) return projectError(context, new RevisionNotFoundError());
+    const workspace = dependencies.revisionWorkspace;
+    if (!workspace) return unavailable(context);
+    try {
+      return apiSuccess(
+        context,
+        await workspace.load(
+          authenticated.session,
+          projectId,
+          recordId,
+          revisionId,
+        ),
+      );
+    } catch (error) {
+      return projectError(context, error);
+    }
+  }
   const revisions = dependencies.revisions;
   const records = dependencies.records;
   if (!revisions || !records) return unavailable(context);
@@ -1525,10 +1555,9 @@ function toRfiWriteInput(rfi: Rfi) {
     scheduleImpact: rfi.scheduleImpact,
   };
 }
-function toRecordWriteInput(record: Record) {
+function toRecordMetadataInput(record: Record) {
   return {
     recordType: record.recordType,
-    recordNumber: record.recordNumber,
     title: record.title,
     description: record.description,
     discipline: record.discipline,

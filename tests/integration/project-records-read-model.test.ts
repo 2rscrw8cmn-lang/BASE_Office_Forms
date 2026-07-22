@@ -13,6 +13,7 @@ import { D1MembershipsRepository } from "../../src/infrastructure/db/d1/membersh
 import { D1OrganizationsRepository } from "../../src/infrastructure/db/d1/organizations-repository";
 import { D1ProjectMembershipsRepository } from "../../src/infrastructure/db/d1/project-memberships-repository";
 import { D1ProjectRecordsReadRepository } from "../../src/infrastructure/db/d1/project-records-read-repository";
+import { D1ProjectRecordSequencesRepository } from "../../src/infrastructure/db/d1/project-record-sequences-repository";
 import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
@@ -76,7 +77,13 @@ function dependencies(): V2RouteDependencies {
       new D1MembershipsRepository(database),
     ),
     projects,
-    records: new RecordService(projects, new D1RecordsRepository(database)),
+    records: new RecordService(
+      projects,
+      new D1RecordsRepository(
+        database,
+        new D1ProjectRecordSequencesRepository(database),
+      ),
+    ),
     projectRecords: new ProjectRecordsReadModelService(
       projects,
       new D1ProjectRecordsReadRepository(database),

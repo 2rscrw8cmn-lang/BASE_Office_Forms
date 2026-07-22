@@ -25,6 +25,7 @@ import { D1ProjectsRepository } from "../../src/infrastructure/db/d1/projects-re
 import { D1RecordRevisionSequencesRepository } from "../../src/infrastructure/db/d1/record-revision-sequences-repository";
 import { D1RecordRevisionsRepository } from "../../src/infrastructure/db/d1/record-revisions-repository";
 import { D1RecordsRepository } from "../../src/infrastructure/db/d1/records-repository";
+import { D1ProjectRecordSequencesRepository } from "../../src/infrastructure/db/d1/project-record-sequences-repository";
 import { D1RevisionFilesRepository } from "../../src/infrastructure/db/d1/revision-files-repository";
 import { R2FileStorage } from "../../src/infrastructure/storage/r2-file-storage";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
@@ -173,7 +174,10 @@ function dependencies(storage?: FileStoragePort): V2RouteDependencies {
     new D1ProjectsRepository(database),
     new D1ProjectMembershipsRepository(database),
   );
-  const records = new D1RecordsRepository(database);
+  const records = new D1RecordsRepository(
+    database,
+    new D1ProjectRecordSequencesRepository(database),
+  );
   const revisionSequences = new D1RecordRevisionSequencesRepository(database);
   const revisions = new D1RecordRevisionsRepository(
     database,
@@ -419,7 +423,7 @@ describe("files foundation API", () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(9);
+    expect(version?.schema_version).toBe(10);
   });
 
   it("uploads a file, persists metadata and the file.uploaded event, and downloads exact bytes", async () => {
