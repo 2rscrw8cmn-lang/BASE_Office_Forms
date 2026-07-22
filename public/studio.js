@@ -216,9 +216,10 @@
         <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
         <option value="bottom"${align === "bottom" ? " selected" : ""}>Bottom</option>
       </select>`)}
+      ${fieldCell("Row", `<label class="toggle compact"><input type="checkbox" data-path="${base}.${index}.break" data-value-type="bool"${field.break ? " checked" : ""}><span>New line</span></label>`)}
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
-    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. The preview shows a dashed outline where it will sit.</div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. Check "New line" to start this field on a fresh row below the previous ones. The preview shows a dashed outline where it will sit.</div>`;
   }
 
   function cardHead(type, index, noun) {
