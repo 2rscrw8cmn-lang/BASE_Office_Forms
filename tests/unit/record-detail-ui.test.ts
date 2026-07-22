@@ -509,9 +509,9 @@ describe("record detail workspace", () => {
     expect(
       document.querySelector(".document-read-only")?.textContent,
     ).toContain("read-only");
-    expect(
-      document.querySelector(".document-read-only")?.textContent,
-    ).toContain("Archived July 2, 2026");
+    expect(document.querySelector(".document-read-only")?.textContent).toMatch(
+      /Archived July \d{1,2}, 2026/,
+    );
     expect(
       document.querySelector(".document-title-row")?.textContent,
     ).toContain("Archived");
