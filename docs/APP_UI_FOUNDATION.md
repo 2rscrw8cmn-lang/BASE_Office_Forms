@@ -30,14 +30,18 @@ registers, cards, dialogs, statuses, file rows, and history remain mostly local
 markup and CSS. The resulting component, state, and responsive contracts in
 this document are binding for later migrations.
 
-UI-2 has implemented its build and CSS boundary, but remains active until its
-runtime smoke tests and complete gate pass. The authenticated entry now loads
+UI-2 completed its build and CSS boundary, complete validation gate, and
+authenticated product-owner smoke test on 2026-07-23. The authenticated entry now loads
 neutral `public/brand-tokens.css`, Vite output in `public/app/`, and the
 existing shell through a React compatibility host. It no longer loads
 `public/base.css`. `public/base.css` continues to own controlled-document
 geometry and renderer selectors, while legacy Studio, Library, fill, and viewer
 pages retain their compatible renderer path. No feature route or domain rule
 has been migrated into React.
+
+UI-2 is ready for PR review and merge. PR #36 reconciliation is the required
+next action before UI-3 begins; completion of this foundation does not begin
+the component-library phase.
 
 The target for application headings is **Archivo**. Existing browser-module
 screens may still show Georgia because they retain their legacy shell CSS; UI-2

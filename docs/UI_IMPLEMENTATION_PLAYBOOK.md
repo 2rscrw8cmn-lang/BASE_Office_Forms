@@ -21,7 +21,7 @@ At completion the agent must update the repository documentation described in th
 ```text
 Spike 0  Tabulator behavior proof                              [complete: reject for RFI]
 UI-1     Audit, design contract, and decisions                 [complete]
-UI-2     Application/document CSS separation + React/Vite foundation [active: runtime gate]
+UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
 UI-5     RFI register using BaseDataGrid + Tabulator
@@ -158,9 +158,9 @@ The team can answer, without inventing per-screen rules:
 
 ## 5. UI-2 — CSS separation and React/Vite foundation
 
-**Status:** Active. The implementation boundary is present; UI-2 may be marked
-complete only after the merged branch passes runtime smoke testing and the full
-exit gate.
+**Status:** Complete on 2026-07-23. PR #41 passed the full gate and the
+authenticated product-owner smoke test; it is ready for review and merge. PR
+#36 reconciliation is required before UI-3 begins.
 
 ### Objective
 

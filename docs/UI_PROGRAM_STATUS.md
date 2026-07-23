@@ -1,7 +1,7 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-23
-**Current phase:** UI-2 — CSS separation and React/Vite foundation active
+**Current phase:** UI-2 — CSS separation and React/Vite foundation complete; PR #41 ready for review and merge
 **Active PR:** [#41 — UI-2 — CSS separation and React/Vite foundation](https://github.com/2rscrw8cmn-lang/BASE_Office_Forms/pull/41) (`ui-2-css-react-vite-foundation`)
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
@@ -54,7 +54,7 @@ headers, registers, cards, dialogs, status tones, file rows, and history remain
 mostly local markup and CSS. The application heading target is Archivo; UI-2
 does not perform the later legacy-Georgia typography migration.
 
-## 3. UI-2 active work — PR #41
+## 3. UI-2 complete — PR #41
 
 ### Implemented on the branch
 
@@ -75,15 +75,19 @@ does not perform the later legacy-Georgia typography migration.
 - The narrow, previously proven Miniflare `sharp` override resolves the
   development/test audit finding without `npm audit fix --force`.
 
-### Current blockers
+### Authenticated product-owner closeout (2026-07-23)
 
-1. Re-run the failed authenticated Dashboard and Project Overview checks and
-   verify that register captions and filter labels are visually hidden while
-   remaining available to assistive technology.
+The product owner completed the authenticated retest on
+`https://b2e8a4ce.base-office-forms.pages.dev`. Dashboard and Project Overview
+load without HTTP 500/Cloudflare 1101; `BASE UI Preview` and `UI-2 Smoke Test`
+are available; Records shows `Preview Test Document` and its draft revision.
+Projects and Records register captions, plus search, filter, and sort labels,
+are visually hidden while retaining meaningful accessible names in the browser
+accessibility pane. Browser Back/Forward, direct project-route refresh, Studio,
+Document Library, controlled-document preview, and mobile navigation also pass.
 
-UI-2 is technically ready for that product-owner smoke testing, but remains
-active until every blocker above is resolved. Its implementation work is not
-permission to mark the phase complete early.
+The UI-2 exit gate is satisfied. PR #41 is ready for review and merge; this
+status does not authorize beginning UI-3 before PR #36 reconciliation.
 
 ### Automated validation after merge
 
@@ -146,7 +150,7 @@ An earlier unauthenticated request to the PR preview returned Cloudflare Access
 `302 Found`, which could not test the Pages Function. The subsequent
 product-owner authenticated smoke and direct D1 query established the actual
 preview-schema mismatch documented above. The new guarded fixture supplies the
-minimum Access identity and synthetic project required for the targeted browser
+minimum Access identity and synthetic project used for the passing browser
 retest; it does not alter the source route or its read model.
 
 ## 4. UI-2 exit gate
@@ -167,28 +171,31 @@ UI-2 is complete only when all of these are true:
 - rollback notes, dependency documentation, current structure, ADRs, tracker,
   and PR #41 evidence are current.
 
+**Satisfied 2026-07-23:** the complete local gate, active Pages preview, and
+the authenticated product-owner retest above meet every UI-2 exit criterion.
+
 ## 5. Phase status
 
-| Phase                        | Status                      | Next gate                                                 |
-| ---------------------------- | --------------------------- | --------------------------------------------------------- |
-| Spike 0 — Tabulator          | Complete; rejected for RFI  | Future high-volume proposal only                          |
-| UI-1 — Audit and decisions   | Complete                    | Binding documents and ADRs recorded                       |
-| UI-2 — CSS + React/Vite      | Active; fixture provisioned | Targeted authenticated Dashboard/Overview and a11y retest |
-| UI-3 — Components + UI Lab   | Not started                 | UI-2 exit gate passes                                     |
-| UI-4 — React shell           | Not started                 | UI-3 shared patterns stable                               |
-| UI-5 — RFI register          | Not started                 | Controlled-table parity; no Tabulator dependency          |
-| UI-6 — Projects + Records    | Not started                 | Shared register contract                                  |
-| UI-7 — Detail workspaces     | Not started                 | Shared workspace contract                                 |
-| UI-8 — Dashboard/forms/admin | Not started                 | Shared shell/forms/registers stable                       |
-| UI-9 — Library + Studio      | Not started                 | Application foundation stable                             |
-| UI-10 — Enforcement/cleanup  | Not started                 | Route parity and visual baselines                         |
+| Phase                        | Status                     | Next gate                                        |
+| ---------------------------- | -------------------------- | ------------------------------------------------ |
+| Spike 0 — Tabulator          | Complete; rejected for RFI | Future high-volume proposal only                 |
+| UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
+| UI-2 — CSS + React/Vite      | Complete; PR #41 ready     | Review/merge PR #41; retain rollback path        |
+| UI-3 — Components + UI Lab   | Not started                | PR #36 reconciliation after PR #41 review/merge  |
+| UI-4 — React shell           | Not started                | UI-3 shared patterns stable                      |
+| UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
+| UI-6 — Projects + Records    | Not started                | Shared register contract                         |
+| UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
+| UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
+| UI-9 — Library + Studio      | Not started                | Application foundation stable                    |
+| UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                |
 
 ## 6. Current constraints and risks
 
 - Preview D1 schema remains isolated by the branch-compatible `0001`–`0012`
   migration set. The synthetic fixture is limited to one identity's minimum
-  access path and must be removed with the guarded cleanup command when the
-  targeted retest is complete.
+  access path and can be removed with the guarded cleanup command when it is
+  no longer needed.
 - Official RFI issuance remains incomplete and must fail closed.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
@@ -198,6 +205,6 @@ UI-2 is complete only when all of these are true:
 
 ## 7. Next action
 
-Complete PR #41's targeted authenticated smoke evidence and full gate.
-Only after UI-2's exit gate passes may UI-3 begin with BASE primitives and the
-UI Lab. Do not merge this PR from this task.
+Review and merge PR #41 through the normal review workflow. Before UI-3,
+reconcile PR #36 with the resulting current-main UI-2 foundation and record
+the outcome. Do not merge this PR from this task.
