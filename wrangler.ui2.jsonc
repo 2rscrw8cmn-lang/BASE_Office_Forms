@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "base-office-forms-ui2-preview-tools",
+  "compatibility_date": "2026-07-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "base-office-forms-ui2-preview",
+      "database_id": "c874725c-78d8-43d5-a1b8-5d4d26e52067",
+      "migrations_dir": "./migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "base-office-forms-files-preview",
+    },
+  ],
+}

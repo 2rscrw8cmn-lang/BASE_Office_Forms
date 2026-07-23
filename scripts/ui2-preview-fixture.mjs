@@ -41,17 +41,22 @@ const expectedMigrations = [
   "0012_project_record_sequences.sql",
 ];
 const wranglerCli = resolve("node_modules", "wrangler", "bin", "wrangler.js");
+const wranglerConfig = resolve("wrangler.ui2.jsonc");
 
 function sql(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
 function runWrangler(args, options = {}) {
-  return execFileSync(process.execPath, [wranglerCli, ...args], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    stdio: options.json ? ["ignore", "pipe", "inherit"] : "inherit",
-  });
+  return execFileSync(
+    process.execPath,
+    [wranglerCli, "--config", wranglerConfig, ...args],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: options.json ? ["ignore", "pipe", "inherit"] : "inherit",
+    },
+  );
 }
 
 function queryDatabase(database, command, environment) {
@@ -74,8 +79,6 @@ function executePreviewFile(sqlText) {
       "execute",
       previewDatabase,
       "--remote",
-      "--env",
-      "ui2",
       "--file",
       temporaryFile,
       "--yes",
@@ -89,7 +92,7 @@ function assertPreviewTarget() {
   if (!existsSync(wranglerCli)) {
     throw new Error("Local Wrangler is required; run npm install first.");
   }
-  const configuration = readFileSync("wrangler.jsonc", "utf8");
+  const configuration = readFileSync("wrangler.ui2.jsonc", "utf8");
   if (
     !configuration.includes(`\"database_name\": \"${previewDatabase}\"`) ||
     !configuration.includes(`\"database_id\": \"${previewDatabaseId}\"`)
@@ -104,7 +107,6 @@ function assertMigrations() {
   const migrations = queryDatabase(
     previewDatabase,
     "SELECT name FROM d1_migrations ORDER BY id",
-    "ui2",
   ).map((row) => row.name);
   if (JSON.stringify(migrations) !== JSON.stringify(expectedMigrations)) {
     throw new Error(
@@ -154,7 +156,6 @@ function resolvePreviewUser(identity) {
      FROM users
      WHERE identity_subject = ${sql(identity.identity_subject)}
         OR lower(email) = ${sql(identity.email.toLowerCase())}`,
-    "ui2",
   );
   if (rows.length > 1) {
     throw new Error(
@@ -221,7 +222,6 @@ function verify(userId) {
      JOIN organization_memberships om ON om.user_id = u.id AND om.status = 'active'
      JOIN project_memberships pm ON pm.user_id = u.id AND pm.organization_id = om.organization_id AND pm.status = 'active'
      WHERE u.id = ${sql(userId)} AND u.status = 'active' AND om.organization_id = ${sql(previewFixture.organizationId)} AND pm.project_id = ${sql(previewFixture.projectId)}`,
-    "ui2",
   );
   if (
     membership.length !== 1 ||
@@ -237,7 +237,6 @@ function verify(userId) {
        (SELECT COUNT(*) FROM rfi_records WHERE organization_id = ${sql(previewFixture.organizationId)} AND project_id = ${sql(previewFixture.projectId)} AND status IN ('issued', 'answered')) AS active_rfi_count,
        (SELECT COUNT(*) FROM revision_files WHERE organization_id = ${sql(previewFixture.organizationId)} AND project_id = ${sql(previewFixture.projectId)}) AS recent_file_count,
        (SELECT COUNT(*) FROM issuances WHERE organization_id = ${sql(previewFixture.organizationId)} AND project_id = ${sql(previewFixture.projectId)}) AS recent_issuance_count`,
-    "ui2",
   );
   if (dashboard.length !== 1 || dashboard[0].draft_revision_count !== 1) {
     throw new Error(
@@ -251,7 +250,6 @@ function verify(userId) {
        (SELECT COUNT(*) FROM record_revisions rev JOIN records rec ON rec.id = rev.record_id AND rec.organization_id = rev.organization_id WHERE rev.organization_id = ${sql(previewFixture.organizationId)} AND rev.project_id = ${sql(previewFixture.projectId)} AND rev.status = 'draft' AND rec.status = 'active') AS draft_revisions,
        (SELECT COUNT(*) FROM rfi_records WHERE organization_id = ${sql(previewFixture.organizationId)} AND project_id = ${sql(previewFixture.projectId)} AND status IN ('issued', 'answered')) AS active_rfis,
        (SELECT COUNT(*) FROM project_memberships WHERE organization_id = ${sql(previewFixture.organizationId)} AND project_id = ${sql(previewFixture.projectId)} AND status = 'active') AS team_members`,
-    "ui2",
   );
   if (
     overview.length !== 1 ||
@@ -268,7 +266,6 @@ function verify(userId) {
     previewDatabase,
     `SELECT r.id FROM records r LEFT JOIN record_revisions cur ON cur.id = r.current_revision_id AND cur.organization_id = r.organization_id AND cur.record_id = r.id
      WHERE r.organization_id = ${sql(previewFixture.organizationId)} AND r.project_id = ${sql(previewFixture.projectId)} AND r.status = 'active' AND r.id = ${sql(previewFixture.recordId)}`,
-    "ui2",
   );
   if (records.length !== 1) {
     throw new Error(
