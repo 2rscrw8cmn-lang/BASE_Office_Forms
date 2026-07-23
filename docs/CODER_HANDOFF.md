@@ -4,15 +4,30 @@
 **Version date:** 2026-07-19
 
 
+## 0. Current implementation entry point
+
+The original PR sequence below records the architecture plan from 2026-07-19. Much of that platform foundation is now implemented. Do not start by replaying PR 1.
+
+Before implementation:
+
+1. read the root `AGENTS.md`;
+2. inspect current `main` and open pull requests;
+3. read `CURRENT_APPLICATION_STRUCTURE.md`;
+4. read `UI_PROGRAM_STATUS.md` for UI work;
+5. follow `APP_UI_FOUNDATION.md`, `UI_IMPLEMENTATION_PLAYBOOK.md`, and the applicable phase prompt;
+6. continue an existing valid branch/PR rather than creating a competing replacement.
+
+Every agent must update durable repository handoff documentation and the PR body before returning. Chat history is not the implementation source of truth.
+
 ## 1. Mission
 
 Implement the architecture in this directory without rewriting the current renderer or breaking the shared library.
 
 The first implementation target is the authenticated Project + RFI vertical slice.
 
-## 2. Required first pull requests
+## 2. Original foundation pull-request sequence — historical reference
 
-Keep pull requests reviewable and ordered.
+Keep new pull requests reviewable and ordered, but determine the next work from current `main`, open PRs, `CURRENT_APPLICATION_STRUCTURE.md`, and the applicable living program tracker. The sequence below must not be treated as unstarted work.
 
 ### PR 1 — Test and schema foundation
 

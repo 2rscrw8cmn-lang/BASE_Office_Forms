@@ -1,5 +1,19 @@
 # BASE Forms & Documents Kit
 
+
+## Agents and implementation work
+
+Coding agents must begin with [`AGENTS.md`](AGENTS.md), then read the architecture index and the living program status before changing implementation. Chat history is not the source of truth.
+
+For application UI work, the binding sequence is:
+
+1. [`docs/UI_PROGRAM_STATUS.md`](docs/UI_PROGRAM_STATUS.md) — current phase, active work, constraints, and next action;
+2. [`docs/APP_UI_FOUNDATION.md`](docs/APP_UI_FOUNDATION.md) — application design direction and component rules;
+3. [`docs/UI_IMPLEMENTATION_PLAYBOOK.md`](docs/UI_IMPLEMENTATION_PLAYBOOK.md) — detailed phase guides and exit gates;
+4. [`docs/UI_AGENT_PROMPTS.md`](docs/UI_AGENT_PROMPTS.md) — copy-ready prompts that require repository closeout updates.
+
+Agents must update the program tracker, current application structure, applicable architecture documents, tests, and pull request evidence before returning work. Do not merge unless the user explicitly requests a merge.
+
 One controlled visual identity (`public/base.css`) + one renderer (`public/engine.js`).
 Everything you make is a small **definition** (a JSON object). Create them two ways —
 click through the builder, or describe them and let Claude generate them — and both
@@ -88,8 +102,8 @@ font once in `public/base.css` and every form and document updates together.
 
 ## Current access model
 
-- Anyone who can open the site can browse, fill, and create shared documents.
-- Existing documents can only be overwritten or deleted with their private edit link.
-- Public links contain no edit credential. Keep private edit links with document owners.
-- A future identity layer can add named users, approvals, and role-based permissions
-  without changing stored document definitions.
+- The project-control application is authenticated and uses server-side, tenant-scoped authorization.
+- Browser capabilities improve the interface but never replace API authorization or lifecycle checks.
+- File metadata is stored in D1 and private binaries are stored in R2; permanent public R2 URLs are not used.
+- Legacy public viewer/fill links and private edit-link behavior remain compatibility surfaces separate from project Records and official workflows.
+- Existing valid document definitions remain compatible while identity, project, record, revision, file, and issuance capabilities evolve around them.
