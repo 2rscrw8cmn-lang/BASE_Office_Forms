@@ -1,9 +1,65 @@
 # RFI Slice 1 Reconciliation and Production Rollout
 
-**Status:** Production already has migration 0013. Only 0014 is pending.
-PR #36 deploys code compatible with the existing production schema plus the
-post-0014 model; the coordinated cutover below still requires explicit human
-approval before any step touches production.
+**Status: Complete.** PR #36 is squash-merged, deployed, migrated, reconciled,
+and smoke-tested in production. The sections below are the historical record
+of how the cutover was planned and executed; nothing further is pending for
+RFI Slice 1.
+
+## Production closeout (2026-07-23)
+
+- **Merged main commit:** `e2bca602b4c867f9dd6ec5d17b5b3f8aea690d06`.
+- **Production deployment:** `a6cccd6b-e893-42fb-854a-96f9a26d41e2`
+  (`https://a6cccd6b.base-office-forms.pages.dev`), built from that commit;
+  confirmed via `wrangler pages deployment list` as the current Production
+  deployment before migrating.
+- **Migration applied:** `0014_rfi_document_control_alignment.sql`, start
+  2026-07-23T18:56:25Z, completion 2026-07-23T18:56:28Z (`0014` applied at
+  `2026-07-23 18:56:28` per the ledger). Command:
+  `npx wrangler d1 migrations apply base-office-forms-library --remote`
+  (executed 55 statements in 24.11ms; `0013` correctly skipped, not rerun).
+- **Resulting ledger:** exactly `0001`–`0014` (14 entries).
+- **Reconciliation — all passed:**
+  - 1 migrated RFI; 0 missing records/details/revisions.
+  - 0 duplicate `rfi_details` rows; 0 current-revision mismatches; 0 duplicate
+    records.
+  - 0 orphan details/responses/files.
+  - Response preservation: 0 pre-migration responses → 0 preserved (none
+    existed to preserve).
+  - File/R2-key preservation: 0 pre-migration attachments → 0 on the draft
+    revision (none existed to preserve); the 8 pre-existing non-RFI
+    `revision_files` rows are untouched (same count, same storage keys,
+    backfilled to `role = primary_document`).
+  - Party resolution: the one RFI's `responsible_party = 'fvf'` correctly
+    preserved as **unresolved** (`current_responsible_contact_id = NULL`,
+    `responsible_party_legacy_text = 'fvf'`), matching the pre-migration
+    preflight (0 matching active contacts).
+  - Sequence state preserved: `project_record_type_sequences.last_number = 1`,
+    matching the pre-migration `rfi_number_sequences.last_number = 1`.
+  - Legacy tables `rfi_records`, `rfi_attachments`, `rfi_number_sequences`
+    retired and absent.
+- **Schema marker:** `app_meta.schema_version = 12` immediately after
+  migration, and **confirmed still 12** after authenticated production
+  Dashboard and Project Overview requests — the `INSERT OR IGNORE` legacy-
+  bootstrap fix (commit `5366208`) holds under real traffic.
+- **Production smoke passed:** Dashboard, Projects, Project Overview, Records,
+  direct-route refresh, browser Back/Forward, Studio, Document Library,
+  controlled document preview, mobile navigation; migrated RFI appears exactly
+  once with subject/question preserved and Party `fvf` preserved unresolved;
+  expandable draft editor (single-open, normal text selection, field
+  save/refresh persistence), Details/Preview, RFI workspace load, correct
+  metadata/breadcrumbs, controlled renderer preview; issuance remains
+  fail-closed.
+- **Known limitations:** only one legacy RFI existed in production at
+  migration time, with zero responses/attachments — response and R2
+  attachment-preservation logic were exercised structurally and via the
+  disposable 0014 rehearsal's populated fixture, not against real production
+  attachment volume. The unresolved Party value stays unlinked to a
+  `project_contacts` row until manually reconciled. RFI issuance remains
+  incomplete and fail-closed (pre-existing, unchanged by this migration).
+
+**RFI Slice 1 is complete.** Next: UI-3 is the active implementation phase;
+RFI Slice 2A backend architecture may begin once `main` is pulled and stable;
+RFI Slice 2 issuance UI stays paused until UI-3's shared components exist.
 
 ## Verified production state (2026-07-23T18:32:20Z)
 
@@ -77,7 +133,7 @@ revision per RFI, response/file/R2-key metadata preservation, Party resolution,
 zero reconciliation orphans, retirement of legacy RFI tables, sequence
 preservation, and exactly 14 ledger entries.
 
-## Coordinated production cutover
+## Coordinated production cutover (executed 2026-07-23 — kept as the record of what ran)
 
 Production currently has 1 legacy RFI row (`rfi_records` = 1,
 `rfi_responses` = 0, `rfi_attachments` = 0). Old code requires `rfi_records`;

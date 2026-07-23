@@ -6,14 +6,20 @@ Dashboard, Projects, Project Overview, and project Records register surfaces
 
 ## Runtime shape
 
-### RFI Slice 1 preview reconciliation
+### RFI Slice 1 — complete, production migrated
 
-Pages preview now binds the isolated combined RFI D1 database
-`base-office-forms-rfi-preview` (`5169cd7c-60d8-4dbd-a66c-75155f745216`) through
-the root preview binding. Production remains `base-office-forms-library`
-(`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and is not changed by PR #36. Retained
-UI-2 scripts use `wrangler.ui2.jsonc`; the remote 0014 rehearsal uses the
-separate guarded `wrangler.rfi-rehearsal.jsonc`. See `RFI_SLICE_1_ROLLOUT.md`.
+PR #36 is merged (`e2bca602b4c867f9dd6ec5d17b5b3f8aea690d06`) and migration
+`0014_rfi_document_control_alignment.sql` is applied to production
+`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`; ledger
+exactly `0001`–`0014`). RFIs now live on the shared Records → Revisions →
+Files spine (`records` + `rfi_details`); the standalone `rfi_records`,
+`rfi_attachments`, and `rfi_number_sequences` tables are retired. See
+`RFI_SLICE_1_ROLLOUT.md` §"Production closeout" for full reconciliation
+evidence. Pages preview still binds the isolated combined RFI D1 database
+`base-office-forms-rfi-preview` (`5169cd7c-60d8-4dbd-a66c-75155f745216`)
+through the root preview binding; retained UI-2 scripts use
+`wrangler.ui2.jsonc`, and the remote 0014 rehearsal uses the separate guarded
+`wrangler.rfi-rehearsal.jsonc`.
 
 The repository is a Cloudflare Pages application with static browser assets, a
 small React/Vite application entry, Pages Functions, one D1 database binding,
@@ -67,6 +73,7 @@ Storage
 │   ├── record_revisions
 │   ├── record_revision_sequences
 │   ├── revision_files
+│   ├── rfi_details
 │   └── app_meta
 └── R2 binding FILES (private bucket, no public/signed URLs)
     └── uploaded file binaries, keyed by server-generated storage key
@@ -79,11 +86,14 @@ For UI-2 Pages previews, `DB` is explicitly bound to the isolated
 `base-office-forms-ui2-preview` database
 (`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It carries only the UI-2/current-main
 `0001`–`0012` migration ledger, including the legacy `rfi_records` table used
-by Dashboard and Project Overview. Production remains bound to
-`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and was
-inspected but not modified. PR #36's separate preview database is not a UI-2
-binding because its `0013`/`0014` RFI schema is incompatible with these read
-models.
+by Dashboard and Project Overview at the time of that investigation.
+Production is bound to `base-office-forms-library`
+(`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`); it was inspected but not modified
+during the UI-2 investigation, and has since had migration `0014` applied by
+PR #36 (see the RFI Slice 1 note above) — production no longer has
+`rfi_records`. The UI-2 preview database intentionally still does not; it
+remains pinned to the `0001`–`0012` ledger and is unaffected by the PR #36
+migration.
 
 The preview database is supplied with an opt-in, deterministic smoke fixture
 through `scripts/ui2-preview-fixture.mjs` and the `db:fixture:preview` /

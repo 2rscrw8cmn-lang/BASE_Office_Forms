@@ -1,28 +1,24 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-23
-**Current phase:** UI-2 — CSS separation and React/Vite foundation complete; PR #41 ready for review and merge
-**Active PR:** [#41 — UI-2 — CSS separation and React/Vite foundation](https://github.com/2rscrw8cmn-lang/BASE_Office_Forms/pull/41) (`ui-2-css-react-vite-foundation`)
+**Current phase:** RFI Slice 1 complete and closed out in production. UI-3 is the next active implementation phase.
+**Active PR:** None — PR #36 and PR #41 are both merged. UI-3 has not been started.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
-> **2026-07-23 reconciliation update (supersedes stale PR #41 wording below):**
-> UI-2 is complete and was squash-merged to `main` as `a1ade6d`. The active
-> work is draft PR #36 (`feature/rfi-slice-1-register-workspace`), not UI-3.
-> UI-3 remains blocked until PR #36 reconciliation, Pages preview, checks, and
-> product-owner RFI smoke testing are complete. Do not merge or mark PR #36 ready
-> in this task.
->
-> **2026-07-23 production verification:** read-only verification against
-> `base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) confirmed
-> migration `0013` is already applied and structurally present in production;
-> `0014` is not recorded and has never started — production is a clean
-> pre-0014 state. `app_meta.schema_version` reading `1` instead of `11` is a
-> pre-existing legacy-bootstrap bug (`INSERT OR REPLACE` stomping the marker),
-> already fixed in this PR (commit `5366208`) by switching to
-> `INSERT OR IGNORE`. See `RFI_SLICE_1_ROLLOUT.md` for the full evidence and
-> the coordinated cutover plan: freeze, backup/preflight, squash-merge,
-> production deploy, apply pending migration `0014` only, reconcile, smoke
-> test, reopen. Do not rerun `0013`. Do not merge in this task.
+> **2026-07-23 RFI Slice 1 production closeout:**
+> PR #36 (`feature/rfi-slice-1-register-workspace`) was squash-merged to `main`
+> as `e2bca602b4c867f9dd6ec5d17b5b3f8aea690d06`. Production Pages deployment
+> `a6cccd6b-e893-42fb-854a-96f9a26d41e2` (`https://a6cccd6b.base-office-forms.pages.dev`)
+> built from that commit. Migration `0014_rfi_document_control_alignment.sql`
+> was applied to production (`base-office-forms-library`,
+> `1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) at `2026-07-23 18:56:28`; `0013` was
+> correctly skipped, not rerun. Ledger is exactly `0001`–`0014`. Full evidence,
+> reconciliation results, and known limitations are in
+> `RFI_SLICE_1_ROLLOUT.md` §"Production closeout". **RFI Slice 1 is complete.**
+> UI-3 is now the next active implementation phase; RFI Slice 2A backend
+> architecture may begin once `main` is pulled and stable, but Slice 2 issuance
+> UI work stays paused until UI-3's shared components exist. Do not begin UI-3
+> or Slice 2 work in this task.
 
 ## 1. Current direction
 
@@ -195,14 +191,59 @@ UI-2 is complete only when all of these are true:
 **Satisfied 2026-07-23:** the complete local gate, active Pages preview, and
 the authenticated product-owner retest above meet every UI-2 exit criterion.
 
-## 5. Phase status
+## 5. RFI Slice 1 — production closeout (2026-07-23)
+
+PR #36 is merged and its production migration/reconciliation/smoke sequence
+is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
+
+- **Merged main commit:** `e2bca602b4c867f9dd6ec5d17b5b3f8aea690d06`.
+- **Production deployment:** `a6cccd6b-e893-42fb-854a-96f9a26d41e2`
+  (`https://a6cccd6b.base-office-forms.pages.dev`), built from that commit.
+- **Migration:** `0014_rfi_document_control_alignment.sql` applied to
+  `base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) at
+  `2026-07-23 18:56:28`. `0013` was already applied and was correctly skipped,
+  not rerun. Resulting ledger is exactly `0001`–`0014`.
+- **Reconciliation (all passed):** one stable Record, one `rfi_details` row,
+  and one correct current draft revision for the single migrated RFI; a
+  complete `rfi_0014_reconciliation` map entry; zero orphan details,
+  revisions, responses, or files; zero duplicate records; the RFI's
+  unresolved Party value (`fvf`) preserved as `responsible_party_legacy_text`
+  rather than dropped or force-matched; sequence state preserved
+  (`project_record_type_sequences.last_number = 1`, matching the pre-migration
+  `rfi_number_sequences`); legacy tables `rfi_records`, `rfi_attachments`,
+  `rfi_number_sequences` retired and absent.
+- **Schema marker:** `app_meta.schema_version` reached `12` immediately after
+  migration and **remained `12`** after authenticated Dashboard and Project
+  Overview requests — confirms the legacy-bootstrap fix (`INSERT OR IGNORE`,
+  commit `5366208`) holds under real production traffic.
+- **Production smoke passed:** Dashboard, Projects, Project Overview, Records,
+  direct-route refresh, browser Back/Forward, Studio, Document Library,
+  controlled document preview, mobile navigation; the migrated RFI appears
+  exactly once with subject/question preserved and the unresolved Party value
+  intact; expandable draft editor (single-open, normal text selection,
+  field save/refresh persistence), Details/Preview, RFI workspace load,
+  metadata/breadcrumbs, and controlled renderer preview all pass; issuance
+  remains fail-closed as designed.
+- **Known limitations:** only one legacy RFI existed in production at
+  migration time and it had zero responses/attachments, so response and
+  R2-file/attachment-preservation logic were exercised structurally and via
+  the disposable 0014 rehearsal's populated fixture, not against real
+  production attachment data. The unresolved Party value stays unlinked to a
+  `project_contacts` row until someone edits it by hand — expected behavior,
+  not a defect. RFI issuance remains incomplete and fail-closed (pre-existing,
+  unchanged by this migration).
+
+**RFI Slice 1 is complete.**
+
+## 6. Phase status
 
 | Phase                        | Status                     | Next gate                                        |
 | ---------------------------- | -------------------------- | ------------------------------------------------ |
 | Spike 0 — Tabulator          | Complete; rejected for RFI | Future high-volume proposal only                 |
 | UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
-| UI-2 — CSS + React/Vite      | Complete; PR #41 ready     | Review/merge PR #41; retain rollback path        |
-| UI-3 — Components + UI Lab   | Not started                | PR #36 reconciliation after PR #41 review/merge  |
+| UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
+| RFI Slice 1                  | Complete; merged and closed out in production | none                            |
+| UI-3 — Components + UI Lab   | **Next active phase**      | Begin implementation                             |
 | UI-4 — React shell           | Not started                | UI-3 shared patterns stable                      |
 | UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
@@ -210,26 +251,24 @@ the authenticated product-owner retest above meet every UI-2 exit criterion.
 | UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
 | UI-9 — Library + Studio      | Not started                | Application foundation stable                    |
 | UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                |
+| RFI Slice 2A — backend architecture | Not started; may begin after `main` is pulled and stable | Independent of UI-3 |
+| RFI Slice 2 — issuance UI     | Paused                     | UI-3 shared components must exist first          |
 
-## 6. Current constraints and risks
+## 7. Current constraints and risks
 
-- Preview D1 schema remains isolated by the branch-compatible `0001`–`0012`
-  migration set. The synthetic fixture is limited to one identity's minimum
-  access path and can be removed with the guarded cleanup command when it is
-  no longer needed.
 - Official RFI issuance remains incomplete and must fail closed.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
   resolved or formally accepted before a production release; do not use
   `npm audit fix --force` without a review.
+- The migrated RFI's Party value remains unresolved (legacy text only) until
+  manually reconciled to a project contact.
 
-## 7. Next action
+## 8. Next action
 
-Review and merge PR #41 through the normal review workflow. Before UI-3,
-reconcile PR #36 with the resulting current-main UI-2 foundation and record
-the outcome. Production verification is complete (0013 applied, 0014
-pending) — the remaining gate before UI-3 is human approval of the
-coordinated cutover in `RFI_SLICE_1_ROLLOUT.md` (freeze, squash-merge,
-deploy, apply 0014, reconcile, smoke test, reopen). Do not merge this PR
-from this task.
+UI-3 (Components + UI Lab) is the next active implementation phase. RFI
+Slice 2A backend architecture work may begin independently once `main` is
+pulled and stable, since it does not depend on UI-3. RFI Slice 2 issuance UI
+work stays paused until UI-3's shared component patterns are in place. No
+UI-3 or Slice 2 work was started in this task.
