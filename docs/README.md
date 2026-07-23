@@ -54,3 +54,9 @@ The first production vertical slice is:
 `Projects → RFIs → Files → Issue → Response → Close → Log exports`
 
 Submittals follow using the same record, revision, file, artifact, delivery, and audit foundation.
+
+## UI foundation guides
+
+- `APP_UI_FOUNDATION.md` — binding application UI contract and renderer boundary.
+- `UI_IMPLEMENTATION_PLAYBOOK.md` — ordered UI phases, gates, and closeout rules.
+- `UI_PROGRAM_STATUS.md` — current UI phase, audit findings, decisions, and next gate.

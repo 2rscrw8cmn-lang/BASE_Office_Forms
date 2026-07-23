@@ -2,7 +2,7 @@
 
 **Status:** Authenticated workspace inventory — application shell plus the
 Dashboard, Projects, Project Overview, and project Records register surfaces
-**Updated:** 2026-07-21
+**Updated:** 2026-07-23
 
 ## Runtime shape
 

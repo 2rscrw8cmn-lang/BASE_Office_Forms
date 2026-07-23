@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 These decisions are binding unless replaced by a later recorded decision.
 
 ## ADR-001 — Preserve the renderer
@@ -129,6 +128,64 @@ These decisions are binding unless replaced by a later recorded decision.
 **Decision:** Launch AI as defined actions rather than a general chatbot.
 
 **Reason:** Better context control, structured output, evaluation, and user trust.
+
+## ADR-021 — Separate application UI from controlled-document UI
+
+**Decision:** Keep `public/engine.js`, compatible JSON definitions, and
+renderer-owned CSS as the authority for official document presentation. The
+authenticated application will use application-only CSS and may share only
+explicitly documented neutral brand tokens.
+
+**Reason:** The current entry point still loads `public/base.css` with the app
+shell, allowing document classes and application patterns to drift into one
+another. CSS separation is a UI-2 implementation gate, not a claim about the
+current runtime.
+
+**Consequence:** UI-2 must prove renderer output and legacy Library/Studio
+compatibility before application feature migration begins.
+
+## ADR-022 — Incremental React/Vite application migration
+
+**Decision:** Introduce React, TypeScript, and Vite through a deterministic
+application build and compatibility mount, then migrate route-by-route.
+
+**Reason:** The current static shell and APIs are operational; a broad rewrite
+would increase route, accessibility, and rollback risk.
+
+**Consequence:** Canonical URLs, `/api/v2`, server authority, and legacy
+renderer routes remain stable while old and new mounts coexist temporarily.
+
+## ADR-023 — Radix behavior with BASE-owned components
+
+**Decision:** Radix may supply accessible interaction behavior. BASE owns the
+component source, rendered markup, styling, tokens, accessibility contract, and
+tests; stock shadcn/template styling is not adopted as the BASE theme.
+
+**Reason:** Shared behavior is valuable, but visual and semantic ownership must
+remain coherent across dense construction workflows.
+
+## ADR-024 — One application icon family
+
+**Decision:** Migrated application UI uses Lucide through one BASE icon
+component. Existing local inline SVG families remain compatibility assets until
+their routes migrate.
+
+**Reason:** The current shell, Studio, and Library each use local icon patterns,
+which makes size, stroke, labeling, and decorative behavior inconsistent.
+
+## ADR-025 — Tabulator only through BaseDataGrid
+
+**Decision:** If Spike 0 is accepted, Tabulator is integrated once through
+`BaseDataGrid`; feature code configures columns and actions but never mounts or
+themes Tabulator directly.
+
+**Reason:** RFI editing requires a single tested contract for keyboard behavior,
+async saves, validation, permission, conflict recovery, responsive behavior,
+and accessibility.
+
+**Consequence:** No production Tabulator adoption occurs until Spike 0 records
+version, license, bundle/security impact, behavior gaps, and an acceptable
+adapter contract.
 
 ## Deferred decisions
 
