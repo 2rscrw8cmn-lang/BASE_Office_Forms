@@ -69,13 +69,11 @@ describe("UI-2 application boundary", () => {
   });
 
   it("keeps the reviewed renderer source byte-for-byte stable", () => {
-    // This baseline includes the intentional current-main PDF-export merge,
-    // plus the "Stacked Row Split" tall-field write-in box rework (merge of
-    // local main into origin/main). UI-2 changes the application entry
-    // boundary only, so a later renderer edit fails loudly until it receives
-    // an intentional review.
+    // This baseline includes current main plus the reviewed PR #40 RFI register
+    // interaction work carried by this branch. A later renderer edit fails
+    // loudly until it receives an intentional review.
     expect(createHash("sha256").update(engineSource).digest("hex")).toBe(
-      "47dd824988ce82cd412c943607dbcddc740853e014de1d095b0f72fa23841325",
+      "ee7e27ed3e36305057e7d3ab6bacf069efef00fb5d715e234c90bd00f5e4c128",
     );
   });
 
