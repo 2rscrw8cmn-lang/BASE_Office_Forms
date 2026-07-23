@@ -15,6 +15,10 @@ const projectsViewSource = readFileSync("public/projects-view.js", "utf8");
 const recordsViewSource = readFileSync("public/records-view.js", "utf8");
 const engineSource = readFileSync("public/engine.js", "utf8");
 const baseCss = readFileSync("public/base.css", "utf8");
+const previewFixtureSource = readFileSync(
+  "scripts/ui2-preview-fixture.mjs",
+  "utf8",
+);
 
 describe("UI-2 application boundary", () => {
   it("boots the authenticated app from the React/Vite asset and not renderer CSS", () => {
@@ -89,5 +93,18 @@ describe("UI-2 application boundary", () => {
       { fill: false },
     );
     expect(host.innerHTML).toBe('<div class="sheet">controlled</div>');
+  });
+
+  it("keeps the preview smoke fixture isolated and free of committed identities", () => {
+    expect(previewFixtureSource).toContain(
+      'const previewDatabase = "base-office-forms-ui2-preview";',
+    );
+    expect(previewFixtureSource).toContain(
+      'const previewDatabaseId = "c874725c-78d8-43d5-a1b8-5d4d26e52067";',
+    );
+    expect(previewFixtureSource).toContain("UI2_FIXTURE_EMAIL");
+    expect(previewFixtureSource).toContain("function assertPreviewTarget()");
+    expect(previewFixtureSource).toContain("function cleanup()");
+    expect(previewFixtureSource).not.toContain("@basecm.com");
   });
 });

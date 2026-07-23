@@ -125,5 +125,32 @@ through D1's file importer before recording the migration ledger. Wrangler
 4.113's normal migration runner splits the historical trigger bodies in
 `0003_identity_and_organizations.sql` and returns `incomplete input`; the
 preview helper avoids that parser path. It never includes PR #36 migrations
-`0013` or `0014`. The database contains schema only; provision an approved
-non-production session/project fixture before an authenticated route smoke test.
+`0013` or `0014`. The database begins as a schema-only baseline; use the
+guarded fixture below before an authenticated route smoke test.
+
+### UI-2 authenticated smoke fixture
+
+The UI-2 fixture command seeds only `base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It has no database-name argument and
+refuses to run unless `wrangler.jsonc` still pins that exact name and ID. The
+seed command reads the production `users` row for the supplied Access email
+only to obtain the existing identity subject, email, and display name; it does
+not write to production or copy business data. Those values are accepted only
+through the environment and are never logged or stored in the repository.
+
+```powershell
+$env:UI2_FIXTURE_EMAIL = "your-access-email@example.com"
+npm run db:fixture:preview
+Remove-Item Env:UI2_FIXTURE_EMAIL
+
+# Removes only the deterministic synthetic fixture rows from the UI-2 preview.
+npm run db:fixture:preview:cleanup
+```
+
+The fixture creates one active user and `org_admin` membership, the synthetic
+`BASE UI Preview` organization, the `UI-2 Smoke Test` / `UI2-001` project with
+an active `project_manager` membership, plus `Preview Test Document` and its
+draft revision. It never creates RFIs, files, issuances, or production-derived
+business content. The command verifies memberships, project access, Dashboard
+and Project Overview SQL, the Records row, and the exact `0001`–`0012`
+migration ledger before reporting success.

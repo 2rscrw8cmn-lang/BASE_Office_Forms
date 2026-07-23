@@ -77,9 +77,7 @@ does not perform the later legacy-Georgia typography migration.
 
 ### Current blockers
 
-1. Deploy the explicit UI-2 preview binding and provision an approved
-   non-production session/project fixture in its schema-only database.
-2. Re-run the failed authenticated Dashboard and Project Overview checks and
+1. Re-run the failed authenticated Dashboard and Project Overview checks and
    verify that register captions and filter labels are visually hidden while
    remaining available to assistive technology.
 
@@ -92,9 +90,9 @@ permission to mark the phase complete early.
 After the nested Miniflare `sharp` override, `npm install` regenerated
 `package-lock.json` with `sharp` 0.35.3. `npm audit --audit-level=high` reports
 zero vulnerabilities. The 2026-07-23 `npm run check` gate passes Prettier,
-generated Cloudflare types, TypeScript, ESLint, 233 unit tests, 101 Worker
+generated Cloudflare types, TypeScript, ESLint, 234 unit tests, 101 Worker
 integration tests, the Vite application build, static asset verification, Pages
-Functions compilation, dependency audit, and the 244-file secret scan. No
+Functions compilation, dependency audit, and the 245-file secret scan. No
 browser screenshots or interactive smoke evidence can be produced here because
 no Access-authorized browser is available.
 
@@ -127,25 +125,29 @@ ledger contains only `0001`–`0012`; `rfi_records` has the expected
 and Overview count queries both return successfully. Production's D1 binding
 and migration ledger were only read; no production migration was applied.
 
+### Preview smoke fixture (2026-07-23)
+
+PR #41 provisions an idempotent, deterministic fixture command for
+`base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It accepts the product owner's Access
+email only from `UI2_FIXTURE_EMAIL`, reads production only to resolve the
+existing user identity, then writes a synthetic active `BASE UI Preview`
+organization, `UI-2 Smoke Test` (`UI2-001`) project, active `org_admin` and
+`project_manager` memberships, and one `Preview Test Document` draft revision.
+It seeds no RFIs, files, issuances, or production-derived business data. The
+matching cleanup command removes only its deterministic fixture rows. The
+command verifies the exact `0001`–`0012` ledger, membership/project access,
+Dashboard and Project Overview SQL, and the Records result. Production has no
+write path in this workflow.
+
 ### Preview Project Overview investigation (2026-07-23)
 
-The requested authenticated failure cannot be reproduced from this execution
-environment because Cloudflare Access intercepts the request before the Pages
-Function. A direct request to the PR preview and the same request to the
-current-main deployment both returned `302 Found` with
-`Www-Authenticate: Cloudflare-Access`, a Cloudflare HTML `302 Found` body, and
-no application error code or `x-request-id`. The observed PR-preview edge
-request was `CF-RAY: a1fb58d33c0df436-MIA`; this is an Access response, not an
-API request ID.
-
-The source for `/api/v2/projects/:projectId/overview` and its D1 read model is
-identical on the UI-2 branch and current main. The configured remote D1
-database contains the overview tables and applied migrations, and the overview
-count/activity queries succeed for a live project. No preview migration or
-binding change is justified from that evidence. Capture the authenticated API
-status, error code, request ID, and JSON body in an Access-authorized browser
-before classifying the report as a code failure or preview drift; then apply
-and prove any required correction.
+An earlier unauthenticated request to the PR preview returned Cloudflare Access
+`302 Found`, which could not test the Pages Function. The subsequent
+product-owner authenticated smoke and direct D1 query established the actual
+preview-schema mismatch documented above. The new guarded fixture supplies the
+minimum Access identity and synthetic project required for the targeted browser
+retest; it does not alter the source route or its read model.
 
 ## 4. UI-2 exit gate
 
@@ -167,26 +169,26 @@ UI-2 is complete only when all of these are true:
 
 ## 5. Phase status
 
-| Phase                        | Status                       | Next gate                                                      |
-| ---------------------------- | ---------------------------- | -------------------------------------------------------------- |
-| Spike 0 — Tabulator          | Complete; rejected for RFI   | Future high-volume proposal only                               |
-| UI-1 — Audit and decisions   | Complete                     | Binding documents and ADRs recorded                            |
-| UI-2 — CSS + React/Vite      | Active; root cause corrected | Deploy preview binding, provision fixture, and targeted retest |
-| UI-3 — Components + UI Lab   | Not started                  | UI-2 exit gate passes                                          |
-| UI-4 — React shell           | Not started                  | UI-3 shared patterns stable                                    |
-| UI-5 — RFI register          | Not started                  | Controlled-table parity; no Tabulator dependency               |
-| UI-6 — Projects + Records    | Not started                  | Shared register contract                                       |
-| UI-7 — Detail workspaces     | Not started                  | Shared workspace contract                                      |
-| UI-8 — Dashboard/forms/admin | Not started                  | Shared shell/forms/registers stable                            |
-| UI-9 — Library + Studio      | Not started                  | Application foundation stable                                  |
-| UI-10 — Enforcement/cleanup  | Not started                  | Route parity and visual baselines                              |
+| Phase                        | Status                      | Next gate                                                 |
+| ---------------------------- | --------------------------- | --------------------------------------------------------- |
+| Spike 0 — Tabulator          | Complete; rejected for RFI  | Future high-volume proposal only                          |
+| UI-1 — Audit and decisions   | Complete                    | Binding documents and ADRs recorded                       |
+| UI-2 — CSS + React/Vite      | Active; fixture provisioned | Targeted authenticated Dashboard/Overview and a11y retest |
+| UI-3 — Components + UI Lab   | Not started                 | UI-2 exit gate passes                                     |
+| UI-4 — React shell           | Not started                 | UI-3 shared patterns stable                               |
+| UI-5 — RFI register          | Not started                 | Controlled-table parity; no Tabulator dependency          |
+| UI-6 — Projects + Records    | Not started                 | Shared register contract                                  |
+| UI-7 — Detail workspaces     | Not started                 | Shared workspace contract                                 |
+| UI-8 — Dashboard/forms/admin | Not started                 | Shared shell/forms/registers stable                       |
+| UI-9 — Library + Studio      | Not started                 | Application foundation stable                             |
+| UI-10 — Enforcement/cleanup  | Not started                 | Route parity and visual baselines                         |
 
 ## 6. Current constraints and risks
 
-- Preview D1 schema must remain isolated by branch-compatible migration set.
-  UI-2's preview is schema-only after the correction, so it needs an approved
-  non-production identity/project fixture before the product owner can repeat
-  authenticated route tests.
+- Preview D1 schema remains isolated by the branch-compatible `0001`–`0012`
+  migration set. The synthetic fixture is limited to one identity's minimum
+  access path and must be removed with the guarded cleanup command when the
+  targeted retest is complete.
 - Official RFI issuance remains incomplete and must fail closed.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
@@ -196,6 +198,6 @@ UI-2 is complete only when all of these are true:
 
 ## 7. Next action
 
-Complete PR #41's merge, runtime diagnosis, smoke evidence, and full gate.
+Complete PR #41's targeted authenticated smoke evidence and full gate.
 Only after UI-2's exit gate passes may UI-3 begin with BASE primitives and the
 UI Lab. Do not merge this PR from this task.

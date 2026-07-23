@@ -76,6 +76,16 @@ inspected but not modified. PR #36's separate preview database is not a UI-2
 binding because its `0013`/`0014` RFI schema is incompatible with these read
 models.
 
+The preview database is supplied with an opt-in, deterministic smoke fixture
+through `scripts/ui2-preview-fixture.mjs` and the `db:fixture:preview` /
+`db:fixture:preview:cleanup` commands. The script accepts a product owner's
+Access email only from `UI2_FIXTURE_EMAIL`, reads production only to resolve
+that person's existing identity subject/email/display name, and writes only
+the pinned UI-2 preview database. It creates one synthetic organization,
+project, memberships, record, and draft revision; it never copies production
+business data or creates RFIs, files, or issuances. Cleanup is restricted to
+the fixture's deterministic synthetic IDs.
+
 ## Frontend architecture and design inventory
 
 `public/index.html` is the single entry point for new application routes and
