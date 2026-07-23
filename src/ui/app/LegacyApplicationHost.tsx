@@ -53,7 +53,7 @@ export function LegacyApplicationHost() {
     <div className="react-app-host">
       <div id="app" className="app-root" aria-busy="true">
         <main id="main-content" className="app-boot" tabIndex={-1}>
-          <p className="eyebrow">BASE Office Forms</p>
+          <p className="app-eyebrow">BASE Office Forms</p>
           <h1>{bootError || "Loading workspace…"}</h1>
           {bootError ? (
             <p>Refresh the page to retry the application shell.</p>

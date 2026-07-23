@@ -111,10 +111,13 @@ The authenticated shell now uses an application/document CSS boundary:
 
 - **CSS and tokens:** `brand-tokens.css` owns only neutral brand values and
   font imports. The authenticated entry does not load `base.css`; its
-  generated app CSS and `app-shell.css` own application styling. `base.css`
-  imports the neutral bridge for legacy document pages and retains document
-  geometry and renderer selectors. `app-shell.css` adds semantic shell aliases
-  and an 8/12/18/24/30 px spacing scale derived from existing usage.
+  generated app CSS and `app-shell.css` own application styling. The generated
+  application CSS resets the authenticated body's margin, font, text color,
+  smoothing, paragraphs, and complete app box sizing. `base.css` imports the
+  neutral bridge with a relative `./brand-tokens.css` path for legacy document
+  pages and retains document geometry and renderer selectors. `app-shell.css`
+  adds semantic shell aliases and an 8/12/18/24/30 px spacing scale derived
+  from existing usage.
 - **Typography:** Archivo is the target application heading and control face;
   JetBrains Mono remains the metadata/code face. Existing legacy browser
   headings may still use Georgia until their later UI-phase migration. UI-2

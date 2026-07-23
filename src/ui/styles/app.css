@@ -1,9 +1,24 @@
 /* Application-only reset and React host styles. Renderer layout selectors do
-   not belong here. Keep selectors scoped to the React host during migration. */
+   not belong here. The authenticated body is the application boundary during
+   the compatibility-host migration. */
 
-.react-app-host,
-.react-app-host * {
+.app-shell-body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell-body,
+.app-shell-body *,
+.app-shell-body *::before,
+.app-shell-body *::after {
   box-sizing: border-box;
+}
+
+.app-shell-body p {
+  margin: 0;
 }
 
 .react-app-host {

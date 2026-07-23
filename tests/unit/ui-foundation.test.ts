@@ -6,6 +6,11 @@ import { createRendererPreviewAdapter } from "../../src/ui/app/renderer-preview"
 
 const indexHtml = readFileSync("public/index.html", "utf8");
 const appShellCss = readFileSync("public/app-shell.css", "utf8");
+const applicationCss = readFileSync("src/ui/styles/app.css", "utf8");
+const applicationHostSource = readFileSync(
+  "src/ui/app/LegacyApplicationHost.tsx",
+  "utf8",
+);
 const engineSource = readFileSync("public/engine.js", "utf8");
 const baseCss = readFileSync("public/base.css", "utf8");
 
@@ -19,10 +24,21 @@ describe("UI-2 application boundary", () => {
 
   it("keeps renderer layout CSS in base.css and app shell CSS scoped to app classes", () => {
     expect(baseCss).toContain(".sheet {");
-    expect(baseCss).toContain("@import url('/brand-tokens.css');");
+    expect(baseCss).toContain('@import url("./brand-tokens.css");');
     expect(appShellCss).not.toMatch(/(^|\n)html\s*\{/);
     expect(appShellCss).not.toMatch(/(^|\n)body\s*\{/);
     expect(appShellCss).toContain(".app-shell-body");
+    expect(applicationCss).toContain(".app-shell-body {");
+    expect(applicationCss).toContain("margin: 0;");
+    expect(applicationCss).toContain("font-family: var(--sans);");
+    expect(applicationCss).toContain("color: var(--ink);");
+    expect(applicationCss).toContain(".app-shell-body *::before");
+    expect(applicationCss).toContain(".app-shell-body p {");
+  });
+
+  it("uses application-owned startup classes", () => {
+    expect(applicationHostSource).toContain('className="app-eyebrow"');
+    expect(applicationHostSource).not.toContain('className="eyebrow"');
   });
 
   it("keeps the reviewed renderer source byte-for-byte stable", () => {

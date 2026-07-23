@@ -4,7 +4,7 @@
    Change a value here and every form updates at once.
    ============================================================ */
 
-@import url('/brand-tokens.css');
+@import url("./brand-tokens.css");
 
 :root {
   /* ---- Sheet geometry ---- */

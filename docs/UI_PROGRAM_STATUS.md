@@ -65,41 +65,41 @@ does not perform the later legacy-Georgia typography migration.
 - Authenticated `index.html` no longer loads `public/base.css`; neutral brand
   values live in `public/brand-tokens.css`, while `base.css` remains renderer
   and controlled-document CSS.
+- The application-owned reset now supplies the authenticated body's margin,
+  Archivo/font color, smoothing, paragraph reset, and complete app box sizing.
+  `base.css` imports the shared tokens through the relative
+  `./brand-tokens.css` path; the renderer remains otherwise independent.
 - Controlled renderer-preview adapter, renderer source stability regression,
   dependency/license record, build verification, local-development guidance,
   and rollback notes are present.
+- The narrow, previously proven Miniflare `sharp` override resolves the
+  development/test audit finding without `npm audit fix --force`.
 
 ### Current blockers
 
-1. Resolve or formally accept the four high-severity transitive `sharp`
-   advisories reported by `npm audit`. The only offered remediation is a
-   breaking `npm audit fix --force` upgrade of the Cloudflare test/tooling
-   chain, which this UI-2 PR must not apply implicitly.
-2. Capture the authenticated preview Project Overview response: HTTP status,
+1. Capture the authenticated preview Project Overview response: HTTP status,
    API error code, request ID, and response body, then compare the same request
    against current main. Direct requests from this environment stop at the
    Cloudflare Access HTML sign-in page, so they cannot supply API evidence.
-3. Run the browser smoke suite against the merged preview, including a real
+2. Run the product-owner browser smoke suite against the merged preview,
+   including session, Dashboard, Projects, Project Overview, Records, a real
    direct-route refresh, history navigation, mobile navigation, and controlled
-   document preview.
-4. Update PR #41 evidence with the resolved conflict decisions, smoke results,
-   runtime diagnosis, rollback, limitations, screenshots or factual absence,
-   and next step.
+   document preview, plus Studio and Document Library.
 
-UI-2 must remain active until every blocker above is resolved. Its
-implementation work is not permission to mark the phase complete early.
+UI-2 is technically ready for that product-owner smoke testing, but remains
+active until every blocker above is resolved. Its implementation work is not
+permission to mark the phase complete early.
 
 ### Automated validation after merge
 
-`npm install` regenerated `package-lock.json` from the resolved manifest.
-The 2026-07-23 `npm run check` run passed Prettier, generated Cloudflare types,
-TypeScript, ESLint, 231 unit tests, 101 Worker integration tests, the Vite
-application build, static asset verification, and Pages Functions compilation.
-It stopped at `npm audit --audit-level=high` with four high-severity transitive
-`sharp` findings through Wrangler/Miniflare; `npm run security:secrets` was
-then run separately and passed (243 tracked files). No browser screenshots or
-interactive smoke evidence can be produced here because no Access-authorized
-browser is available.
+After the nested Miniflare `sharp` override, `npm install` regenerated
+`package-lock.json` with `sharp` 0.35.3. `npm audit --audit-level=high` reports
+zero vulnerabilities. The 2026-07-23 `npm run check` gate passes Prettier,
+generated Cloudflare types, TypeScript, ESLint, 232 unit tests, 101 Worker
+integration tests, the Vite application build, static asset verification, Pages
+Functions compilation, dependency audit, and the 243-file secret scan. No
+browser screenshots or interactive smoke evidence can be produced here because
+no Access-authorized browser is available.
 
 ### Preview Project Overview investigation (2026-07-23)
 
@@ -141,19 +141,19 @@ UI-2 is complete only when all of these are true:
 
 ## 5. Phase status
 
-| Phase                        | Status                     | Next gate                                                    |
-| ---------------------------- | -------------------------- | ------------------------------------------------------------ |
-| Spike 0 — Tabulator          | Complete; rejected for RFI | Future high-volume proposal only                             |
-| UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded                          |
-| UI-2 — CSS + React/Vite      | Active in PR #41           | Conflict resolution, preview diagnosis, smoke, and full gate |
-| UI-3 — Components + UI Lab   | Not started                | UI-2 exit gate passes                                        |
-| UI-4 — React shell           | Not started                | UI-3 shared patterns stable                                  |
-| UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency             |
-| UI-6 — Projects + Records    | Not started                | Shared register contract                                     |
-| UI-7 — Detail workspaces     | Not started                | Shared workspace contract                                    |
-| UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable                          |
-| UI-9 — Library + Studio      | Not started                | Application foundation stable                                |
-| UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                            |
+| Phase                        | Status                                            | Next gate                                         |
+| ---------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| Spike 0 — Tabulator          | Complete; rejected for RFI                        | Future high-volume proposal only                  |
+| UI-1 — Audit and decisions   | Complete                                          | Binding documents and ADRs recorded               |
+| UI-2 — CSS + React/Vite      | Active; technically ready for product-owner smoke | Authenticated preview diagnosis and browser smoke |
+| UI-3 — Components + UI Lab   | Not started                                       | UI-2 exit gate passes                             |
+| UI-4 — React shell           | Not started                                       | UI-3 shared patterns stable                       |
+| UI-5 — RFI register          | Not started                                       | Controlled-table parity; no Tabulator dependency  |
+| UI-6 — Projects + Records    | Not started                                       | Shared register contract                          |
+| UI-7 — Detail workspaces     | Not started                                       | Shared workspace contract                         |
+| UI-8 — Dashboard/forms/admin | Not started                                       | Shared shell/forms/registers stable               |
+| UI-9 — Library + Studio      | Not started                                       | Application foundation stable                     |
+| UI-10 — Enforcement/cleanup  | Not started                                       | Route parity and visual baselines                 |
 
 ## 6. Current constraints and risks
 

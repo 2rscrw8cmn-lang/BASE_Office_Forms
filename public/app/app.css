@@ -1,2 +1,2 @@
-.react-app-host,.react-app-host *{box-sizing:border-box}.react-app-host{min-height:100vh}
+.app-shell-body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;margin:0}.app-shell-body,.app-shell-body *,.app-shell-body :before,.app-shell-body :after{box-sizing:border-box}.app-shell-body p{margin:0}.react-app-host{min-height:100vh}
 /*$vite$:1*/
