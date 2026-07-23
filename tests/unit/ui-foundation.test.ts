@@ -69,12 +69,16 @@ describe("UI-2 application boundary", () => {
   });
 
   it("keeps the reviewed renderer source byte-for-byte stable", () => {
-    // This baseline includes current main plus the reviewed PR #40 RFI register
-    // interaction work carried by this branch. A later renderer edit fails
-    // loudly until it receives an intentional review.
-    expect(createHash("sha256").update(engineSource).digest("hex")).toBe(
-      "ee7e27ed3e36305057e7d3ab6bacf069efef00fb5d715e234c90bd00f5e4c128",
-    );
+    // This baseline includes the intentional current-main PDF-export merge.
+    // UI-2 changes the application entry boundary only, so a later renderer
+    // edit fails loudly until it receives an intentional review. Normalize
+    // CRLF first so a checkout with core.autocrlf=true (e.g. Windows) hashes
+    // the same content CI does.
+    expect(
+      createHash("sha256")
+        .update(engineSource.replace(/\r\n/g, "\n"))
+        .digest("hex"),
+    ).toBe("ee7e27ed3e36305057e7d3ab6bacf069efef00fb5d715e234c90bd00f5e4c128");
   });
 
   it("delegates preview markup to the controlled renderer runtime", () => {
