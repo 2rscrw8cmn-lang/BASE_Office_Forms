@@ -29,11 +29,16 @@
     "db:migrate:remote": "wrangler d1 migrations apply base-office-forms-library --remote",
     "db:migrate:preview": "node scripts/migrate-preview-d1.mjs",
     "db:migrations:list:remote": "wrangler d1 migrations list base-office-forms-library --remote",
-    "db:migrations:list:preview": "wrangler d1 migrations list base-office-forms-ui2-preview --remote --env preview",
+    "db:migrations:list:preview": "wrangler --config wrangler.ui2.jsonc d1 migrations list base-office-forms-ui2-preview --remote",
     "db:fixture:preview": "node scripts/ui2-preview-fixture.mjs seed",
     "db:fixture:preview:cleanup": "node scripts/ui2-preview-fixture.mjs cleanup",
     "db:migrate:rfi-preview": "node scripts/migrate-rfi-preview-d1.mjs",
     "db:migrations:list:rfi-preview": "wrangler d1 migrations list base-office-forms-rfi-preview --remote --env preview",
+    "db:fixture:rfi-preview": "node scripts/rfi-preview-fixture.mjs",
+    "db:fixture:rfi-preview:verify": "node scripts/rfi-preview-fixture.mjs verify",
+    "db:fixture:rfi-preview:cleanup": "node scripts/rfi-preview-fixture.mjs cleanup",
+    "db:rehearse:rfi-0014": "node scripts/rfi-0014-rehearsal.mjs",
+    "db:rehearse:rfi-0014:cleanup": "node scripts/rfi-0014-rehearsal.mjs cleanup",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm test && npm run build && npm run functions:build && npm run security:dependencies && npm run security:secrets"
   },
   "devDependencies": {

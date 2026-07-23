@@ -32,6 +32,10 @@ UI-9     Document Library and Studio application controls
 UI-10    Drift prevention, E2E, visual regression, and cleanup
 ```
 
+**Reconciliation constraint:** Draft PR #36 carries the approved controlled
+RFI Slice 1 model while it reconciles with merged UI-2. It is not UI-3 and must
+not make RFI delivery depend on Tabulator.
+
 The RFI product workflow continues in parallel only where its work does not establish competing UI conventions. Any new production UI created before its migration must use existing shared patterns and remain easy to replace.
 
 ## 3. Spike 0 — Tabulator behavior proof

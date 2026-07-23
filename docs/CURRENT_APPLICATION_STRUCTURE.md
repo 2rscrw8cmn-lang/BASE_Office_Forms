@@ -6,6 +6,15 @@ Dashboard, Projects, Project Overview, and project Records register surfaces
 
 ## Runtime shape
 
+### RFI Slice 1 preview reconciliation
+
+Pages preview now binds the isolated combined RFI D1 database
+`base-office-forms-rfi-preview` (`5169cd7c-60d8-4dbd-a66c-75155f745216`) through
+the root preview binding. Production remains `base-office-forms-library`
+(`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and is not changed by PR #36. Retained
+UI-2 scripts use `wrangler.ui2.jsonc`; the remote 0014 rehearsal uses the
+separate guarded `wrangler.rfi-rehearsal.jsonc`. See `RFI_SLICE_1_ROLLOUT.md`.
+
 The repository is a Cloudflare Pages application with static browser assets, a
 small React/Vite application entry, Pages Functions, one D1 database binding,
 and one private R2 bucket binding. The React entry is a compatibility host;

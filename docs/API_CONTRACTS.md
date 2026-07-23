@@ -371,6 +371,15 @@ internals, raw SQL fields, or activity JSON blobs.
 
 ## 8. RFIs
 
+### Reconciled persistence boundary
+
+RFI API routes continue to expose project-scoped RFI IDs and server-derived
+capabilities. Migration 0014 maps the stable RFI ID to the Record ID, keeps
+RFI-only fields in `rfi_details`, creates one current draft revision, and moves
+attachment metadata to `revision_files`; it does not change the public route
+contract. `rfi_0014_reconciliation` supports post-migration audit. Production
+application is an explicit human-approved operation, not part of PR #36.
+
 ### `GET /projects/{projectId}/rfis`
 
 Returns RFI log rows.

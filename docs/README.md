@@ -16,6 +16,10 @@ The original roadmap and coder sequence remain useful architectural history, but
 
 ## Start here
 
+For PR #36 reconciliation, also read `RFI_SLICE_1_ROLLOUT.md` for the Pages
+preview database identity, populated 0014 rehearsal, fixture cleanup, and the
+human-approved production rollout plan.
+
 1. `ARCHITECTURE_V1_ACCEPTANCE.md` — authority, binding rules, and acceptance gates.
 2. `PRODUCT_ARCHITECTURE.md` — product boundary, topology, modules, and release definition.
 3. `DOMAIN_MODEL.md` — exact meaning of projects, records, revisions, files, artifacts, and deliveries.

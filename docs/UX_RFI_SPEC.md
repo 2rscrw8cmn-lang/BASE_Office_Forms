@@ -207,6 +207,16 @@ always conveyed with text (never color alone).
 
 ## 12. Acceptance criteria
 
+## 13. Approved Slice 1 interaction model
+
+PR #40 approved the semantic table implementation used by draft PR #36: a
+single expandable draft editor, normal cursor and text selection, per-field
+save/validation states, capability-gated direct workspace editing, Party
+terminology, a Details/Preview switch, a separate response editor, and a
+deliberate mobile layout. It is not a spreadsheet/grid prototype and does not
+adopt Tabulator. The register and workspace retain server-derived capabilities
+and lifecycle authority.
+
 1. An authorized user can open a project RFI register.
 2. The register shows factual RFI rows from one server read model.
 3. An authorized user can create an unnumbered RFI draft.

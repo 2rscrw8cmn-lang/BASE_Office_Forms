@@ -5,6 +5,13 @@
 **Active PR:** [#41 — UI-2 — CSS separation and React/Vite foundation](https://github.com/2rscrw8cmn-lang/BASE_Office_Forms/pull/41) (`ui-2-css-react-vite-foundation`)
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
+> **2026-07-23 reconciliation update (supersedes stale PR #41 wording below):**
+> UI-2 is complete and was squash-merged to `main` as `a1ade6d`. The active
+> work is draft PR #36 (`feature/rfi-slice-1-register-workspace`), not UI-3.
+> UI-3 remains blocked until PR #36 reconciliation, Pages preview, checks, and
+> product-owner RFI smoke testing are complete. Do not merge or mark PR #36 ready
+> in this task.
+
 ## 1. Current direction
 
 - Preserve the document-control domain, D1/R2 model, authorization,
