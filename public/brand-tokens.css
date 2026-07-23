@@ -1,0 +1,22 @@
+/*
+ * Neutral BASE brand tokens shared by the application shell and the controlled
+ * document renderer. Application selectors live in app-shell.css; document
+ * layout selectors remain in base.css.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  --ink: #232327;
+  --accent: #7a1e22;
+  --accent-dk: #5a1418;
+  --mono: #6f6f74;
+  --field: #bdbdc2;
+  --divider: #cdced2;
+  --row: #e4e4e8;
+  --page-bg: #e7e7ea;
+  --hover: #faf3f3;
+  --paper: #ffffff;
+  --sans: "Archivo", system-ui, sans-serif;
+  --code: "JetBrains Mono", ui-monospace, monospace;
+}

@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 These decisions are binding unless replaced by a later recorded decision.
 
 ## ADR-001 — Preserve the renderer
@@ -129,6 +128,100 @@ These decisions are binding unless replaced by a later recorded decision.
 **Decision:** Launch AI as defined actions rather than a general chatbot.
 
 **Reason:** Better context control, structured output, evaluation, and user trust.
+
+## ADR-021 — Separate application UI from controlled-document styling
+
+**Decision:** The authenticated application uses application-owned styles and components. `public/base.css` remains controlled-document styling and is not the application design system.
+
+**Reason:** Loading generic document and application rules together causes collisions, context-dependent components, and visual drift.
+
+**Consequence:** Neutral brand tokens may be shared, but selectors, resets, layout rules, controls, and responsive behavior remain separated. Renderer output must remain compatible.
+
+## ADR-022 — Incrementally adopt React, TypeScript, and Vite for the application workspace
+
+**Decision:** Migrate the application workspace incrementally to React + TypeScript + Vite while preserving current routes, APIs, Cloudflare deployment, and legacy renderer/library compatibility.
+
+**Reason:** The framework-free modules have established the product architecture but now reproduce routing, forms, dialogs, state, focus, and component behavior across features. Incremental adoption reduces continued custom framework work without requiring a domain rewrite.
+
+**Consequence:** React controls application composition; `public/engine.js` remains the controlled presentation engine. Migration occurs by reviewable route groups with compatibility mounting until parity is complete.
+
+## ADR-023 — Use shared BASE components and Radix behavior primitives
+
+**Decision:** Reusable application controls and patterns are BASE-owned components. Radix may provide complex accessible behavior, and Lucide is the application icon family.
+
+**Reason:** A coherent component contract prevents feature-specific buttons, dialogs, menus, fields, badges, focus behavior, and icon families.
+
+**Consequence:** Default third-party visual themes are not the product design. BASE tokens, variants, accessibility, testing, and UI Lab examples remain authoritative.
+
+## ADR-024 — Use Tabulator only through BaseDataGrid
+
+**Decision:** Tabulator is not adopted for the RFI register. If a future
+high-volume register adopts Tabulator, it uses one `BaseDataGrid` adapter;
+feature modules do not instantiate or theme Tabulator directly.
+
+**Reason:** Spike 0 found that Tabulator's documented interaction model cannot
+preserve the RFI register's required click-to-select, Enter/type-to-edit, and
+non-editing arrow-key navigation. The RFI list is also too small for
+virtualization to justify the additional ~102 KB gzip dependency. Direct
+per-feature integrations would still create inconsistent save, conflict,
+keyboard, responsive, styling, and lifecycle behavior.
+
+**Consequence:** The RFI register stays on its controlled custom table.
+`BaseDataGrid` remains the sole permitted adapter boundary for any later
+accepted use and owns mount/destroy, theme, keyboard contract,
+capability-based editability, async state, rollback, conflict refresh,
+accessibility, responsive behavior, and test utilities. The API remains
+authoritative.
+
+## ADR-025 — Repository documentation is the durable agent handoff
+
+**Decision:** Agents must use and update repository source-of-truth documents, current-state trackers, tests, and PR evidence before handoff.
+
+**Reason:** Branching chats and disconnected coding sessions lose context and repeatedly restart or diverge from completed work.
+
+**Consequence:** `AGENTS.md`, `CURRENT_APPLICATION_STRUCTURE.md`, applicable program trackers, and PR closeout evidence are mandatory. Chat summaries do not supersede repository state.
+
+## ADR-026 — React compatibility host before feature migration
+
+**Decision:** The authenticated entry mounts a React/Vite host that boots the
+existing `createAppShell()` implementation. Feature routes remain in their
+browser modules until their scheduled migration phase.
+
+**Reason:** This establishes a deterministic application asset/runtime boundary
+without duplicating route, API, focus, session, or feature behavior.
+
+**Consequence:** The host owns only bootstrap, error, and unmount lifecycle in
+UI-2. It must not import renderer definitions or recreate domain behavior in
+React.
+
+## ADR-027 — Neutral brand token bridge
+
+**Decision:** Only shared BASE color and type values live in
+`public/brand-tokens.css`. The authenticated entry loads that bridge plus
+application CSS; controlled-document pages load it through `public/base.css`.
+Document geometry and renderer selectors remain in `base.css`.
+
+**Reason:** The application previously inherited generic document rules and
+document-level body behavior from `base.css`. An explicit, small token bridge
+separates the systems without changing official output.
+
+**Consequence:** Token values must remain synchronized until a later cleanup
+has approved visual evidence to retire the legacy renderer import.
+
+## ADR-028 — Reject Tabulator for the RFI register after Spike 0
+
+**Decision:** Reject Tabulator for the production RFI register. Retain the
+existing controlled custom table and revisit Tabulator only for a future
+high-volume register, log, or export surface.
+
+**Reason:** The spike reproduced saves, validation, conflicts, URL state, and
+mobile cards, but documented Tabulator APIs could not reproduce the required
+keyboard workflow without unsupported internals. Its scale advantage begins
+well beyond expected RFI list sizes.
+
+**Consequence:** UI-5 must not make RFI delivery depend on Tabulator. A future
+proposal needs a fresh acceptance decision, assistive-technology evidence, a
+select-versus-edit interaction decision, and a bundle-splitting plan.
 
 ## Deferred decisions
 

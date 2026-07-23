@@ -73,7 +73,9 @@ Submittal E2E covers expected item through resubmission and approval.
 
 ### 2.6 Visual regression tests
 
-The renderer is a product asset. Capture stable reference outputs for:
+The renderer and application UI are product assets with separate visual baselines.
+
+Controlled-document references include:
 
 - RFI cover/form;
 - RFI with long question and continuation pages;
@@ -83,7 +85,17 @@ The renderer is a product asset. Capture stable reference outputs for:
 - controlled document;
 - package cover and contents.
 
-Visual changes require explicit approval, not automatic snapshot replacement.
+Application references include:
+
+- global shell and mobile drawer;
+- Dashboard and Project Overview;
+- Projects, Records, and RFI registers;
+- RFI, Record, and Revision workspaces;
+- create/edit dialogs and validation;
+- loading, first-use empty, filtered empty, error, permission, saving, failed, and conflict states;
+- UI Lab shared components at desktop, tablet, and mobile widths.
+
+Visual changes require explicit approval, not automatic snapshot replacement. Controlled-document baselines and application baselines remain distinct so application CSS changes cannot silently authorize document-output changes.
 
 ## 3. Required test fixtures
 
@@ -224,6 +236,24 @@ Notion/import validation includes:
 - redaction and data-boundary rules;
 - regression set for RFI drafting and submittal extraction.
 
+## 12A. Application UI foundation tests
+
+Shared application components and migrated routes require:
+
+- component behavior tests for explicit variants and states;
+- keyboard and focus tests for dialogs, menus, tabs, drawers, and grids;
+- route parity and browser history tests during shell migration;
+- server-capability and denied-action tests;
+- BaseDataGrid mount/destroy, editing, validation, rollback, save-state, and conflict-refresh tests;
+- URL-backed search/filter/sort restoration;
+- first-use empty versus filtered-empty distinction;
+- desktop, tablet, and mobile visual evidence;
+- accessibility scans plus manual critical keyboard journeys;
+- tests or lint rules preventing raw feature-specific visual conventions and direct Tabulator use;
+- renderer and legacy-route regressions during application/document CSS separation.
+
+A UI migration is not accepted because it looks cleaner. Behavioral parity, accessibility, authoritative permissions, failure recovery, and documentation closeout are required.
+
 ## 13. Performance targets
 
 Internal pilot targets under normal load:
@@ -261,7 +291,9 @@ Every pull request must pass:
 - migration validation;
 - build;
 - security dependency scan;
-- secret scan.
+- secret scan;
+- visual/accessibility artifacts for affected application UI when the foundation introduces them;
+- documentation tracker checks for UI program work.
 
 Changes touching renderer output also run visual regression. Changes touching schema or authorization require the corresponding focused suite.
 

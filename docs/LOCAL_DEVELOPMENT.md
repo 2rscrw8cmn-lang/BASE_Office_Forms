@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.2 seconds
+Output:
 # Local Development
 
 ## Prerequisites
@@ -40,6 +43,12 @@ npm run db:migrate:local
 npm run dev
 ```
 
+`npm run dev` builds the React/Vite compatibility assets first, then starts
+Cloudflare Pages locally from `public/`. During UI work, use a second terminal
+with `npm run dev:ui` to rebuild `public/app/` on source changes; refresh the
+Pages origin after each rebuild. The Pages runtime remains the deployment
+truth, not the standalone Vite server.
+
 Wrangler prints the local origin. Verify the new platform route at:
 
 ```text
@@ -71,6 +80,7 @@ npm test
 npm run test:unit
 npm run test:integration
 npm run build
+npm run build:ui
 npm run functions:build
 ```
 
@@ -95,38 +105,56 @@ npm run deploy
 Do not use production credentials or production data in local, preview, or test
 environments.
 
-## Preview / production D1 and applying migrations
+## UI-2 preview D1
 
-This Pages project uses a **single** D1 database (`base-office-forms-library`,
-declared in `wrangler.jsonc`). Pages **preview** and **production** deployments
-bind that same database — there is no separate preview D1. Therefore migrating
-the remote database migrates the database used by both environments:
+UI-2 uses its own preview-only D1 database, `base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). The root `DB` binding declares that
+ID as `preview_database_id`; production remains
+`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`). Do not
+run production migration commands to prepare a Pages preview.
 
 ```bash
-# Apply pending migrations to the shared remote database (preview + production).
-npm run db:migrate:remote      # or the alias: npm run db:migrate:preview
+# Apply and verify only the UI-2/current-main migration set (0001–0012).
+npm run db:migrate:preview
+npm run db:migrations:list:preview
 
-# Verify which migrations are applied and inspect the live RFI schema.
+# Production inspection/migration remains explicit and separate.
 npm run db:migrations:list:remote
-npm run db:schema:remote
+npm run db:migrate:remote
 ```
 
-If a Pages **preview** deployment cannot load authenticated data (for example the
-Work Dashboard shows "The dashboard could not be loaded") while older previews
-still work, the cause is almost always that a **new migration has not been
-applied to the bound database**: the new code queries columns/tables that do not
-yet exist. The API now returns `503 DATABASE_SCHEMA_OUTDATED` in that situation
-so the failure is legible. Run `db:migrations:list:remote` to confirm the pending
-migration, then `db:migrate:remote`.
+`db:migrate:preview` intentionally pins the UI-2 migration list and applies it
+through D1's file importer before recording the migration ledger. Wrangler
+4.113's normal migration runner splits the historical trigger bodies in
+`0003_identity_and_organizations.sql` and returns `incomplete input`; the
+preview helper avoids that parser path. It never includes PR #36 migrations
+`0013` or `0014`. The database begins as a schema-only baseline; use the
+guarded fixture below before an authenticated route smoke test.
 
-> A migration that errors is rolled back and **not** recorded as applied, so a
-> failed remote apply silently leaves the database on the previous schema. Always
-> confirm with `db:migrations:list:remote` after applying.
+### UI-2 authenticated smoke fixture
 
-If a separate preview database is ever configured in the Cloudflare Pages
-dashboard, it must be migrated explicitly against its own name or id — a
-production migration does **not** reach it automatically:
+The UI-2 fixture command seeds only `base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It has no database-name argument and
+refuses to run unless `wrangler.jsonc` still pins that exact name and ID. The
+seed command reads the production `users` row for the supplied Access email
+only to obtain the existing identity subject, email, and display name; it does
+not write to production or copy business data. Those values are accepted only
+through the environment and are never logged or stored in the repository.
 
-```bash
-wrangler d1 migrations apply <preview-db-name-or-id> --remote
+```powershell
+$env:UI2_FIXTURE_EMAIL = "your-access-email@example.com"
+npm run db:fixture:preview
+Remove-Item Env:UI2_FIXTURE_EMAIL
+
+# Removes only the deterministic synthetic fixture rows from the UI-2 preview.
+npm run db:fixture:preview:cleanup
 ```
+
+The fixture creates one active user and `org_admin` membership, the synthetic
+`BASE UI Preview` organization, the `UI-2 Smoke Test` / `UI2-001` project with
+an active `project_manager` membership, plus `Preview Test Document` and its
+draft revision. It never creates RFIs, files, issuances, or production-derived
+business content. The command verifies memberships, project access, Dashboard
+and Project Overview SQL, the Records row, and the exact `0001`–`0012`
+migration ledger before reporting success.
+

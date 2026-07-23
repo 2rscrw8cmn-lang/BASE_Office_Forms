@@ -2,17 +2,24 @@
 
 **Status:** Authenticated workspace inventory — application shell plus the
 Dashboard, Projects, Project Overview, and project Records register surfaces
-**Updated:** 2026-07-21
+**Updated:** 2026-07-23
 
 ## Runtime shape
 
-The repository is a Cloudflare Pages application with static browser assets, Pages
-Functions, one D1 database binding, and one private R2 bucket binding. It does not
-use a client framework or a server framework.
+The repository is a Cloudflare Pages application with static browser assets, a
+small React/Vite application entry, Pages Functions, one D1 database binding,
+and one private R2 bucket binding. The React entry is a compatibility host;
+feature routes remain in the existing browser modules until later UI phases.
 
 ```text
 Browser
-├── public/index.html and public/app-shell.js  authenticated workspace shell
+├── public/index.html                         authenticated app entry
+├── public/brand-tokens.css                   neutral brand token bridge
+├── public/app/app.js and public/app/app.css  generated React/Vite entry assets
+├── src/ui/app/main.tsx                       React entry and root mount
+├── src/ui/app/LegacyApplicationHost.tsx      legacy shell compatibility host
+├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
+├── public/app-shell.js                        existing authenticated shell
 ├── public/app-routing.js                      browser route definitions
 ├── public/app-shell.css                       responsive shell styles
 ├── public/app-api.js                          shared /api/v2 browser client
@@ -30,9 +37,12 @@ Browser
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
 ├── public/viewer.html                        public definition viewer
+├── public/pdf-export.js                      controlled-document PDF export helper
+├── public/vendor/pdf-lib.min.js              vendored PDF export runtime
 ├── public/library-api.js                     legacy /api client
 ├── public/engine.js                          renderer (preserved)
-└── public/base.css                           shared visual system (preserved)
+├── public/base.css                           document/renderer CSS (preserved)
+└── vite.config.ts                             deterministic UI asset build
 
 Cloudflare Pages Functions
 ├── functions/api/[[path]].ts                 legacy shared-library API
@@ -56,15 +66,35 @@ Storage
 The D1 binding also contains immutable `issuances` and `issuance_files`
 snapshots plus `project_issuance_sequences` for project-wide issue numbering.
 
+For UI-2 Pages previews, `DB` is explicitly bound to the isolated
+`base-office-forms-ui2-preview` database
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It carries only the UI-2/current-main
+`0001`–`0012` migration ledger, including the legacy `rfi_records` table used
+by Dashboard and Project Overview. Production remains bound to
+`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and was
+inspected but not modified. PR #36's separate preview database is not a UI-2
+binding because its `0013`/`0014` RFI schema is incompatible with these read
+models.
+
+The preview database is supplied with an opt-in, deterministic smoke fixture
+through `scripts/ui2-preview-fixture.mjs` and the `db:fixture:preview` /
+`db:fixture:preview:cleanup` commands. The script accepts a product owner's
+Access email only from `UI2_FIXTURE_EMAIL`, reads production only to resolve
+that person's existing identity subject/email/display name, and writes only
+the pinned UI-2 preview database. It creates one synthetic organization,
+project, memberships, record, and draft revision; it never copies production
+business data or creates RFIs, files, or issuances. Cleanup is restricted to
+the fixture's deterministic synthetic IDs.
+
 ## Frontend architecture and design inventory
 
-The browser application remains framework-free static HTML, CSS, and JavaScript.
-`public/index.html` is the single entry point for new application routes and loads
-browser-native ES modules: `app-routing.js` owns route matching and selected
-navigation state, while `app-shell.js` owns composition, history navigation,
-session/project requests, focus management, mobile drawer behavior, and the
-lifecycle of per-route feature modules. No frontend runtime framework or build
-pipeline was added.
+`public/index.html` is the single entry point for new application routes and
+mounts the generated React/Vite entry. `main.tsx` renders
+`LegacyApplicationHost`, which dynamically loads the existing `app-shell.js`
+compatibility module. The legacy shell still owns route matching, composition,
+history navigation, session/project requests, focus management, mobile drawer
+behavior, and the lifecycle of per-route feature modules. This is an
+incremental build boundary, not a feature-screen migration.
 
 The shell delegates the data-backed routes to focused feature modules rather
 than rendering their data, forms, and state itself:
@@ -97,15 +127,21 @@ only the overview read model and never issues a second project-detail request;
 the shell's existing project-context request continues to populate the project
 header and tabs.
 
-The shell extends rather than replaces the existing `base.css` visual system:
+The authenticated shell now uses an application/document CSS boundary:
 
-- **CSS and tokens:** `base.css` remains the source of `--ink`, `--accent`,
-  `--accent-dk`, `--mono`, `--field`, `--divider`, `--row`, `--page-bg`,
-  `--hover`, and `--paper`. `app-shell.css` adds semantic shell aliases and an
-  8/12/18/24/30 px spacing scale derived from existing usage.
-- **Typography:** Archivo remains the application and control face, JetBrains
-  Mono remains the metadata/code face, and Georgia is reserved for page and
-  section headings.
+- **CSS and tokens:** `brand-tokens.css` owns only neutral brand values and
+  font imports. The authenticated entry does not load `base.css`; its
+  generated app CSS and `app-shell.css` own application styling. The generated
+  application CSS resets the authenticated body's margin, font, text color,
+  smoothing, paragraphs, and complete app box sizing. `base.css` imports the
+  neutral bridge with a relative `./brand-tokens.css` path for legacy document
+  pages and retains document geometry and renderer selectors. `app-shell.css`
+  adds semantic shell aliases and an 8/12/18/24/30 px spacing scale derived
+  from existing usage.
+- **Typography:** Archivo is the target application heading and control face;
+  JetBrains Mono remains the metadata/code face. Existing legacy browser
+  headings may still use Georgia until their later UI-phase migration. UI-2
+  deliberately establishes the boundary without performing that migration.
 - **Color:** the shell uses BASE maroon, ink, paper, and the existing warm-gray
   direction. It does not add a separate application palette or gradients.
 - **Controls:** quiet white bordered controls, the existing maroon primary
@@ -432,6 +468,11 @@ navigates to it, and the viewer now carries the same fill, answer
 import/export, and PDF-export capabilities. It remains reachable at its
 direct URL for existing bookmarks, but it is a candidate for retirement in a
 future cleanup rather than a destination to surface in navigation.
+
+`pdf-export.js` and the vendored `pdf-lib` runtime preserve the current
+controlled-document PDF export path. They remain outside the React/Vite host;
+the UI-2 merge retains this current-main capability rather than moving document
+rendering or PDF generation into React.
 
 The former root shared-library markup is preserved at `library.html`,
 continuing to load `engine.js`, `library-api.js`, `global-search.js`, and

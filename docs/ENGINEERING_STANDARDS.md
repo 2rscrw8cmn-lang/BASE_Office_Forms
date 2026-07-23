@@ -190,15 +190,24 @@ Audit/domain events are not ordinary debug logs. They are durable application da
 - Browser preview and official artifact must use equivalent rendering rules.
 - Official artifacts are generated server-side or by a controlled job—not trusted as arbitrary browser uploads.
 
-## 17. Front-end rules
+## 17. Front-end and application UI rules
 
-- Use semantic HTML.
+- Use semantic HTML and the approved application component library.
 - Centralize API calls and error handling.
 - Do not duplicate workflow rules in multiple views; use capabilities returned by the API plus client UX checks.
 - Avoid destructive icon-only controls.
 - Preserve unsaved drafts on recoverable navigation when practical.
-- Clearly distinguish saved draft, saving, saved, and conflict states.
+- Clearly distinguish draft, editing, saving, saved, failed, offline, and conflict states.
 - Do not optimistically claim official issuance before server confirmation.
+- Follow `APP_UI_FOUNDATION.md` and the active phase in `UI_IMPLEMENTATION_PLAYBOOK.md`.
+- Keep application UI styles separate from controlled-document styles. Application feature code does not add rules to `public/base.css`.
+- Shared problems use shared components. Feature code does not create local button, badge, dialog, field, page-header, filter-toolbar, empty-state, or focus systems.
+- Use semantic application tokens rather than raw colors. Approved data visualizations are documented exceptions.
+- Use the approved icon family through one icon component.
+- Tabulator is instantiated only through the approved `BaseDataGrid` adapter after the spike exit gate.
+- Client code never infers authorization from role-name strings.
+- Desktop, tablet, and mobile behavior are deliberate and tested.
+- UI changes cover loading, populated, first-use empty, filtered empty, error/retry, permission, validation, and conflict states as applicable.
 
 ## 18. Feature flags
 
@@ -218,13 +227,17 @@ Flags are temporary rollout tools, not permanent branching architecture.
 Each PR includes:
 
 - problem and scope;
-- architecture references;
+- architecture and current-structure references;
+- UI-foundation and active-phase references for UI work;
 - schema/API impact;
-- security impact;
-- migration and rollback notes;
-- tests;
-- screenshots for UI changes;
-- known limitations.
+- security and tenant-isolation impact;
+- dependency and license impact;
+- migration, deployment, reconciliation, and rollback notes;
+- tests and checks;
+- desktop/mobile screenshots or a factual explanation when capture is unavailable;
+- accessibility and keyboard evidence for interactive UI;
+- documentation updated, including `UI_PROGRAM_STATUS.md` for UI work;
+- known limitations and the exact next recommended action.
 
 Keep PRs vertically coherent and reviewable. Do not mix broad refactors with workflow features.
 
@@ -239,7 +252,10 @@ Use concise imperative/semantic messages. Every commit on a shared branch must b
 - API contract changes update `API_CONTRACTS.md`.
 - Workflow changes update `WORKFLOWS.md` and tests.
 - Schema changes update `DATA_MODEL.md`.
-- Temporary implementation notes do not override binding architecture without an explicit decision.
+- Runtime, route, dependency, style, component, or file-location changes update `CURRENT_APPLICATION_STRUCTURE.md`.
+- Every UI-related PR updates `UI_PROGRAM_STATUS.md` with completion evidence, limitations, and the next action.
+- New source-of-truth documents are linked from the root README and this documentation index.
+- Temporary implementation notes and chat summaries do not override binding architecture or the living repository handoff.
 
 ## 22. Dependency policy
 
@@ -263,7 +279,9 @@ A code change is done only when:
 - authorization is covered;
 - audit effects are covered;
 - migration is safe;
-- UI handles loading, empty, error, and conflict states;
-- documentation is updated;
+- UI follows approved application patterns and handles loading, first-use empty, filtered empty, error, permission, validation, and conflict states as applicable;
+- desktop, tablet, mobile, keyboard, focus, and visual evidence are complete for UI changes;
+- documentation and living program trackers are updated;
+- the final handoff identifies branch/PR, checks, screenshots, limitations, rollback, and next action;
 - observability is sufficient for support;
 - no critical TODO is deferred silently.
