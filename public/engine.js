@@ -40,7 +40,7 @@
   }
 
   function ctrlGrid(def, numberLabel) {
-    if (def.showControl === false) return "";
+    if (def.showControl !== true) return "";
     const visibility = def.controlVisibility || {};
     const cells = [];
     if (visibility.no !== false && def.no) cells.push([numberLabel || "Document No.", def.no]);
@@ -210,7 +210,7 @@
     const counter = { n: 0 };
     const footnotes = (form.footnotes || []).length ? `<div class="footnote">${form.footnotes.map(esc).join("<br>")}</div>` : "";
     return `<div class="${sheetClass(form)}" style="${appearance(form)}" id="sheet-${esc(form.no)}" data-paginate="true">${topBar(form)}
-      ${form.showTag === false ? "" : `<div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>`}
+      ${form.showTag === true ? `<div class="form-tag">${esc(form.typeLabel || "Form")} ${esc(form.no)}</div>` : ""}
       <h1 class="form-title">${esc(form.title)}</h1>
       ${form.sub ? `<p class="form-sub">${esc(form.sub)}</p>` : ""}
       ${ctrlGrid(form, "Form No.")}
@@ -325,7 +325,7 @@
     let output = "";
     if (hasCover) {
       output += `<div class="${sheetClass(doc, "cover")}" style="${appearance(doc)}">${topBar(doc)}<div class="cover-mid">
-        <div class="form-tag">${esc(doc.tag || `${doc.documentType || "Document"} · ${doc.no || ""}`)}</div>
+        ${doc.showTag === true ? `<div class="form-tag">${esc(doc.tag || `${doc.documentType || "Document"} · ${doc.no || ""}`)}</div>` : ""}
         <h1 class="cover-title">${esc(doc.title)}</h1><div class="cover-bar"></div>
         ${doc.subtitle ? `<div class="cover-sub">${esc(doc.subtitle)}</div>` : ""}
         ${doc.standard ? `<p class="cover-standard">${esc(doc.standard)}</p>` : ""}</div>
@@ -334,7 +334,7 @@
       output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     } else {
       output += `<div class="${sheetClass(doc, "doc-body-sheet")}" style="${appearance(doc)}" data-paginate="true">${topBar(doc)}
-        <div class="form-tag">${esc(doc.tag || doc.documentType || "Document")}</div><h1 class="form-title">${esc(doc.title)}</h1>
+        ${doc.showTag === true ? `<div class="form-tag">${esc(doc.tag || doc.documentType || "Document")}</div>` : ""}<h1 class="form-title">${esc(doc.title)}</h1>
         ${doc.subtitle ? `<p class="form-sub">${esc(doc.subtitle)}</p>` : ""}${ctrlGrid(doc, "Document No.")}<div class="doc-body page-flow">${bodyContent}</div></div>`;
     }
     return output;
@@ -358,7 +358,7 @@
       page = end + 1;
       return { no: documents[index].no || String(index + 1).padStart(2, "0"), title: documents[index].title || "Untitled", range: start === end ? String(start) : `${start}-${end}` };
     });
-    const cover = `<div class="${sheetClass(pkg, "cover package-cover")}" style="${appearance(pkg)}">${topBar(pkg)}<div class="cover-mid"><div class="form-tag">${esc(pkg.tag || "Document Package")}</div><h1 class="cover-title">${esc(pkg.title)}</h1><div class="cover-bar"></div>${pkg.subtitle ? `<div class="cover-sub">${esc(pkg.subtitle)}</div>` : ""}<p class="cover-standard">${documents.length} controlled document${documents.length === 1 ? "" : "s"} · Index generated ${today()}</p></div>${ctrlGrid(pkg, "Package No.")}</div>`;
+    const cover = `<div class="${sheetClass(pkg, "cover package-cover")}" style="${appearance(pkg)}">${topBar(pkg)}<div class="cover-mid">${pkg.showTag === true ? `<div class="form-tag">${esc(pkg.tag || "Document Package")}</div>` : ""}<h1 class="cover-title">${esc(pkg.title)}</h1><div class="cover-bar"></div>${pkg.subtitle ? `<div class="cover-sub">${esc(pkg.subtitle)}</div>` : ""}<p class="cover-standard">${documents.length} controlled document${documents.length === 1 ? "" : "s"} · Index generated ${today()}</p></div>${ctrlGrid(pkg, "Package No.")}</div>`;
     const index = `<div class="${sheetClass(pkg, "package-index")}" style="${appearance(pkg)}" data-paginate="true">${topBar(pkg)}<h2 class="form-title page-title">Package Index</h2><div class="package-index-list page-flow">${entries.map((entry, i) => `<div class="package-index-row" data-package-index="${i}"><span class="seq">${String(i + 1).padStart(2, "0")}</span><span><strong>${esc(entry.title)}</strong><small>${esc(entry.no)}</small></span><span class="leader"></span><span class="pages">${entry.range}</span></div>`).join("")}</div></div>`;
     return cover + index + rendered.map((html, index) => `<div class="package-document" data-package-item="${index + 1}">${html}</div>`).join("");
   }
@@ -492,19 +492,19 @@
 
   function blankForm() {
     return { kind: "form", documentType: "Controlled Form", typeLabel: "Form", no: "NEW-1", title: "Untitled Form", sub: "",
-      control: controls("NEW-1"), controlVisibility: {}, showControl: true, appearance: {},
+      control: controls("NEW-1"), controlVisibility: {}, showControl: false, showTag: false, appearance: {},
       sections: [{ name: "Section One", req: "REQUIRED", fields: [{ label: "Field label", w: 1, height: 46 }] }], footnotes: [] };
   }
 
   function blankDoc() {
     return { kind: "document", documentType: "Document", no: "DOC-1", tag: "Document · DOC-1", title: "Untitled Document", subtitle: "", standard: "",
-      control: controls("DOC-1"), controlVisibility: {}, showControl: true, appearance: {}, authority: "", toc: true, layout: { cover: true },
+      control: controls("DOC-1"), controlVisibility: {}, showControl: false, showTag: false, appearance: {}, authority: "", toc: true, layout: { cover: true },
       blocks: [{ type: "prose", heading: "First Section", paras: ["Write the first paragraph here."] }] };
   }
 
   function blankPackage() {
     return { kind: "package", documentType: "Package", no: "PKG-1", tag: "Controlled Package", title: "Untitled Package", subtitle: "",
-      control: controls("PKG-1"), controlVisibility: {}, showControl: true, appearance: {}, documents: [] };
+      control: controls("PKG-1"), controlVisibility: {}, showControl: false, showTag: false, appearance: {}, documents: [] };
   }
 
   function docTemplate(type, title, no, options) {
