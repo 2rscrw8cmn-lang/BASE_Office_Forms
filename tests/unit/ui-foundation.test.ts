@@ -74,10 +74,13 @@ describe("UI-2 application boundary", () => {
     // main into origin/main), and the cover-tag/document-control-strip
     // off-by-default change. UI-2 changes the application entry boundary
     // only, so a later renderer edit fails loudly until it receives an
-    // intentional review.
-    expect(createHash("sha256").update(engineSource).digest("hex")).toBe(
-      "080b025a428bf666d3d11a31d4ed3fc4595a9fffa6b5dfaeb92ab78f327028a5",
-    );
+    // intentional review. Normalize CRLF first so a checkout with
+    // core.autocrlf=true (e.g. Windows) hashes the same content CI does.
+    expect(
+      createHash("sha256")
+        .update(engineSource.replace(/\r\n/g, "\n"))
+        .digest("hex"),
+    ).toBe("dd30291f2cad991002eeceb8be308545dcde5f4bf8b47fe21caf36f560e0862d");
   });
 
   it("delegates preview markup to the controlled renderer runtime", () => {
