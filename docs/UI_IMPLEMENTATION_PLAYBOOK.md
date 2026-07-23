@@ -1,6 +1,6 @@
 # BASE UI Foundation Implementation Playbook
 
-**Status:** Execution guide for the binding direction in `APP_UI_FOUNDATION.md`  
+**Status:** Execution guide for the binding direction in `APP_UI_FOUNDATION.md`
 **Rule:** Complete phases in order unless a documented dependency requires a narrow overlap.
 
 ## 1. How to use this playbook
@@ -19,9 +19,9 @@ At completion the agent must update the repository documentation described in th
 ## 2. Program sequencing
 
 ```text
-Spike 0  Tabulator behavior proof
-UI-1     Audit, design contract, and decisions
-UI-2     Application/document CSS separation + React/Vite foundation
+Spike 0  Tabulator behavior proof                              [complete: reject for RFI]
+UI-1     Audit, design contract, and decisions                 [complete]
+UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
 UI-5     RFI register using BaseDataGrid + Tabulator
@@ -80,7 +80,18 @@ Create or update a spike report containing:
 
 No production adoption until all critical RFI keyboard, save, validation, permission, and conflict behaviors have an acceptable design.
 
+### Result
+
+Spike 0 is complete and rejects Tabulator for the RFI register. The prototype
+could not preserve the required select-then-edit/non-editing-arrow keyboard
+workflow through documented APIs. Retain the controlled custom RFI table.
+Tabulator may be reconsidered for a future high-volume register, log, or
+export surface through `BaseDataGrid`, with a new acceptance decision.
+
 ## 4. UI-1 — Audit, design contract, and decisions
+
+**Status:** Complete. The audit and binding decisions are recorded in the UI
+foundation, ADRs, and program tracker.
 
 ### Objective
 
@@ -146,6 +157,10 @@ The team can answer, without inventing per-screen rules:
 - what is application UI versus official document rendering.
 
 ## 5. UI-2 — CSS separation and React/Vite foundation
+
+**Status:** Complete on 2026-07-23. PR #41 passed the full gate and the
+authenticated product-owner smoke test; it is ready for review and merge. PR
+#36 reconciliation is required before UI-3 begins.
 
 ### Objective
 
@@ -276,11 +291,14 @@ Move global application composition into the new foundation while keeping featur
 
 The shell is stable enough that feature migrations no longer need to modify global navigation or invent page containers.
 
-## 8. UI-5 — RFI register and BaseDataGrid
+## 8. UI-5 — RFI register and BaseDataGrid decision
 
 ### Objective
 
-Use the most demanding current register to prove the production data-grid integration.
+Migrate the RFI register with the controlled custom-table interaction model.
+Do not adopt Tabulator for this route: Spike 0 rejected it because its keyboard
+behavior regressed. The detailed `BaseDataGrid` contract below is retained for
+a future accepted high-volume register, not as an RFI delivery prerequisite.
 
 ### Required behavior
 
@@ -304,7 +322,8 @@ Use the most demanding current register to prove the production data-grid integr
 
 ### Architecture rules
 
-- feature code configures `BaseDataGrid`; it does not instantiate Tabulator;
+- feature code does not instantiate Tabulator; any future accepted use
+  configures `BaseDataGrid`;
 - API remains authoritative;
 - role strings are not interpreted in the client;
 - official issuance remains outside grid editing;
@@ -312,7 +331,8 @@ Use the most demanding current register to prove the production data-grid integr
 
 ### Exit gate
 
-Behavioral parity is demonstrated through tests and visual evidence. Cleaner appearance alone is not acceptance.
+Behavioral parity is demonstrated through tests and visual evidence. Cleaner appearance alone is not acceptance. RFI acceptance is against the controlled
+custom-table keyboard contract, not the rejected Tabulator prototype.
 
 ## 9. UI-6 — Projects and Records registers
 

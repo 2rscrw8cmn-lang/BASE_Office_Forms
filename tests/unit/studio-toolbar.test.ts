@@ -412,20 +412,7 @@ describe("Studio command toolbar (Issue #25)", () => {
     });
   });
 
-  it("introduces no React or lucide dependency", () => {
-    const pkg = readFileSync("package.json", "utf8");
-    const parsed = JSON.parse(pkg) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-    const all = {
-      ...(parsed.dependencies ?? {}),
-      ...(parsed.devDependencies ?? {}),
-    };
-    Object.keys(all).forEach((name) => {
-      expect(name).not.toMatch(/react/i);
-      expect(name).not.toMatch(/lucide/i);
-    });
+  it("keeps legacy Studio independent from the migrated icon runtime", () => {
     expect(builderHtml.toLowerCase()).not.toContain("lucide");
     expect(studioSource.toLowerCase()).not.toContain("lucide");
   });

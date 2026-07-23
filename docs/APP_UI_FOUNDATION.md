@@ -1,8 +1,8 @@
 # BASE Application UI Foundation
 
-**Status:** Binding application design direction  
-**Owner:** Product/architecture  
-**Applies to:** Authenticated application workspace, Studio controls, and Document Library application chrome  
+**Status:** Binding application design direction
+**Owner:** Product/architecture
+**Applies to:** Authenticated application workspace, Studio controls, and Document Library application chrome
 **Does not replace:** `public/engine.js`, controlled-document definitions, or official document output
 
 ## 1. Purpose
@@ -19,6 +19,42 @@ The immediate problem is structural inconsistency:
 
 This document establishes the binding UI direction and the boundary between the application and the controlled-document renderer.
 
+### Current implementation checkpoint — UI-1 and UI-2
+
+UI-1 audited Dashboard, Projects, Project Overview, the Records register,
+Record and Revision workspaces, RFI register/workspace, create/edit dialogs,
+Studio, and Document Library. The audit found that the existing shell has the
+strongest shared behavior (route focus, project context, API errors/request
+IDs, drawer behavior, and responsive thresholds), while page headers,
+registers, cards, dialogs, statuses, file rows, and history remain mostly local
+markup and CSS. The resulting component, state, and responsive contracts in
+this document are binding for later migrations.
+
+UI-2 completed its build and CSS boundary, complete validation gate, and
+authenticated product-owner smoke test on 2026-07-23. The authenticated entry now loads
+neutral `public/brand-tokens.css`, Vite output in `public/app/`, and the
+existing shell through a React compatibility host. It no longer loads
+`public/base.css`. `public/base.css` continues to own controlled-document
+geometry and renderer selectors, while legacy Studio, Library, fill, and viewer
+pages retain their compatible renderer path. No feature route or domain rule
+has been migrated into React.
+
+UI-2 is ready for PR review and merge. PR #36 reconciliation is the required
+next action before UI-3 begins; completion of this foundation does not begin
+the component-library phase.
+
+The target for application headings is **Archivo**. Existing browser-module
+screens may still show Georgia because they retain their legacy shell CSS; UI-2
+does not need to perform that later typography migration. UI-3/UI-4 component
+and shell work must apply Archivo to migrated application headings without
+altering controlled-document typography.
+
+Spike 0 is complete: Tabulator is rejected for the RFI register because its
+documented keyboard model cannot preserve BASE's select-then-edit and
+non-editing arrow-key workflow. It remains a conditional candidate for future
+high-volume registers, logs, or exports, only through `BaseDataGrid` and only
+after a separate acceptance decision.
+
 ## 2. Product boundary
 
 ### 2.1 Application workspace
@@ -33,7 +69,7 @@ React + TypeScript + Vite
 ├── TanStack Query
 ├── Radix behavior primitives
 ├── BASE-owned component source and styling
-├── Tabulator through BaseDataGrid
+├── Tabulator through BaseDataGrid only if a future adoption is accepted
 └── application-only CSS
 ```
 
@@ -76,15 +112,15 @@ The application should feel like a modern commercial construction operations pla
 
 ### 4.1 Typography
 
-| Role | Standard |
-|---|---|
-| Application interface | Archivo |
-| Metadata, IDs, codes | JetBrains Mono, used sparingly |
-| Official controlled documents | Existing renderer typography |
-| Application page headings | Archivo; Georgia is removed from the application workspace |
-| Body text | 13–14 px minimum under normal conditions |
-| Supporting text | 12–13 px |
-| Metadata | 11–12 px minimum |
+| Role                          | Standard                                                   |
+| ----------------------------- | ---------------------------------------------------------- |
+| Application interface         | Archivo                                                    |
+| Metadata, IDs, codes          | JetBrains Mono, used sparingly                             |
+| Official controlled documents | Existing renderer typography                               |
+| Application page headings     | Archivo; Georgia is removed from the application workspace |
+| Body text                     | 13–14 px minimum under normal conditions                   |
+| Supporting text               | 12–13 px                                                   |
+| Metadata                      | 11–12 px minimum                                           |
 
 Uppercase mono labels are reserved for true identifiers, compact metadata, and controlled terminology. They are not the default treatment for every caption.
 
@@ -92,33 +128,33 @@ Uppercase mono labels are reserved for true identifiers, compact metadata, and c
 
 Exact token values are maintained in the application token source. Features use semantic names, not raw hex values.
 
-| Token role | Usage |
-|---|---|
-| Workspace | Main application background |
-| Surface | Panels, dialogs, cards, menus |
-| Border subtle | Internal divisions and quiet grouping |
-| Border strong | Controls and deliberate boundaries |
-| Text primary | Main content |
-| Text muted | Supporting information |
-| Accent | Primary action, focus, selected/active state |
-| Success | Completed, active, issued where semantically positive |
-| Warning | Due soon, reconciliation, attention required |
-| Danger | Errors, destructive actions, invalid states |
-| Info | Neutral informational notice |
+| Token role    | Usage                                                 |
+| ------------- | ----------------------------------------------------- |
+| Workspace     | Main application background                           |
+| Surface       | Panels, dialogs, cards, menus                         |
+| Border subtle | Internal divisions and quiet grouping                 |
+| Border strong | Controls and deliberate boundaries                    |
+| Text primary  | Main content                                          |
+| Text muted    | Supporting information                                |
+| Accent        | Primary action, focus, selected/active state          |
+| Success       | Completed, active, issued where semantically positive |
+| Warning       | Due soon, reconciliation, attention required          |
+| Danger        | Errors, destructive actions, invalid states           |
+| Info          | Neutral informational notice                          |
 
 Red is not used for ordinary focus or normal form borders. Error and danger treatments remain distinct from BASE maroon.
 
 ### 4.3 Geometry and density
 
-| Element | Standard |
-|---|---|
-| Default control height | 40 px |
-| Compact control height | 32–34 px |
-| Minimum touch target | 44 px where isolated or mobile |
-| Radius | 4–6 px |
-| Page gutter | Responsive token; consistent across page patterns |
-| Panel shadow | Minimal; borders carry most structure |
-| Register row height | Compact but readable; standardized by BaseDataGrid |
+| Element                | Standard                                           |
+| ---------------------- | -------------------------------------------------- |
+| Default control height | 40 px                                              |
+| Compact control height | 32–34 px                                           |
+| Minimum touch target   | 44 px where isolated or mobile                     |
+| Radius                 | 4–6 px                                             |
+| Page gutter            | Responsive token; consistent across page patterns  |
+| Panel shadow           | Minimal; borders carry most structure              |
+| Register row height    | Compact but readable; standardized by BaseDataGrid |
 
 Component variants must be explicit, such as `size="compact"`, rather than changed by a parent feature selector.
 
@@ -270,7 +306,11 @@ Radix may provide behavior, but BASE owns the rendered styling and component con
 
 ### 6.4 BaseDataGrid
 
-Tabulator must be wrapped by one `BaseDataGrid` integration. Feature modules may configure columns and feature actions but may not instantiate or theme Tabulator directly.
+If a future high-volume register adopts Tabulator, it must be wrapped by one
+`BaseDataGrid` integration. Feature modules may configure columns and feature
+actions but may not instantiate or theme Tabulator directly. The RFI register
+remains on its controlled custom table after Spike 0 rejected Tabulator's
+keyboard behavior.
 
 `BaseDataGrid` owns:
 
@@ -357,7 +397,8 @@ A feature is incomplete when these states are left to generic browser behavior o
 - TanStack Query for remote server state.
 - Radix primitives for complex accessible behavior.
 - Lucide for application icons.
-- Tabulator through `BaseDataGrid` for editable construction registers.
+- Tabulator through `BaseDataGrid` only for a future accepted high-volume
+  register; it is not adopted for the RFI register.
 
 ### Conditions
 

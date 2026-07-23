@@ -1,0 +1,38 @@
+/* Application-only reset and React host styles. Renderer layout selectors do
+   not belong here. The authenticated body is the application boundary during
+   the compatibility-host migration. */
+
+.app-shell-body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell-body,
+.app-shell-body *,
+.app-shell-body *::before,
+.app-shell-body *::after {
+  box-sizing: border-box;
+}
+
+.app-shell-body p {
+  margin: 0;
+}
+
+.app-shell-body .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.react-app-host {
+  min-height: 100vh;
+}

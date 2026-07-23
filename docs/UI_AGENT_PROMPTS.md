@@ -1,6 +1,6 @@
 # BASE UI Program — Copy-Ready Agent Prompts
 
-**Purpose:** Start each phase from repository context without relying on an earlier chat.  
+**Purpose:** Start each phase from repository context without relying on an earlier chat.
 **Usage:** Copy one phase prompt into a coding agent. Replace bracketed values only when needed.
 
 ## Required preamble for every UI agent
