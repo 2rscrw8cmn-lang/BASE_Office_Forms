@@ -11,6 +11,18 @@
 > UI-3 remains blocked until PR #36 reconciliation, Pages preview, checks, and
 > product-owner RFI smoke testing are complete. Do not merge or mark PR #36 ready
 > in this task.
+>
+> **2026-07-23 production verification:** read-only verification against
+> `base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) confirmed
+> migration `0013` is already applied and structurally present in production;
+> `0014` is not recorded and has never started — production is a clean
+> pre-0014 state. `app_meta.schema_version` reading `1` instead of `11` is a
+> pre-existing legacy-bootstrap bug (`INSERT OR REPLACE` stomping the marker),
+> already fixed in this PR (commit `5366208`) by switching to
+> `INSERT OR IGNORE`. See `RFI_SLICE_1_ROLLOUT.md` for the full evidence and
+> the coordinated cutover plan: freeze, backup/preflight, squash-merge,
+> production deploy, apply pending migration `0014` only, reconcile, smoke
+> test, reopen. Do not rerun `0013`. Do not merge in this task.
 
 ## 1. Current direction
 
@@ -160,6 +172,8 @@ preview-schema mismatch documented above. The new guarded fixture supplies the
 minimum Access identity and synthetic project used for the passing browser
 retest; it does not alter the source route or its read model.
 
+
+
 ## 4. UI-2 exit gate
 
 UI-2 is complete only when all of these are true:
@@ -214,4 +228,8 @@ the authenticated product-owner retest above meet every UI-2 exit criterion.
 
 Review and merge PR #41 through the normal review workflow. Before UI-3,
 reconcile PR #36 with the resulting current-main UI-2 foundation and record
-the outcome. Do not merge this PR from this task.
+the outcome. Production verification is complete (0013 applied, 0014
+pending) — the remaining gate before UI-3 is human approval of the
+coordinated cutover in `RFI_SLICE_1_ROLLOUT.md` (freeze, squash-merge,
+deploy, apply 0014, reconcile, smoke test, reopen). Do not merge this PR
+from this task.

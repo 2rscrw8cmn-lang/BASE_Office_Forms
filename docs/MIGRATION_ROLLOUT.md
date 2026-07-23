@@ -309,4 +309,7 @@ model to the Records → Revisions → Files spine. Its stable RFI ID becomes th
 Record ID and `rfi_0014_reconciliation` preserves the legacy-to-record/draft
 mapping. The detailed preview topology, rehearsal, human approval points,
 backup, maintenance gate, reconciliation, monitoring, forward-fix, and rollback
-limits are in `RFI_SLICE_1_ROLLOUT.md`. This PR performs no production migration.
+limits are in `RFI_SLICE_1_ROLLOUT.md`. Migration 0013 is already applied to
+production; 0014 remains pending and is only applied there as part of the
+human-approved coordinated cutover after PR #36 merges — never as part of
+this PR's own checks.
