@@ -170,14 +170,11 @@ describe("RFI spreadsheet register", () => {
     const harness = mountRegister();
     await harness.view.reload();
 
-    const subject = element(
-      harness.root,
-      '[data-id="rfi-1"][data-field="subject"]',
-    );
-    fire(subject, "click");
-    key(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
-      "Enter",
+    // Subject: the explicit "Edit subject" trigger begins editing (it is a
+    // link by default, not a click-to-select cell); Enter commits.
+    fire(
+      element(harness.root, '[data-edit-subject][data-id="rfi-1"]'),
+      "click",
     );
     const editor = element(
       harness.root,
@@ -192,6 +189,11 @@ describe("RFI spreadsheet register", () => {
     });
     expect(harness.root.textContent).toContain("Updated clearance");
 
+    // Secondary field (question): Escape cancels an in-progress edit.
+    fire(
+      element(harness.root, '[data-secondary-toggle][data-id="rfi-1"]'),
+      "click",
+    );
     key(element(harness.root, '[data-id="rfi-1"][data-field="question"]'), "x");
     const question = element(
       harness.root,
@@ -201,45 +203,51 @@ describe("RFI spreadsheet register", () => {
     key(question, "Escape");
     expect(harness.api.updateRfi).toHaveBeenCalledTimes(1);
 
+    // Responsible -> Due: Tab commits and moves selection to the next
+    // direct-editable grid cell.
     key(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
+      element(
+        harness.root,
+        '[data-id="rfi-1"][data-field="responsiblePartyId"]',
+      ),
       "Enter",
     );
-    const tabbed = element(
+    const respEditor = element(
       harness.root,
-      '[data-field="subject"] [data-cell-editor]',
-    ) as HTMLInputElement;
-    tabbed.value = "Tabbed clearance";
-    key(tabbed, "Tab");
+      '[data-field="responsiblePartyId"] [data-cell-editor]',
+    ) as unknown as HTMLSelectElement;
+    respEditor.value = "";
+    key(respEditor, "Tab");
     await settle();
     expect(harness.api.updateRfi).toHaveBeenCalledTimes(2);
     expect(
       element(
         harness.root,
-        '[data-id="rfi-1"][data-field="responsiblePartyId"]',
+        '[data-id="rfi-1"][data-field="requestedResponseDate"]',
       ).classList.contains("is-selected"),
     ).toBe(true);
 
-    key(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
-      "Enter",
+    // Subject validation: required field blocks an empty commit.
+    fire(
+      element(harness.root, '[data-edit-subject][data-id="rfi-1"]'),
+      "click",
     );
     const empty = element(
       harness.root,
       '[data-field="subject"] [data-cell-editor]',
     ) as HTMLInputElement;
     empty.value = "";
-    key(empty, "Tab");
+    key(empty, "Enter");
     expect(harness.api.updateRfi).toHaveBeenCalledTimes(2);
     expect(
       element(harness.root, '[data-field="subject"] [role="alert"]')
         .textContent,
     ).toContain("required");
+    key(empty, "Escape");
 
-    const locked = element(
-      harness.root,
-      '[data-id="rfi-locked"][data-field="subject"]',
-    );
+    const lockedRow = element(harness.root, '[data-rfi-row="rfi-locked"]');
+    expect(lockedRow.querySelector("[data-edit-subject]")).toBeNull();
+    const locked = element(lockedRow, '[data-field="responsiblePartyId"]');
     expect(locked.getAttribute("tabindex")).toBe("-1");
     key(locked, "Enter");
     expect(locked.querySelector("[data-cell-editor]")).toBeNull();
@@ -256,9 +264,9 @@ describe("RFI spreadsheet register", () => {
     fire(status, "change");
     expect(harness.window.location.search).toContain("status=draft");
 
-    key(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
-      "Enter",
+    fire(
+      element(harness.root, '[data-edit-subject][data-id="rfi-1"]'),
+      "click",
     );
     const editor = element(
       harness.root,
@@ -270,11 +278,17 @@ describe("RFI spreadsheet register", () => {
     expect(harness.window.location.search).toContain("status=draft");
 
     fire(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
+      element(
+        harness.root,
+        '[data-id="rfi-1"][data-field="responsiblePartyId"]',
+      ),
       "click",
     );
     expect(harness.navigate).not.toHaveBeenCalled();
-    fire(element(harness.root, '[data-rfi-row="rfi-1"] .open-link'), "click");
+    fire(
+      element(harness.root, '[data-rfi-row="rfi-1"] .rfi-subject-link'),
+      "click",
+    );
     expect(harness.navigate).toHaveBeenCalledWith(
       "/projects/project-1/rfis/rfi-1",
     );
@@ -300,9 +314,9 @@ describe("RFI spreadsheet register", () => {
       ],
     });
     await harness.view.reload();
-    key(
-      element(harness.root, '[data-id="rfi-1"][data-field="subject"]'),
-      "Enter",
+    fire(
+      element(harness.root, '[data-edit-subject][data-id="rfi-1"]'),
+      "click",
     );
     const editor = element(
       harness.root,
@@ -368,7 +382,7 @@ describe("RFI spreadsheet register", () => {
 });
 
 describe("RFI register visual refinement", () => {
-  it("renders the six-column desktop hierarchy with identity, subject, responsible, due, updated, and action", async () => {
+  it("renders the five-column desktop hierarchy with identity, subject, responsible, due, and updated — no Action column", async () => {
     const harness = mountRegister({
       rows: [
         rfi({
@@ -392,19 +406,20 @@ describe("RFI register visual refinement", () => {
       ...harness.root.querySelectorAll(".rfi-table thead th"),
     ].map((th) => th.textContent.trim());
     expect(headers).toEqual([
-      "RFI",
+      "RFI ↑",
       "Subject",
       "Responsible",
       "Due",
       "Updated",
-      "Action",
     ]);
+    expect(harness.root.querySelector(".rfi-cell-action")).toBeNull();
+    expect(harness.root.textContent).not.toContain("Open →");
 
     const row = element(harness.root, '[data-rfi-row="rfi-1"]');
     expect(row.querySelector(".rfi-id-number")?.textContent).toBe("RFI-014");
     expect(row.querySelector(".rfi-id-status")?.textContent).toBe("Open");
-    const subjectCell = element(row, '[data-field="subject"]');
-    expect(subjectCell.querySelector(".rfi-subject-primary")?.textContent).toBe(
+    const subjectCell = element(row, "[data-subject-cell]");
+    expect(subjectCell.querySelector(".rfi-subject-link")?.textContent).toBe(
       "Relocate existing VAV above conference room",
     );
     expect(
@@ -417,16 +432,13 @@ describe("RFI register visual refinement", () => {
       element(row, '[data-field="responsiblePartyId"]').textContent,
     ).toContain("Alex Architect");
     expect(row.querySelector(".rfi-updated-text")).not.toBeNull();
-    expect(element(row, ".open-link").textContent).toContain("Open");
   });
 
   it("shows Unnumbered Draft with a Draft status line for unissued rows", async () => {
     const harness = mountRegister();
     await harness.view.reload();
     const row = element(harness.root, '[data-rfi-row="rfi-1"]');
-    expect(row.querySelector(".rfi-id-number")?.textContent).toBe(
-      "Unnumbered Draft",
-    );
+    expect(row.querySelector(".rfi-id-number")?.textContent).toBe("Unnumbered");
     expect(row.querySelector(".rfi-id-number")?.classList).toContain(
       "rfi-id-number-draft",
     );
@@ -507,15 +519,16 @@ describe("RFI register visual refinement", () => {
     const lockedRow = element(harness.root, '[data-rfi-row="rfi-locked"]');
     expect(lockedRow.classList).toContain("is-locked");
     expect(lockedRow.querySelector("[data-secondary-toggle]")).toBeNull();
+    expect(lockedRow.querySelector("[data-edit-subject]")).toBeNull();
     expect(
-      element(lockedRow, '[data-field="subject"]').getAttribute(
+      element(lockedRow, '[data-field="responsiblePartyId"]').getAttribute(
         "aria-readonly",
       ),
     ).toBe("true");
 
-    fire(element(lockedRow, '[data-field="subject"]'), "click");
+    fire(element(lockedRow, '[data-field="responsiblePartyId"]'), "click");
     expect(harness.navigate).not.toHaveBeenCalled();
-    fire(element(lockedRow, ".open-link"), "click");
+    fire(element(lockedRow, ".rfi-subject-link"), "click");
     expect(harness.navigate).toHaveBeenCalledWith(
       "/projects/project-1/rfis/rfi-locked",
     );
@@ -766,7 +779,165 @@ describe("RFI register visual refinement", () => {
     expect(card.querySelector(".rfi-card-question")).not.toBeNull();
     expect(card.querySelector(".rfi-card-facts")).not.toBeNull();
   });
+
+  it("both the RFI identity and the Subject title link to the workspace with clear accessible names", async () => {
+    const harness = mountRegister();
+    await harness.view.reload();
+    const idLink = element(
+      harness.root,
+      '[data-rfi-row="rfi-1"] .rfi-id-link',
+    ) as HTMLAnchorElement;
+    expect(idLink.getAttribute("href")).toBe("/projects/project-1/rfis/rfi-1");
+    expect(idLink.getAttribute("aria-label")).toContain("Open RFI");
+    const subjectLink = element(
+      harness.root,
+      '[data-rfi-row="rfi-1"] .rfi-subject-link',
+    ) as HTMLAnchorElement;
+    expect(subjectLink.getAttribute("href")).toBe(
+      "/projects/project-1/rfis/rfi-1",
+    );
+    expect(subjectLink.textContent).toBe("Door clearance");
+
+    fire(idLink, "click");
+    expect(harness.navigate).toHaveBeenCalledWith(
+      "/projects/project-1/rfis/rfi-1",
+    );
+  });
+
+  it("begins the existing Subject edit mode from its explicit edit affordance only", async () => {
+    const harness = mountRegister();
+    await harness.view.reload();
+    expect(
+      harness.root.querySelector('[data-id="rfi-1"][data-field="subject"]'),
+    ).toBeNull();
+    const trigger = element(
+      harness.root,
+      '[data-edit-subject][data-id="rfi-1"]',
+    );
+    expect(trigger.getAttribute("aria-label")).toBe("Edit subject");
+
+    fire(
+      element(harness.root, '[data-rfi-row="rfi-1"] .rfi-subject-link'),
+      "click",
+    );
+    expect(
+      harness.root.querySelector(
+        '[data-id="rfi-1"][data-field="subject"] [data-cell-editor]',
+      ),
+    ).toBeNull();
+
+    fire(trigger, "click");
+    expect(
+      element(
+        harness.root,
+        '[data-id="rfi-1"][data-field="subject"] [data-cell-editor]',
+      ),
+    ).toBeTruthy();
+  });
+
+  it("sorts by clicking a column header, updates the URL, toggles direction, and marks aria-sort", async () => {
+    const harness = mountRegister({
+      rows: [
+        rfi({ id: "rfi-1", subject: "Bravo item" }),
+        rfi({ id: "rfi-2", subject: "Alpha item" }),
+      ],
+    });
+    await harness.view.reload();
+    expect(harness.root.querySelector("#rfi-sort")).toBeNull();
+
+    const subjectHeader = element(harness.root, '[data-sort-header="subject"]');
+    expect(subjectHeader.closest("th")?.getAttribute("aria-sort")).toBe("none");
+    fire(subjectHeader, "click");
+    expect(harness.window.location.search).toContain("sort=subject");
+    expect(
+      element(harness.root, '[data-sort-header="subject"]')
+        .closest("th")
+        ?.getAttribute("aria-sort"),
+    ).toBe("ascending");
+    const orderAsc = [...harness.root.querySelectorAll("[data-rfi-row]")].map(
+      (row) => row.getAttribute("data-rfi-row"),
+    );
+    expect(orderAsc).toEqual(["rfi-2", "rfi-1"]);
+
+    fire(element(harness.root, '[data-sort-header="subject"]'), "click");
+    expect(harness.window.location.search).toContain("direction=desc");
+    expect(
+      element(harness.root, '[data-sort-header="subject"]')
+        .closest("th")
+        ?.getAttribute("aria-sort"),
+    ).toBe("descending");
+    const orderDesc = [...harness.root.querySelectorAll("[data-rfi-row]")].map(
+      (row) => row.getAttribute("data-rfi-row"),
+    );
+    expect(orderDesc).toEqual(["rfi-1", "rfi-2"]);
+  });
+
+  it("keeps Search, Status, Responsible, and Due as the only visible filter controls", async () => {
+    const harness = mountRegister();
+    await harness.view.reload();
+    expect(harness.root.querySelector("#rfi-search")).not.toBeNull();
+    expect(harness.root.querySelector("#rfi-status")).not.toBeNull();
+    expect(harness.root.querySelector("#rfi-responsible")).not.toBeNull();
+    expect(harness.root.querySelector("#rfi-due")).not.toBeNull();
+    expect(harness.root.querySelector("#rfi-sort")).toBeNull();
+  });
 });
+
+function mountWorkspace(
+  options: {
+    data?: Record<string, unknown>;
+    updateRfi?: ReturnType<typeof vi.fn>;
+  } = {},
+) {
+  const window = new Window({
+    url: "https://base.test/projects/project-1/rfis/rfi-1",
+  });
+  const document = window.document as unknown as Document;
+  document.body.innerHTML = '<main id="root"></main>';
+  Object.assign(globalThis, { document });
+  const render = vi.fn(() => '<label>Subject<input name="subject"></label>');
+  Object.assign(globalThis, { BASE: { clone: structuredClone, render } });
+  const data = options.data ?? {
+    project: { id: "project-1", name: "Library", projectNumber: "P-001" },
+    rfi: rfi({ capabilities: undefined }),
+    currentVersion: { id: "rev-1", label: "Draft 1" },
+    responsibleContacts: [contact],
+    capabilities: {
+      updateDraft: true,
+      uploadAttachment: true,
+      close: false,
+      reopen: false,
+      void: false,
+      issue: false,
+    },
+    attachments: { supporting_attachment: [], reference_drawing: [] },
+    responses: [],
+    activity: [],
+    template: { name: "RFI", versionNumber: 3, definition: { title: "RFI" } },
+  };
+  const root = element(document, "#root");
+  const api = {
+    getRfiWorkspace: vi.fn(() => Promise.resolve({ data })),
+    updateRfi: options.updateRfi ?? vi.fn(() => Promise.resolve({ data: {} })),
+  };
+  const navigate = vi.fn();
+  const announce = vi.fn();
+  const holder: { current?: ReturnType<typeof createRfiWorkspaceView> } = {};
+  const requestRender = () => {
+    holder.current?.mount(root);
+  };
+  const view = createRfiWorkspaceView({
+    api,
+    projectId: "project-1",
+    rfiId: "rfi-1",
+    navigate,
+    announce,
+    requestRender,
+  });
+  holder.current = view;
+  views.push(view);
+  return { window, document, root, api, navigate, announce, view, render };
+}
 
 describe("RFI document workspace", () => {
   it("uses the shared document hierarchy, revision-aware files, renderer, and separate response", async () => {
@@ -845,19 +1016,107 @@ describe("RFI document workspace", () => {
       root.querySelector(".document-options [data-action='void']"),
     ).not.toBeNull();
     expect(
-      root.querySelector(".document-header-actions > [data-action='void']"),
+      root.querySelector(".rfi-rail-actions > [data-action='void']"),
     ).toBeNull();
     expect(root.textContent).toContain("Supporting attachment");
     expect(root.textContent).toContain("Draft 1");
     expect(root.querySelector(".rfi-response-panel")?.textContent).toContain(
       "Maintain 36 inches",
     );
+
+    // Preview is not rendered by default — Details is the default main mode,
+    // and the renderer never runs until Preview is explicitly selected.
+    expect(render).not.toHaveBeenCalled();
+    expect(root.querySelector(".rfi-render-panel")).toBeNull();
+    expect(
+      element(root, '[data-mode-button="details"]').getAttribute(
+        "aria-pressed",
+      ),
+    ).toBe("true");
+
+    fire(element(root, '[data-mode-button="preview"]'), "click");
     expect(render).toHaveBeenCalledTimes(1);
+    expect(root.querySelector(".document-work-panel")).toBeNull();
     const previewInput = element(
       root,
       ".rfi-render-preview input",
     ) as HTMLInputElement;
     expect(previewInput.disabled).toBe(true);
     expect(previewInput.value).toBe("Door clearance");
+  });
+
+  it("renders a main content column and a metadata rail, with references shown side by side", async () => {
+    const harness = mountWorkspace();
+    await harness.view.reload();
+
+    expect(harness.root.querySelector(".rfi-workspace-grid")).not.toBeNull();
+    expect(harness.root.querySelector(".rfi-workspace-main")).not.toBeNull();
+    const rail = element(harness.root, ".rfi-workspace-aside");
+    expect(rail.textContent).toContain("Status");
+    expect(rail.textContent).toContain("Responsible party");
+    expect(rail.textContent).toContain("Response due");
+    expect(rail.textContent).toContain("Attachments");
+
+    const fields = [
+      ...harness.root.querySelectorAll(".rfi-content-field"),
+    ] as HTMLElement[];
+    const drawing = fields.find((f) =>
+      f.textContent.includes("Drawing references"),
+    );
+    const spec = fields.find((f) =>
+      f.textContent.includes("Specification references"),
+    );
+    const question = fields.find((f) => f.textContent.includes("Question"));
+    expect(drawing?.classList.contains("is-wide")).toBe(false);
+    expect(spec?.classList.contains("is-wide")).toBe(false);
+    expect(question?.classList.contains("is-wide")).toBe(true);
+  });
+
+  it("saves the draft form with lockVersion, and reports conflict and permission-loss", async () => {
+    const updateRfi = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { subject: "Updated subject" } });
+    const harness = mountWorkspace({ updateRfi });
+    await harness.view.reload();
+    fire(element(harness.root, "[data-edit-info]"), "click");
+    const form = element(harness.root, "[data-info-form]") as HTMLFormElement;
+    (element(form, "#rfi-f-subject") as HTMLInputElement).value =
+      "Updated subject";
+    fire(form, "submit");
+    await settle();
+    expect(updateRfi).toHaveBeenCalledWith(
+      "project-1",
+      "rfi-1",
+      expect.objectContaining({ lockVersion: 1 }),
+    );
+    expect(harness.root.querySelector("[data-info-form]")).toBeNull();
+
+    const conflictError = Object.assign(new Error("Conflict"), {
+      status: 409,
+    });
+    const conflictUpdate = vi.fn().mockRejectedValueOnce(conflictError);
+    const conflictHarness = mountWorkspace({ updateRfi: conflictUpdate });
+    await conflictHarness.view.reload();
+    fire(element(conflictHarness.root, "[data-edit-info]"), "click");
+    fire(element(conflictHarness.root, "[data-info-form]"), "submit");
+    await settle();
+    expect(conflictHarness.announce).toHaveBeenCalledWith(
+      expect.stringContaining("changed elsewhere"),
+    );
+    expect(conflictHarness.api.getRfiWorkspace).toHaveBeenCalledTimes(2);
+
+    const deniedError = Object.assign(new Error("Forbidden"), {
+      status: 403,
+    });
+    const deniedUpdate = vi.fn().mockRejectedValueOnce(deniedError);
+    const deniedHarness = mountWorkspace({ updateRfi: deniedUpdate });
+    await deniedHarness.view.reload();
+    fire(element(deniedHarness.root, "[data-edit-info]"), "click");
+    fire(element(deniedHarness.root, "[data-info-form]"), "submit");
+    await settle();
+    expect(
+      element(deniedHarness.root, "[data-info-form] .app-dialog-error")
+        .textContent,
+    ).toContain("Forbidden");
   });
 });

@@ -14,10 +14,23 @@ import {
 const SORT_KEYS = {
   number: { label: "RFI number", defaultDir: "asc" },
   updated: { label: "Recently updated", defaultDir: "desc" },
+  // "created" has no dedicated header (the register only sorts by its five
+  // visible columns) but stays a valid key so old bookmarked/shared URLs
+  // still parse instead of silently resetting to the default sort.
   created: { label: "Newest", defaultDir: "desc" },
   subject: { label: "Subject A–Z", defaultDir: "asc" },
+  responsible: { label: "Responsible party", defaultDir: "asc" },
   due: { label: "Response due date", defaultDir: "asc" },
 };
+
+// Header label + sort key for each sortable desktop column, in display order.
+const SORT_HEADERS = [
+  ["number", "RFI"],
+  ["subject", "Subject"],
+  ["responsible", "Responsible"],
+  ["due", "Due"],
+  ["updated", "Updated"],
+];
 
 const DUE_OPTIONS = [
   ["all", "Any due status"],
@@ -37,14 +50,14 @@ const EDITABLE_FIELDS = {
     type: "text",
   },
 };
-// Direct register editing stays on the always-visible primary row. The
-// remaining long-form fields still use the same per-field edit/save pipeline,
-// but live in a row-level secondary editor opened explicitly per row.
-const DIRECT_FIELDS = [
-  "subject",
-  "responsiblePartyId",
-  "requestedResponseDate",
-];
+// Direct register editing stays on the always-visible primary row. Subject
+// is edited through its own explicit "Edit subject" trigger (see subjectCell
+// below) rather than the click-to-select/type grid model, since its default
+// display is a workspace link; Responsible/Due keep the original spreadsheet
+// cell behavior. The remaining long-form fields still use the same per-field
+// edit/save pipeline, but live in a row-level secondary editor opened
+// explicitly per row.
+const DIRECT_FIELDS = ["responsiblePartyId", "requestedResponseDate"];
 const SECONDARY_FIELDS = [
   "question",
   "contractorSuggestion",
@@ -76,6 +89,9 @@ function collateNumber(a, b) {
 }
 function compareDate(a, b) {
   return (Date.parse(a || "") || 0) - (Date.parse(b || "") || 0);
+}
+function responsibleSortKey(rfi) {
+  return rfi.responsibleParty || rfi.responsiblePartyLegacyText || "";
 }
 function truncate(value, max = 140) {
   const text = String(value || "").trim();
@@ -230,6 +246,8 @@ export function createRfisView({
       let comparison = 0;
       if (filters.sort === "subject")
         comparison = collate(a.subject, b.subject);
+      else if (filters.sort === "responsible")
+        comparison = collate(responsibleSortKey(a), responsibleSortKey(b));
       else if (filters.sort === "updated")
         comparison = compareDate(a.updatedAt, b.updatedAt);
       else if (filters.sort === "created")
@@ -275,7 +293,10 @@ export function createRfisView({
   function identityCell(rfi) {
     const isLegacyIncomplete =
       rfi.issuanceReconciliationState === "legacy_incomplete";
-    const numberText = rfi.rfiNumber || "Unnumbered Draft";
+    // Quieter than the assigned-number treatment: no monospace/tabular
+    // digits, no italics, so a real RFI number always reads as visually
+    // stronger than an unissued placeholder.
+    const numberText = rfi.rfiNumber || "Unnumbered";
     const numberClass = rfi.rfiNumber
       ? "rfi-id-number"
       : "rfi-id-number rfi-id-number-draft";
@@ -288,12 +309,57 @@ export function createRfisView({
     return `<span class="${numberClass}">${escapeHtml(numberText)}</span><span class="rfi-id-status${isLegacyIncomplete ? " is-attention" : ""}">${escapeHtml(statusText)}</span>${legacy}`;
   }
 
-  function subjectDisplay(rfi) {
+  function subjectSaveState(rfi) {
+    const cellState = cellStates.get(`${rfi.id}:subject`);
+    return cellState
+      ? `<span class="rfi-cell-save-state is-${cellState.status}" role="${cellState.status === "failed" ? "alert" : "status"}">${escapeHtml(cellState.message)}</span>`
+      : "";
+  }
+
+  // Subject's default state is a workspace link, not a spreadsheet cell — a
+  // link and a click-to-edit cell can't share one click meaning. Editing is
+  // reached only through the explicit "Edit subject"/"Details" controls, so
+  // this read state intentionally carries no `data-cell`/tabindex of its own.
+  function subjectReadCell(rfi, href) {
+    const editable = rfi.capabilities?.updateDraft === true;
     const questionPreview = truncate(rfi.question, 90);
     const refs = [rfi.drawingReferences, rfi.specificationReferences]
       .filter(Boolean)
       .join(" · ");
-    return `<span class="rfi-cell-text rfi-subject-primary" title="${escapeHtml(rfi.subject || "")}">${escapeHtml(rfi.subject || "Untitled RFI")}</span>${questionPreview ? `<span class="rfi-subject-secondary">${escapeHtml(questionPreview)}</span>` : ""}${refs ? `<span class="rfi-subject-meta">${escapeHtml(refs)}</span>` : ""}`;
+    const editButton = editable
+      ? `<button type="button" class="rfi-edit-subject-trigger" data-edit-subject data-id="${escapeHtml(rfi.id)}" aria-label="Edit subject">
+          <svg class="app-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Z"></path><path d="m14.5 5.5 4 4"></path></svg>
+          <span aria-hidden="true">Edit</span>
+        </button>`
+      : "";
+    const detailsButton = editable
+      ? `<button type="button" class="rfi-edit-details-trigger" data-secondary-toggle data-id="${escapeHtml(rfi.id)}" aria-expanded="${secondaryOpen === rfi.id}" aria-controls="rfi-secondary-${escapeHtml(rfi.id)}">Details</button>`
+      : "";
+    return `<td class="rfi-cell-subject" data-subject-cell data-id="${escapeHtml(rfi.id)}">
+      <div class="rfi-subject-row">
+        <a class="rfi-subject-link" href="${href}" data-app-link title="${escapeHtml(rfi.subject || "")}">${escapeHtml(rfi.subject || "Untitled RFI")}</a>
+        ${editButton}${detailsButton}
+      </div>
+      ${questionPreview ? `<span class="rfi-subject-secondary">${escapeHtml(questionPreview)}</span>` : ""}
+      ${refs ? `<span class="rfi-subject-meta">${escapeHtml(refs)}</span>` : ""}
+      ${subjectSaveState(rfi)}
+    </td>`;
+  }
+
+  // Editing state reuses the exact same data-cell/data-cell-editor contract
+  // (and therefore the same startEdit/commitEdit/cancelEdit pipeline) as the
+  // Responsible/Due grid cells — only the read-state trigger differs.
+  function subjectEditingCell(rfi) {
+    return `<td class="rfi-grid-cell rfi-cell-subject is-editing" data-cell data-id="${escapeHtml(rfi.id)}" data-field="subject" tabindex="0" aria-readonly="false">
+      ${editorMarkup(rfi, "subject")}
+      ${subjectSaveState(rfi)}
+    </td>`;
+  }
+
+  function subjectCell(rfi, href) {
+    return editing?.id === rfi.id && editing?.field === "subject"
+      ? subjectEditingCell(rfi)
+      : subjectReadCell(rfi, href);
   }
 
   function responsibleDisplay(rfi) {
@@ -381,7 +447,7 @@ export function createRfisView({
   function secondaryEditorRow(rfi) {
     const open = secondaryOpen === rfi.id;
     return `<tr class="rfi-secondary-row" id="rfi-secondary-${escapeHtml(rfi.id)}" data-secondary-row="${escapeHtml(rfi.id)}"${open ? "" : " hidden"}>
-      <td colspan="6">
+      <td colspan="5">
         <div class="rfi-secondary-panel" role="group" aria-label="Additional details for ${escapeHtml(rfi.subject || "this RFI")}">
           <div class="rfi-secondary-field">
             <span class="rfi-secondary-label" id="rfi-secondary-label-question-${escapeHtml(rfi.id)}">Question</span>
@@ -409,19 +475,12 @@ export function createRfisView({
       .map((rfi) => {
         const href = rfiWorkspaceHref(projectId, rfi.id);
         const editable = rfi.capabilities?.updateDraft === true;
-        const secondaryTrigger = editable
-          ? `<button type="button" class="rfi-edit-details-trigger" data-secondary-toggle data-id="${escapeHtml(rfi.id)}" aria-expanded="${secondaryOpen === rfi.id}" aria-controls="rfi-secondary-${escapeHtml(rfi.id)}">
-              <svg class="app-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Z"></path><path d="m14.5 5.5 4 4"></path></svg>
-              <span>Edit details</span>
-            </button>`
-          : "";
         return `<tr class="app-data-row${editable ? "" : " is-locked"}" data-rfi-row="${escapeHtml(rfi.id)}">
-          <th scope="row" class="rfi-cell-id"><a class="rfi-id-link" href="${href}" data-app-link>${identityCell(rfi)}</a></th>
-          ${editableCell(rfi, "subject", { className: "rfi-cell-subject", display: subjectDisplay })}
+          <th scope="row" class="rfi-cell-id"><a class="rfi-id-link" href="${href}" data-app-link aria-label="Open RFI ${escapeHtml(rfi.rfiNumber || "Unnumbered")}">${identityCell(rfi)}</a></th>
+          ${subjectCell(rfi, href)}
           ${editableCell(rfi, "responsiblePartyId", { className: "rfi-cell-responsible", display: responsibleDisplay })}
           ${editableCell(rfi, "requestedResponseDate", { className: "rfi-cell-due", display: dueDisplay })}
           <td class="rfi-cell-updated"><span class="rfi-updated-text" title="${escapeHtml(formatDate(rfi.updatedAt) || "")}">${escapeHtml(formatRelativeUpdated(rfi.updatedAt) || "—")}</span></td>
-          <td class="rfi-cell-action cell-open">${secondaryTrigger}<a class="open-link" href="${href}" data-app-link aria-label="Open ${escapeHtml(rfi.subject)}">Open <span aria-hidden="true">→</span></a></td>
         </tr>${secondaryEditorRow(rfi)}`;
       })
       .join("");
@@ -447,6 +506,20 @@ export function createRfisView({
       .join("");
   }
 
+  function sortHeader(key, label) {
+    const active = filters.sort === key;
+    const direction = filters.direction === "asc" ? "ascending" : "descending";
+    const arrow = filters.direction === "asc" ? "↑" : "↓";
+    const nextDirectionLabel = active
+      ? filters.direction === "asc"
+        ? "descending"
+        : "ascending"
+      : SORT_KEYS[key].defaultDir === "asc"
+        ? "ascending"
+        : "descending";
+    return `<th scope="col" aria-sort="${active ? direction : "none"}"><button type="button" class="rfi-sort-header${active ? " is-active" : ""}" data-sort-header="${key}" aria-label="Sort by ${escapeHtml(label)}, ${nextDirectionLabel}">${escapeHtml(label)}${active ? ` <span class="rfi-sort-arrow" aria-hidden="true">${arrow}</span>` : ""}</button></th>`;
+  }
+
   function resultsMarkup(rfis) {
     const filtered = applyFilters(rfis);
     if (!rfis.length) {
@@ -456,11 +529,10 @@ export function createRfisView({
       return '<div class="records-empty" role="status"><p>No RFIs match these filters.</p><button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>';
     }
     return `<div class="records-table-wrap rfi-table-wrap" role="region" aria-label="Project RFI working register" tabindex="0">
-      <table class="records-table app-data-table rfi-table" role="grid">
+      <table class="records-table app-data-table rfi-table" role="grid" aria-describedby="rfi-register-hint">
         <caption class="sr-only">Editable project RFI register</caption>
         <thead><tr>
-          <th>RFI</th><th>Subject</th><th>Responsible</th>
-          <th>Due</th><th>Updated</th><th><span class="sr-only">Action</span></th>
+          ${SORT_HEADERS.map(([key, label]) => sortHeader(key, label)).join("")}
         </tr></thead>
         <tbody>${tableRows(filtered)}</tbody>
       </table>
@@ -480,12 +552,6 @@ export function createRfisView({
           ${selectMarkup("rfi-status", "All statuses", statusOptions(rfis), filters.status)}
           ${selectMarkup("rfi-responsible", "All responsible parties", responsibleOptions(rfis), filters.responsible)}
           ${selectMarkup("rfi-due", "Any due status", DUE_OPTIONS.slice(1), filters.due)}
-          ${selectMarkup(
-            "rfi-sort",
-            "Sort",
-            Object.entries(SORT_KEYS).map(([key, meta]) => [key, meta.label]),
-            filters.sort,
-          )}
         </div>
       </div>
       <div class="app-register-filter-state"><button class="text-link" type="button" data-clear-filters${hasActiveFilters() ? "" : " hidden"}>Clear all</button><p class="app-register-result-count" aria-live="polite" data-result-count></p></div>
@@ -494,7 +560,13 @@ export function createRfisView({
 
   function heading() {
     const total = state.status === "loaded" ? state.data.rfis.length : null;
-    return `<header class="app-register-header rfi-heading app-container-register"><div class="app-register-title"><div><h2 id="rfis-title" tabindex="-1">RFIs</h2><p class="rfi-register-hint">Select a cell, then press Enter or type to edit. Use Edit details for question, suggestion, and references.</p></div>${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}</div>${canCreate() ? `<button class="primary-button" type="button" data-create-rfi${creating ? " disabled" : ""}>${creating ? "Adding…" : "Add RFI"}</button>` : ""}</header>`;
+    return `<header class="app-register-header rfi-heading app-container-register">
+      <div class="app-register-title">
+        <h2 id="rfis-title" tabindex="-1">RFIs</h2>${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}
+      </div>
+      <p class="sr-only" id="rfi-register-hint">Responsible party and Response due are directly editable: select the cell, then press Enter or type to edit. Use Edit subject to rename the RFI, and Details for question, suggestion, and references. Click a column header to sort.</p>
+      ${canCreate() ? `<button class="primary-button" type="button" data-create-rfi${creating ? " disabled" : ""}>${creating ? "Adding…" : "Add RFI"}</button>` : ""}
+    </header>`;
   }
 
   function body() {
@@ -522,7 +594,19 @@ export function createRfisView({
       return;
     }
     if (selected) {
-      matchingCell(selected)?.focus();
+      const cell = matchingCell(selected);
+      if (cell) {
+        cell.focus();
+        return;
+      }
+      // Subject has no grid cell while it's just a link + Edit button (its
+      // read state carries no [data-cell]); once its edit ends, keyboard
+      // focus belongs on the trigger that started it, not nowhere.
+      if (selected.field === "subject") {
+        container
+          .querySelector(`[data-edit-subject][data-id="${selected.id}"]`)
+          ?.focus();
+      }
     }
   }
 
@@ -660,8 +744,13 @@ export function createRfisView({
     const nextValue = String(editor.value ?? "").trim();
     const normalized = nextValue || null;
     const current = edit.original || null;
+    // Subject has no grid neighbors to Tab into (it isn't part of the
+    // DIRECT_FIELDS grid), so Tab just commits it in place like Enter would.
     const destination =
-      target || (move ? adjacentCell(edit.id, edit.field, move) : selected);
+      target ||
+      (move && edit.field !== "subject"
+        ? adjacentCell(edit.id, edit.field, move)
+        : selected);
     const validation = validationMessage(edit.field, nextValue);
     if (validation) {
       cellStates.set(`${edit.id}:${edit.field}`, {
@@ -847,6 +936,29 @@ export function createRfisView({
         });
       });
     container
+      .querySelectorAll("[data-results] [data-edit-subject]")
+      .forEach((button) => {
+        const id = button.getAttribute("data-id");
+        button.addEventListener("click", () =>
+          startEdit(container, id, "subject"),
+        );
+      });
+    container
+      .querySelectorAll("[data-results] [data-sort-header]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const key = button.getAttribute("data-sort-header");
+          if (filters.sort === key) {
+            filters.direction = filters.direction === "asc" ? "desc" : "asc";
+          } else {
+            filters.sort = key;
+            filters.direction = SORT_KEYS[key].defaultDir;
+          }
+          syncUrl(true);
+          updateResults(container);
+        });
+      });
+    container
       .querySelectorAll("[data-results] [data-clear-filters]")
       .forEach((button) =>
         button.addEventListener("click", () => clearFilters(container)),
@@ -955,10 +1067,6 @@ export function createRfisView({
     bind("#rfi-status", (value) => (filters.status = value));
     bind("#rfi-responsible", (value) => (filters.responsible = value));
     bind("#rfi-due", (value) => (filters.due = value));
-    bind("#rfi-sort", (value) => {
-      filters.sort = SORT_KEYS[value] ? value : "number";
-      filters.direction = SORT_KEYS[filters.sort].defaultDir;
-    });
     container
       .querySelector(".rfi-toolbar [data-clear-filters]")
       ?.addEventListener("click", () => clearFilters(container));
