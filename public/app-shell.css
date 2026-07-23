@@ -2825,14 +2825,6 @@ html {
 }
 
 /* ---- RFI register & workspace ---------------------------------------- */
-.rfi-table .rfi-cell-long {
-  max-width: 22ch;
-  color: var(--shell-muted);
-  font-size: 0.9em;
-}
-.rfi-table .rfi-cell-number {
-  white-space: nowrap;
-}
 .rfi-number {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -3185,14 +3177,14 @@ html {
   }
 }
 
-/* Corrective RFI working-register and record-workspace overrides. */
+/* RFI working register — six-column visual hierarchy (desktop). ---------- */
 .rfi-register-hint {
   margin: 5px 0 0;
   color: var(--shell-muted);
   font-size: 0.82rem;
 }
 .rfi-table {
-  min-width: 1780px;
+  width: 100%;
   table-layout: fixed;
 }
 .rfi-table thead {
@@ -3200,56 +3192,44 @@ html {
   top: 0;
   z-index: 4;
 }
-.rfi-table th:nth-child(1) {
-  width: 132px;
+.rfi-table thead th {
+  font-weight: 600;
 }
-.rfi-table th:nth-child(2) {
-  width: 260px;
+/* RFI · Subject · Responsible · Due · Updated · Action. Subject is left
+   unconstrained so it absorbs whatever width the other five don't need. */
+.rfi-table th:nth-child(1) {
+  width: 116px;
 }
 .rfi-table th:nth-child(3) {
-  width: 150px;
+  width: 148px;
 }
 .rfi-table th:nth-child(4) {
-  width: 220px;
+  width: 112px;
 }
 .rfi-table th:nth-child(5) {
-  width: 150px;
+  width: 84px;
 }
-.rfi-table th:nth-child(6),
-.rfi-table th:nth-child(7) {
-  width: 280px;
-}
-.rfi-table th:nth-child(8),
-.rfi-table th:nth-child(9) {
-  width: 190px;
-}
-.rfi-table th:nth-child(10) {
-  width: 240px;
-}
-.rfi-table th:nth-child(11),
-.rfi-table th:nth-child(12) {
-  width: 130px;
-}
-.rfi-table th:nth-child(13) {
-  width: 92px;
+.rfi-table th:nth-child(6) {
+  width: 118px;
 }
 .rfi-table .rfi-grid-cell {
   position: relative;
-  height: 64px;
+  min-height: 58px;
   padding: 0;
   color: var(--shell-ink);
   cursor: cell;
   vertical-align: top;
   outline: none;
 }
-.rfi-grid-cell .rfi-cell-text {
-  display: -webkit-box;
-  min-height: 63px;
-  padding: 14px 15px;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
+td.rfi-grid-cell > span:not(.rfi-cell-save-state) {
+  display: block;
+  padding-inline: 14px;
+}
+td.rfi-grid-cell > span:first-child:not(.rfi-cell-save-state) {
+  padding-top: 11px;
+}
+td.rfi-grid-cell > span:last-child:not(.rfi-cell-save-state) {
+  padding-bottom: 11px;
 }
 .rfi-grid-cell.is-selected {
   z-index: 2;
@@ -3263,8 +3243,8 @@ html {
 }
 .rfi-cell-editor {
   width: 100%;
-  min-height: 63px;
-  padding: 12px 14px;
+  min-height: 58px;
+  padding: 11px 14px;
   border: 0;
   border-radius: 0;
   background: #fff;
@@ -3275,7 +3255,7 @@ html {
 }
 select.rfi-cell-editor,
 input.rfi-cell-editor[type="date"] {
-  min-height: 63px;
+  min-height: 58px;
 }
 .rfi-cell-save-state {
   position: absolute;
@@ -3297,11 +3277,237 @@ input.rfi-cell-editor[type="date"] {
   color: var(--app-error);
   white-space: normal;
 }
-.rfi-table .rfi-cell-status .status-badge {
+
+/* Column 1 — RFI identity: number/draft label stacked over a plain status
+   line. No color-only status; text always accompanies it. */
+.rfi-table .rfi-cell-id {
+  padding: 11px 14px;
+  vertical-align: top;
+}
+.rfi-id-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.rfi-id-link:hover .rfi-id-number {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+.rfi-id-number {
+  display: block;
+  color: var(--ink);
+  font: 600 12.5px/1.3 var(--code);
+  font-variant-numeric: tabular-nums;
+}
+.rfi-id-number-draft {
+  color: var(--shell-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+.rfi-id-status {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font: 500 10.5px/1.3 var(--sans);
+}
+.rfi-id-status.is-attention {
+  color: #8a5a00;
+}
+.rfi-id-legacy {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.72em;
+}
+
+/* Column 2 — Subject: the dominant column. Primary line carries the most
+   visual weight; question preview and reference metadata are quieter and
+   smaller, and are omitted entirely when there is nothing to show. */
+.rfi-table .rfi-cell-subject {
+  width: auto;
+}
+.rfi-subject-primary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font: 600 13px/1.35 var(--sans);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+.rfi-subject-secondary {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--shell-muted);
+  font: 400 11.5px/1.35 var(--sans);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+.rfi-subject-meta {
+  display: block;
+  margin-top: 3px;
+  color: #948f8c;
+  font: 500 10px/1.3 var(--code);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Column 3 — Responsible: readable, but secondary to Subject. */
+.rfi-table .rfi-cell-responsible {
+  width: 148px;
+}
+.rfi-cell-responsible .rfi-cell-text {
+  font-weight: 500;
+}
+.rfi-responsible-company {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.85em;
+}
+.rfi-responsible-legacy {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+  font-style: italic;
+}
+.rfi-responsible-empty {
+  color: var(--shell-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Column 4 — Due: server-computed urgency text, never large badges. */
+.rfi-table .rfi-cell-due {
+  width: 112px;
+}
+.rfi-due-date {
+  font-variant-numeric: tabular-nums;
+}
+.rfi-due-urgency {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.78em;
+}
+.rfi-due-urgency.is-overdue {
+  color: var(--app-error);
+  font-weight: 600;
+}
+.rfi-due-urgency.is-due-soon {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+/* Column 5 — Updated: compact relative time, exact date on hover/AT. */
+.rfi-table .rfi-cell-updated {
+  width: 84px;
+  padding: 11px 14px;
+  vertical-align: top;
+  color: var(--shell-muted);
+  font: 500 11px/1.35 var(--sans);
   white-space: nowrap;
 }
-.rfi-table .cell-open {
-  text-align: right;
+
+/* Column 6 — Action: one explicit "Open" link, plus the row's secondary
+   details toggle. Neither is the whole-row click target. */
+.rfi-table .rfi-cell-action {
+  width: 118px;
+  padding: 11px 14px;
+  vertical-align: top;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.rfi-edit-details-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  color: var(--shell-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 500 10.5px/1 var(--sans);
+}
+.rfi-edit-details-trigger .app-icon {
+  width: 13px;
+  height: 13px;
+}
+.rfi-edit-details-trigger:hover,
+.rfi-edit-details-trigger:focus-visible,
+.rfi-edit-details-trigger[aria-expanded="true"] {
+  color: var(--app-accent);
+}
+.rfi-edit-details-trigger:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Secondary editor panel — expands beneath the row for the long-form fields.
+   Hidden by default via [hidden]; only one row's panel is open at a time. */
+.rfi-secondary-row td {
+  padding: 14px 16px 16px;
+  background: #faf8f6;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.rfi-secondary-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.rfi-secondary-field {
+  display: grid;
+  gap: 4px;
+}
+.rfi-secondary-label {
+  color: var(--shell-muted);
+  font: 600 10px/1.3 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rfi-secondary-cell {
+  position: relative;
+  min-height: 38px;
+  background: #fff;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  outline: none;
+}
+.rfi-secondary-cell .rfi-cell-text {
+  display: block;
+  padding: 8px 10px;
+  color: var(--shell-ink);
+  white-space: pre-wrap;
+}
+.rfi-secondary-cell.is-selected {
+  box-shadow: inset 0 0 0 2px var(--app-accent);
+}
+.rfi-secondary-cell.is-editing {
+  box-shadow: inset 0 0 0 2px var(--app-accent);
+}
+.rfi-secondary-cell .rfi-cell-editor {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+.rfi-secondary-cell .rfi-cell-save-state {
+  right: 4px;
+  bottom: -20px;
+  background: none;
+  padding: 0;
+}
+
+/* Locked (non-draft) rows read as normal records — no dimming, no disabled
+   look — they simply have no edit affordances rendered at all. */
+.app-data-row.is-locked .rfi-grid-cell {
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .rfi-secondary-panel {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rfi-workspace-view {
