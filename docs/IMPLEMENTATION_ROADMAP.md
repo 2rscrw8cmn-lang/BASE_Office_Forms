@@ -23,6 +23,35 @@ Create project
 
 Each phase has an exit gate. Work does not advance because screens exist; it advances when the business workflow is operational and tested.
 
+## 1A. Cross-cutting application UI foundation
+
+The project-control application now requires an incremental UI-foundation program to prevent design and interaction drift while the RFI vertical slice continues.
+
+Binding references:
+
+- `APP_UI_FOUNDATION.md` — design and component contract;
+- `UI_IMPLEMENTATION_PLAYBOOK.md` — phase guides and exit gates;
+- `UI_PROGRAM_STATUS.md` — living status and next action;
+- `UI_AGENT_PROMPTS.md` — copy-ready agent instructions and closeout requirements.
+
+Sequence:
+
+```text
+Tabulator behavior spike
+→ UI audit and decisions
+→ application/document CSS separation + React/Vite foundation
+→ BASE components and UI Lab
+→ React shell and route parity
+→ RFI register through BaseDataGrid
+→ Projects and Records registers
+→ RFI/Record/Revision workspaces
+→ Dashboard/forms/Team/Administration
+→ Library and Studio controls
+→ visual, accessibility, and drift enforcement
+```
+
+This is a cross-cutting delivery program, not permission to pause official RFI workflow work indefinitely or to perform a broad rewrite. Each UI phase has an exit gate. Existing routes, APIs, renderer compatibility, domain invariants, tenant isolation, numbering, and official lifecycle authority remain binding.
+
 ## 2. Phase 0 — Architecture and platform foundation
 
 ### Objective
