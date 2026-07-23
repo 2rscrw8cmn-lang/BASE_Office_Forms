@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // the tests stay focused on toolbar wiring and accessibility.
 
 const engineSource = readFileSync("public/engine.js", "utf8");
+const toastSource = readFileSync("public/studio-toast.js", "utf8");
 const studioSource = readFileSync("public/studio.js", "utf8");
 const builderHtml = readFileSync("public/builder.html", "utf8");
 
@@ -58,6 +59,7 @@ interface Studio {
   library: Record<string, Mock>;
   templates: Record<string, Mock>;
   print: Mock;
+  downloadFormPdf: Mock;
   confirm: Mock;
   createdInputs: InputLike[];
   createObjectURL: Mock;
@@ -126,6 +128,7 @@ function loadStudio(options: { editKey?: unknown } = {}): Studio {
 
   const clipboard = { writeText: vi.fn(() => Promise.resolve()) };
   const print = vi.fn();
+  const downloadFormPdf = vi.fn(() => Promise.resolve());
   const confirm = vi.fn(() => true);
   const createObjectURL = vi.fn(() => "blob:mock");
   const createdInputs: InputLike[] = [];
@@ -168,6 +171,7 @@ function loadStudio(options: { editKey?: unknown } = {}): Studio {
     atob: (value: string) => Buffer.from(value, "base64").toString("binary"),
     BASE_LIBRARY: library,
     BASE_TEMPLATES: templates,
+    BASE_PDF: { downloadFormPdf },
   };
 
   runInNewContext(engineSource, context);
@@ -176,6 +180,10 @@ function loadStudio(options: { editKey?: unknown } = {}): Studio {
   base.paginate = () => undefined;
   base.updatePackageIndex = () => undefined;
   context.BASE = base;
+  runInNewContext(toastSource, context);
+  context.BASE_TOAST = (
+    context.window as { BASE_TOAST: Record<string, unknown> }
+  ).BASE_TOAST;
   runInNewContext(studioSource, context);
 
   const el = (selector: string): ElementLike => {
@@ -203,6 +211,7 @@ function loadStudio(options: { editKey?: unknown } = {}): Studio {
     library,
     templates,
     print,
+    downloadFormPdf,
     confirm,
     createdInputs,
     createObjectURL,
@@ -246,7 +255,7 @@ describe("Studio command toolbar (Issue #25)", () => {
     studio.el("#downloadButton").click();
 
     expect(studio.createObjectURL).toHaveBeenCalledTimes(1);
-    expect(studio.el("#status").textContent).toContain("backup exported");
+    expect(studio.el("#toastStack").textContent).toContain("backup exported");
   });
 
   it("Share is an icon-only control with an accessible name and decorative icon", async () => {
@@ -298,13 +307,14 @@ describe("Studio command toolbar (Issue #25)", () => {
     expect(studio.el("#modalTitle").textContent).toBe("Import AI JSON");
   });
 
-  it("Export PDF remains functional", async () => {
+  it("Export PDF downloads a fillable PDF for a form document", async () => {
+    // loadStudio()'s default draft is BASE.blankForm() (kind: "form"), which
+    // now exports a real fillable PDF via BASE_PDF instead of window.print().
     const studio = loadStudio();
     studio.el("#printButton").click();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 200);
-    });
-    expect(studio.print).toHaveBeenCalled();
+    await studio.settle();
+    expect(studio.downloadFormPdf).toHaveBeenCalledTimes(1);
+    expect(studio.print).not.toHaveBeenCalled();
   });
 
   it("Save to Library is the primary action and still saves", async () => {
@@ -402,20 +412,7 @@ describe("Studio command toolbar (Issue #25)", () => {
     });
   });
 
-  it("introduces no React or lucide dependency", () => {
-    const pkg = readFileSync("package.json", "utf8");
-    const parsed = JSON.parse(pkg) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-    const all = {
-      ...(parsed.dependencies ?? {}),
-      ...(parsed.devDependencies ?? {}),
-    };
-    Object.keys(all).forEach((name) => {
-      expect(name).not.toMatch(/react/i);
-      expect(name).not.toMatch(/lucide/i);
-    });
+  it("keeps legacy Studio independent from the migrated icon runtime", () => {
     expect(builderHtml.toLowerCase()).not.toContain("lucide");
     expect(studioSource.toLowerCase()).not.toContain("lucide");
   });

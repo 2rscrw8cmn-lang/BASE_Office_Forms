@@ -14,16 +14,15 @@ export const RECORD_STATUSES = ["active", "archived"] as const;
 
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
 
-export interface RecordWriteInput {
+export interface RecordCreateInput {
   recordType: RecordType;
-  recordNumber: string | null;
   title: string;
   description: string | null;
   discipline: string | null;
   source: string | null;
 }
 
-export type RecordUpdateInput = Omit<RecordWriteInput, "recordType">;
+export type RecordUpdateInput = Omit<RecordCreateInput, "recordType">;
 
 export interface Record {
   id: string;

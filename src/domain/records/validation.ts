@@ -3,9 +3,10 @@ import {
   RECORD_TYPES,
   type RecordStatus,
   type RecordType,
-  type RecordWriteInput,
+  type RecordCreateInput,
 } from "./record";
 import { RecordArchivedError } from "./errors";
+import { isControlledDiscipline } from "../../../public/record-options.js";
 
 export class RecordValidationError extends Error {}
 
@@ -32,34 +33,32 @@ function optionalText(value: unknown, field: string): string | null {
   return value.trim() || null;
 }
 
-export function validateRecordMetadata(value: {
-  recordType: unknown;
-  recordNumber: unknown;
-  title: unknown;
-  description: unknown;
-  discipline: unknown;
-  source: unknown;
-}): RecordWriteInput {
+export function validateRecordMetadata(
+  value: {
+    recordType: unknown;
+    title: unknown;
+    description: unknown;
+    discipline: unknown;
+    source: unknown;
+  },
+  options: { existingDiscipline?: string | null } = {},
+): RecordCreateInput {
   if (typeof value.recordType !== "string" || !isRecordType(value.recordType)) {
     throw new RecordValidationError("recordType is invalid.");
   }
-  let recordNumber: string | null;
-  if (value.recordNumber === undefined || value.recordNumber === null) {
-    recordNumber = null;
-  } else if (typeof value.recordNumber !== "string") {
-    throw new RecordValidationError("recordNumber must be text.");
-  } else {
-    recordNumber = value.recordNumber.trim();
-    if (!recordNumber) {
-      throw new RecordValidationError("recordNumber must not be empty.");
-    }
+  const discipline = optionalText(value.discipline, "discipline");
+  if (
+    discipline !== null &&
+    !isControlledDiscipline(discipline) &&
+    discipline !== options.existingDiscipline
+  ) {
+    throw new RecordValidationError("discipline is invalid.");
   }
   return {
     recordType: value.recordType,
-    recordNumber,
     title: requiredText(value.title, "title"),
     description: optionalText(value.description, "description"),
-    discipline: optionalText(value.discipline, "discipline"),
+    discipline,
     source: optionalText(value.source, "source"),
   };
 }

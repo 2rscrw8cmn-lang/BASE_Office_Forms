@@ -11,6 +11,7 @@ import {
   activeRfiReason,
   describeActivity,
   actorLabel,
+  revisionName,
 } from "./app-format.js";
 
 function base(projectId) {
@@ -114,14 +115,14 @@ export function createProjectOverviewView({
     const draftItems = data.attention.draftRevisions.map((item) =>
       attentionItem({
         href: revisionHref(projectId, item),
-        primary: `${item.recordTitle} · Rev ${item.revisionNumber}`,
+        primary: `${item.recordTitle} · ${revisionName(item)}`,
         reason: draftRevisionReason(),
       }),
     );
     const readyItems = data.attention.readyToIssue.map((item) =>
       attentionItem({
         href: issueHref(projectId, item),
-        primary: `${item.recordTitle} · Rev ${item.revisionNumber}`,
+        primary: `${item.recordTitle} · ${revisionName(item)}`,
         reason: readyToIssueReason(item.fileCount),
       }),
     );

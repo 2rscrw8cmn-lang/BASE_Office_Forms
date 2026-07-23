@@ -2,8 +2,8 @@ import type { AppSession } from "../../auth/authentication-adapter";
 import { RecordNotFoundError } from "../../domain/records/errors";
 import type {
   Record,
+  RecordCreateInput,
   RecordUpdateInput,
-  RecordWriteInput,
 } from "../../domain/records/record";
 import {
   assertRecordIsActive,
@@ -12,7 +12,7 @@ import {
 import { D1RecordsRepository } from "../../infrastructure/db/d1/records-repository";
 import { ProjectService } from "../projects/project-service";
 
-export interface RecordMutationInput extends RecordWriteInput {
+export interface RecordMutationInput extends RecordCreateInput {
   correlationId: string;
 }
 
@@ -85,12 +85,14 @@ export class RecordService {
     );
     const record = await this.find(actor, projectId, recordId);
     assertRecordIsActive(record.status, "be edited");
-    const metadata = validateRecordMetadata({
-      ...input,
-      recordType: record.recordType,
-    });
+    const metadata = validateRecordMetadata(
+      {
+        ...input,
+        recordType: record.recordType,
+      },
+      { existingDiscipline: record.discipline },
+    );
     const update: RecordUpdateInput = {
-      recordNumber: metadata.recordNumber,
       title: metadata.title,
       description: metadata.description,
       discipline: metadata.discipline,

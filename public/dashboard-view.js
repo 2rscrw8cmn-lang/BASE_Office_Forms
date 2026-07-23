@@ -11,6 +11,7 @@ import {
   activeRfiReason,
   fileUploadedReason,
   issuanceCreatedReason,
+  revisionName,
 } from "./app-format.js";
 
 function revisionHref(item) {
@@ -109,7 +110,7 @@ export function createDashboardView({
     const draftItems = data.draftRevisions.map((item) =>
       attentionItem({
         href: revisionHref(item),
-        primary: `${item.recordTitle} · Rev ${item.revisionNumber}`,
+        primary: `${item.recordTitle} · ${revisionName(item)}`,
         secondary: projectLabel(item),
         reason: draftRevisionReason(),
       }),
@@ -117,7 +118,7 @@ export function createDashboardView({
     const readyItems = data.readyToIssue.map((item) =>
       attentionItem({
         href: issueHref(item),
-        primary: `${item.recordTitle} · Rev ${item.revisionNumber}`,
+        primary: `${item.recordTitle} · ${revisionName(item)}`,
         secondary: projectLabel(item),
         reason: readyToIssueReason(item.fileCount),
       }),

@@ -141,9 +141,26 @@ function defaultHandler(key: string, pathname: string, role: Role): Response {
   if (key === "POST /api/v2/projects/proj-1/records")
     return json(
       {
-        data: record({ id: "rec-new", title: "New Record" }),
+        data: record({
+          id: "rec-new",
+          recordNumber: "0004",
+          title: "New Record",
+        }),
         meta: { requestId: "req-new" },
       },
+      201,
+    );
+  if (key === "POST /api/v2/projects/proj-1/records/rec-new/revisions")
+    return json(
+      { data: { id: "rev-new" }, meta: { requestId: "req-revision" } },
+      201,
+    );
+  if (
+    key ===
+    "POST /api/v2/projects/proj-1/records/rec-new/revisions/rev-new/files"
+  )
+    return json(
+      { data: { id: "file-new" }, meta: { requestId: "req-file" } },
       201,
     );
   if (/^\/api\/v2\/projects\/[^/]+\/records$/.test(pathname))
@@ -262,7 +279,7 @@ describe("records register view", () => {
     const header = grab(document, ".records-heading");
     expect(header.classList.contains("app-register-header")).toBe(true);
     expect(header.classList.contains("app-container-register")).toBe(true);
-    expect(header.querySelector("h2")?.textContent).toBe("Records");
+    expect(header.querySelector("h2")?.textContent).toBe("Document Register");
     expect(header.querySelector(".app-register-count")?.textContent).toBe(
       "3 records",
     );
@@ -294,7 +311,7 @@ describe("records register view", () => {
   it("shows the current revision, no-revision state, draft presence, and file count", async () => {
     const { document } = await mountRecords();
     const firstRow = grab(document, ".records-table tbody tr");
-    expect(firstRow.textContent).toContain("Rev 1");
+    expect(firstRow.textContent).toContain("Original");
     expect(firstRow.textContent).toContain("Published");
     expect(firstRow.textContent).toContain("Draft in progress");
     expect(firstRow.querySelector(".cell-files")?.textContent).toBe("2");
@@ -548,11 +565,14 @@ describe("records register view", () => {
 });
 
 describe("records create authorization and dialog", () => {
-  it("shows Create record when the capability is present", async () => {
+  it("shows Add document when the capability is present", async () => {
     const { document } = await mountRecords();
     expect(
       document.querySelector(".records-heading [data-create-record]"),
     ).not.toBeNull();
+    expect(textOf(document, ".records-heading [data-create-record]")).toBe(
+      "Add document",
+    );
   });
 
   it("hides Create record when the capability is absent but still lists records", async () => {
@@ -575,7 +595,8 @@ describe("records create authorization and dialog", () => {
     const { document } = await mountRecords();
     grab(document, ".records-heading [data-create-record]").click();
     expect(document.querySelector(".app-dialog")).not.toBeNull();
-    expect(document.activeElement?.id).toBe("rf-title-input");
+    grab(document, "[data-mode='upload']").click();
+    expect(document.activeElement?.id).toBe("add-title");
     expect(
       document.querySelector('.app-dialog [aria-invalid="true"]'),
     ).toBeNull();
@@ -583,22 +604,37 @@ describe("records create authorization and dialog", () => {
     fire(grab(document, ".app-dialog form"), "submit");
     await settle(1);
     expect(
-      document.querySelector("#rf-title-error")?.hasAttribute("hidden"),
+      document.querySelector("#add-title-error")?.hasAttribute("hidden"),
     ).toBe(false);
-    expect(grab(document, "#rf-title-input").getAttribute("aria-invalid")).toBe(
+    expect(grab(document, "#add-title").getAttribute("aria-invalid")).toBe(
       "true",
     );
   });
 
   it("navigates to the new record detail route after a successful creation", async () => {
-    const { document, window } = await mountRecords();
+    const { document, window, fetch } = await mountRecords();
     grab(document, ".records-heading [data-create-record]").click();
-    setFieldValue(document, "#rf-title-input", "New Record");
-    (grab(document, "#rf-type") as HTMLInputElement).value = "drawing";
+    grab(document, "[data-mode='empty']").click();
+    expect(document.querySelector("#add-number")).toBeNull();
+    expect(document.querySelector("#add-discipline")?.tagName).toBe("SELECT");
+    setFieldValue(document, "#add-title", "New Document");
+    (grab(document, "#add-type") as HTMLInputElement).value = "drawing";
+    setFieldValue(document, "#add-discipline", "architectural");
     fire(grab(document, ".app-dialog form"), "submit");
     await waitFor(() => {
-      expect(window.location.pathname).toBe("/projects/proj-1/records/rec-new");
+      expect(window.location.pathname).toBe(
+        "/projects/proj-1/records/rec-new/revisions/rev-new",
+      );
     });
+    const call = fetch.mock.calls.find(([, init]) => init?.method === "POST");
+    const body = call?.[1]?.body;
+    if (typeof body !== "string") throw new Error("Expected JSON body");
+    expect(JSON.parse(body)).toMatchObject({
+      recordType: "drawing",
+      discipline: "architectural",
+      title: "New Document",
+    });
+    expect(JSON.parse(body)).not.toHaveProperty("recordNumber");
     expect(document.querySelector(".app-dialog")).toBeNull();
   });
 
@@ -609,7 +645,8 @@ describe("records create authorization and dialog", () => {
       },
     });
     grab(document, ".records-heading [data-create-record]").click();
-    setFieldValue(document, "#rf-title-input", "New Record");
+    grab(document, "[data-mode='empty']").click();
+    setFieldValue(document, "#add-title", "New Document");
     fire(grab(document, ".app-dialog form"), "submit");
     await waitFor(() => {
       expect(
@@ -617,7 +654,79 @@ describe("records create authorization and dialog", () => {
       ).toBe(false);
     });
     expect(textOf(document, ".app-dialog-error")).toContain("req-conflict");
-    expect(fieldValue(document, "#rf-title-input")).toBe("New Record");
+    expect(fieldValue(document, "#add-title")).toBe("New Document");
+  });
+
+  it("creates a document, initial revision, and uploaded file before navigating", async () => {
+    const { document, window, fetch } = await mountRecords();
+    grab(document, ".records-heading [data-create-record]").click();
+    grab(document, "[data-mode='upload']").click();
+    setFieldValue(document, "#add-title", "Uploaded Plan");
+    const file = new window.File(["drawing"], "A-301.pdf", {
+      type: "application/pdf",
+    });
+    const input = grab(document, "#add-file") as HTMLInputElement;
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fire(grab(document, ".app-dialog form"), "submit");
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(
+        "/projects/proj-1/records/rec-new/revisions/rev-new",
+      );
+    });
+    const mutationPaths = fetch.mock.calls
+      .filter(([, init]) => init?.method === "POST")
+      .map(([input]) => {
+        const value =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        return new URL(value, "https://base.test").pathname;
+      });
+    expect(mutationPaths).toEqual([
+      "/api/v2/projects/proj-1/records",
+      "/api/v2/projects/proj-1/records/rec-new/revisions",
+      "/api/v2/projects/proj-1/records/rec-new/revisions/rev-new/files",
+    ]);
+  });
+
+  it("keeps a created draft recoverable when its file upload fails", async () => {
+    const { document, window } = await mountRecords(
+      "/projects/proj-1/records",
+      {
+        routes: {
+          "POST /api/v2/projects/proj-1/records/rec-new/revisions/rev-new/files":
+            () => fail(503, "req-file-failed"),
+        },
+      },
+    );
+    grab(document, ".records-heading [data-create-record]").click();
+    grab(document, "[data-mode='upload']").click();
+    setFieldValue(document, "#add-title", "Uploaded Plan");
+    const file = new window.File(["drawing"], "A-301.pdf", {
+      type: "application/pdf",
+    });
+    const input = grab(document, "#add-file") as HTMLInputElement;
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fire(grab(document, ".app-dialog form"), "submit");
+    await waitFor(() => {
+      expect(textOf(document, ".app-dialog-error")).toContain(
+        "req-file-failed",
+      );
+    });
+    expect(textOf(document, ".add-document-recovery")).toContain(
+      "Open original and retry upload",
+    );
+    expect(
+      document.querySelector("[data-recovery]")?.getAttribute("href"),
+    ).toBe("/projects/proj-1/records/rec-new/revisions/rev-new");
   });
 
   it("closes the create dialog on Escape", async () => {
