@@ -69,16 +69,18 @@ describe("UI-2 application boundary", () => {
   });
 
   it("keeps the reviewed renderer source byte-for-byte stable", () => {
-    // This baseline includes the intentional current-main PDF-export merge.
-    // UI-2 changes the application entry boundary only, so a later renderer
-    // edit fails loudly until it receives an intentional review. Normalize
-    // CRLF first so a checkout with core.autocrlf=true (e.g. Windows) hashes
-    // the same content CI does.
+    // This baseline includes the intentional current-main PDF-export merge,
+    // the "Stacked Row Split" tall-field write-in box rework (merge of local
+    // main into origin/main), and the cover-tag/document-control-strip
+    // off-by-default change. UI-2 changes the application entry boundary
+    // only, so a later renderer edit fails loudly until it receives an
+    // intentional review. Normalize CRLF first so a checkout with
+    // core.autocrlf=true (e.g. Windows) hashes the same content CI does.
     expect(
       createHash("sha256")
         .update(engineSource.replace(/\r\n/g, "\n"))
         .digest("hex"),
-    ).toBe("ee7e27ed3e36305057e7d3ab6bacf069efef00fb5d715e234c90bd00f5e4c128");
+    ).toBe("dd30291f2cad991002eeceb8be308545dcde5f4bf8b47fe21caf36f560e0862d");
   });
 
   it("delegates preview markup to the controlled renderer runtime", () => {

@@ -161,6 +161,7 @@
     const isPackage = def.kind === "package";
     return `<details class="panel collapsible" data-panel-key="details"${openAttribute("details", true)}><summary>${esc(def.documentType || def.kind)} details</summary>
       <div class="two">${textInput(isPackage ? "Package No." : (def.kind === "form" ? "Form No." : "Document No."), "no", def.no)}${textInput("Type", "documentType", def.documentType)}</div>
+      ${boolInput("Show document no., type & cover tag", "showTag", def.showTag === true)}
       ${textInput("Title", "title", def.title)}
       ${textInput(isDoc ? "Subtitle" : "Supporting line", isDoc || isPackage ? "subtitle" : "sub", isDoc || isPackage ? def.subtitle : def.sub)}
       <p class="micro">Branded header — BASE Construction LLC, 1601 Minnesota Ave, Winter Park, FL 32789 — is fixed and can't be changed per document. Toggle it on or off under Appearance &amp; page setup.</p>
@@ -175,7 +176,7 @@
   function controlPanel() {
     const c = def.control || {};
     const v = def.controlVisibility || {};
-    return `<details class="panel collapsible" data-panel-key="control"${openAttribute("control", true)}><summary>Document control</summary>${boolInput("Show document-control strip", "showControl", def.showControl !== false)}
+    return `<details class="panel collapsible" data-panel-key="control"${openAttribute("control", true)}><summary>Document control</summary>${boolInput("Show document-control strip", "showControl", def.showControl === true)}
       <div class="control-row"><label class="toggle compact"><input type="checkbox" data-control-visible="no"${v.no !== false ? " checked" : ""}><span>No.</span></label></div>
       ${BASE.controlKeys.map(key => `<div class="control-row"><label class="toggle compact"><input type="checkbox" data-control-visible="${esc(key)}"${v[key] !== false ? " checked" : ""}><span>${esc(key)}</span></label><input class="in" data-control-value="${esc(key)}" value="${esc(c[key] || "")}"></div>`).join("")}
     </details>`;
