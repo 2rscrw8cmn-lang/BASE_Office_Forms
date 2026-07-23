@@ -60,3 +60,5 @@ Submittals follow using the same record, revision, file, artifact, delivery, and
 - `APP_UI_FOUNDATION.md` — binding application UI contract and renderer boundary.
 - `UI_IMPLEMENTATION_PLAYBOOK.md` — ordered UI phases, gates, and closeout rules.
 - `UI_PROGRAM_STATUS.md` — current UI phase, audit findings, decisions, and next gate.
+- `UI_DEPENDENCIES.md` — UI package, license, security, and replacement record.
+- `UI2_ROLLBACK.md` — UI-2 deployment boundary and rollback procedure.

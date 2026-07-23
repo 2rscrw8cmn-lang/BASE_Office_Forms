@@ -13,17 +13,13 @@
       type="image/svg+xml"
       href="/assets/base-logo.svg?v=20260718"
     />
-    <link rel="stylesheet" href="/base.css" />
+    <link rel="stylesheet" href="/brand-tokens.css" />
     <link rel="stylesheet" href="/app-shell.css" />
+    <link rel="stylesheet" href="/app/app.css" />
   </head>
   <body class="app-shell-body">
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <div id="app" class="app-root" aria-busy="true">
-      <main id="main-content" class="app-boot" tabindex="-1">
-        <p class="eyebrow">BASE Office Forms</p>
-        <h1>Loading workspace&hellip;</h1>
-      </main>
-    </div>
-    <script type="module" src="/app-shell.js"></script>
+    <div id="react-app"></div>
+    <script type="module" src="/app/app.js"></script>
   </body>
 </html>

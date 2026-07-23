@@ -2,6 +2,9 @@ import { access, readFile } from "node:fs/promises";
 
 const requiredFiles = [
   "public/index.html",
+  "public/brand-tokens.css",
+  "public/app/app.js",
+  "public/app/app.css",
   "public/app-shell.js",
   "public/app-routing.js",
   "public/app-shell.css",

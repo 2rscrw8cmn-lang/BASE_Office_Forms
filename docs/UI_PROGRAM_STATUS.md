@@ -1,7 +1,7 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-23  
-**Current phase:** UI-1 — Audit and design contract complete  
+**Current phase:** UI-2 — CSS separation and React/Vite foundation complete
 **Authority:** Living handoff for the UI foundation program
 
 ## 1. Current direction
@@ -13,8 +13,10 @@ Vite incrementally for application UI, separate application CSS from renderer
 CSS, use Radix behavior with BASE-owned components, use Lucide through one icon
 component, and evaluate Tabulator only through `BaseDataGrid`.
 
-UI-1 did not migrate React, add dependencies, change routes, or change runtime
-behavior.
+UI-2 adds the React/TypeScript/Vite build and compatibility host without
+migrating feature routes or changing domain behavior. The existing shell still
+owns all current authenticated route behavior; Studio and Document Library
+remain legacy pages.
 
 ## 2. Audit completion
 
@@ -54,19 +56,24 @@ The audit covered the requested screens against current `main` and
 - Async handling is mature for implemented app routes but conflict recovery is
   not a shared client behavior. RFI UI is absent even though RFI API/domain
   services exist. No phase may claim the RFI register/workspace is implemented.
-- `public/index.html` currently loads renderer/base CSS with app CSS. This is a
-  known UI-2 boundary defect, not something to paper over with more selectors.
+- UI-2 now keeps document geometry in `public/base.css`, neutral brand values in
+  `public/brand-tokens.css`, and application entry CSS in generated
+  `public/app/app.css` plus `public/app-shell.css`. The authenticated entry no
+  longer loads `base.css`; legacy document pages continue to do so through the
+  token bridge.
 
 ## 4. Decisions recorded by UI-1
 
 1. **Application/document CSS separation:** keep `public/engine.js`, compatible
-   definitions, and renderer CSS authoritative; UI-2 will extract only neutral
-   brand tokens and stop authenticated application routes from depending on
-   document classes. Current separation is incomplete.
+   definitions, and renderer CSS authoritative; UI-2 extracts only neutral
+   brand tokens and stops authenticated application routes from depending on
+   document classes. Full retirement of legacy document CSS imports remains a
+   later cleanup after route parity.
 2. **Incremental React/Vite:** introduce a deterministic application build and
    compatibility mount first; migrate route-by-route while preserving canonical
    URLs, `/api/v2`, legacy Library/Studio operation, and rollback to static
-   mounts. UI-1 adds no runtime dependency.
+   mounts. UI-1 established the decision; UI-2 adds only the compatibility
+   runtime and build dependencies needed for that boundary.
 3. **Radix/BASE components:** Radix may provide behavior primitives; BASE owns
    source, styling, tokens, markup, accessibility contract, and tests. Do not
    ship stock shadcn/template styling as the theme.
@@ -88,8 +95,8 @@ The audit covered the requested screens against current `main` and
 |---|---|---|
 | UI-1 | Restore the program contract, complete screen audit, record decisions, and set the UI-2 gate. | Current `main`; complete |
 | Spike 0 | Prove Tabulator behavior and publish `BaseDataGrid` contract, version/license, gaps, and tests. | Current RFI API/domain; may run in parallel with UI-2 |
-| UI-2A | Extract neutral brand tokens; split application and renderer CSS; prove document output and legacy pages unchanged. | UI-1; current-main baseline |
-| UI-2B | Add React/TypeScript/Vite deterministic build, compatibility mount, and rollback path without feature migration. | UI-2A |
+| UI-2A | Extract neutral brand tokens; split application and renderer CSS; prove document output and legacy pages unchanged. | UI-1; current-main baseline; complete |
+| UI-2B | Add React/TypeScript/Vite deterministic build, compatibility mount, and rollback path without feature migration. | UI-2A; complete |
 | UI-3A | Build BASE primitives, status map, icon component, dialogs, focus, and state primitives. | UI-2B |
 | UI-3B | Build PageHeader, RegisterToolbar, workspace patterns, responsive helpers, and UI Lab. | UI-3A |
 | UI-4 | Migrate shell/navigation/context/router/query/error/focus parity. | UI-3B |
@@ -114,14 +121,17 @@ UI-2 may start only when all of these are true:
 - UI-2's first PR is limited to CSS/token/build separation and compatibility
   mounting; it does not migrate React feature routes.
 
-Until then, the program remains at UI-1 complete / UI-2 not started.
+UI-2 is complete when the implementation and regression checks listed in the
+latest-work section pass. The current production follow-up is remediation or
+formal acceptance of the existing Cloudflare development-tool audit findings;
+do not use `npm audit fix --force` without a dependency review.
 
 ## 7. Open questions
 
-- Which exact React/Vite and Radix package versions meet the repository's
-  runtime, bundle, and license requirements?
-- Will UI-2 use a separate Vite output directory or a compatibility asset
-  manifest for Cloudflare Pages?
+- Which Radix package set should UI-3 adopt while preserving the pinned React /
+  Vite runtime documented in `docs/UI_DEPENDENCIES.md`?
+- Which dependency owner will remediate or accept the existing high-severity
+  Cloudflare dev/test dependency chain reported by `npm audit`?
 - Which visual-regression runner and artifact retention policy will be approved?
 - After Spike 0, which read-only Projects/Records surfaces use `BaseDataGrid`
   versus a lighter shared table?
@@ -134,7 +144,7 @@ Until then, the program remains at UI-1 complete / UI-2 not started.
 |---|---|---|
 | Spike 0 — Tabulator | In progress / separate evidence required | Accepted behavior and adapter recommendation |
 | UI-1 — Audit and decisions | Complete | This document, foundation, playbook, ADR entries |
-| UI-2 — CSS + React/Vite | Not started; gated | Exact condition above |
+| UI-2 — CSS + React/Vite | Complete; audit follow-up open | Build, route-boundary, renderer, and rollback evidence below |
 | UI-3 — Components + UI Lab | Not started | UI-2 merged |
 | UI-4 — React shell | Not started | UI-3 patterns stable |
 | UI-5 — RFI register | Not started | UI-4 + accepted Spike 0 |
@@ -146,15 +156,28 @@ Until then, the program remains at UI-1 complete / UI-2 not started.
 
 ## 9. Latest completed work
 
-- **Phase:** UI-1
-- **Branch/PR/commit:** documentation-only; no PR or commit created by this audit
-- **Scope:** restored the missing UI playbook, completed the screen audit,
-  refined the foundation contract, recorded UI architecture decisions, and
-  ordered implementation slices
-- **Checks:** documentation/source audit only; no code or React migration run
-- **Screenshots:** not produced; UI-1 is a documentation audit and no browser
-  surface was changed
-- **Known limitations:** Spike 0 remains separate; RFI UI, React/Vite,
-  application/document CSS separation, and shared components remain future work
-- **Next action:** satisfy the exact UI-2 start condition, then run UI-2A
-
+- **Phase:** UI-2
+- **Branch/PR/commit:** local implementation; no PR created or merged
+- **Scope:** added the pinned React/TypeScript/Vite compatibility build, split
+  neutral brand tokens from document CSS, preserved the legacy shell behind
+  `LegacyApplicationHost`, added the controlled renderer-preview adapter,
+  documented dependencies and rollback, and kept all feature routes on their
+  existing implementations.
+- **Checks:** `npm run format:check`, `npm run lint`, `npm run typecheck`,
+  `npm run build`, `npm run test:unit`, `npm run functions:build`, and
+  `npm run security:secrets` pass. `npm audit --audit-level=high` reports four
+  high-severity findings in the existing Cloudflare development/test chain
+  (`@cloudflare/vitest-pool-workers` → `miniflare`/`sharp`/`wrangler`); no
+  force-fix was applied. Renderer unit coverage and the new UI-foundation
+  boundary tests pass.
+- **Screenshots:** not produced; UI-2 changes the entry/build boundary and does
+  not migrate feature-screen markup. Browser visual baselines remain a UI-10
+  deliverable.
+- **Known limitations:** Spike 0 remains separate; RFI UI, shared BASE
+  components, Radix, Lucide, Tabulator, `BaseDataGrid`, and React feature-route
+  migration remain future work. Generated assets in `public/app/` are required
+  for the committed Pages deployment output.
+- **Rollback:** follow [`UI2_ROLLBACK.md`](UI2_ROLLBACK.md) to restore the
+  previous static entry while retaining API, data, and renderer assets.
+- **Next action:** resolve or explicitly accept the dependency audit findings,
+  then begin UI-3 primitives and UI Lab without moving feature behavior yet.

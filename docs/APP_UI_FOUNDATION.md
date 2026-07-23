@@ -9,19 +9,22 @@ official document output
 
 ## 1. Current implementation truth
 
-The current application is still framework-free static HTML, CSS, and browser
-ES modules. The shell, Dashboard, Projects, Project Overview, Records register,
-Record workspace, Revision workspace, shared API/format helpers, mobile drawer,
-and create/add-document flows are implemented. RFI register/workspace,
-Issuances, Team, and Administration remain route-level placeholders. The
-Document Library and Studio remain legacy pages; Studio has stabilized editor
-identity, preview, and save-state behavior but has not adopted the application
-component system.
+The authenticated workspace now has a React/TypeScript/Vite compatibility host,
+but its route and feature behavior remains the existing browser-module shell.
+The shell, Dashboard, Projects, Project Overview, Records register, Record
+workspace, Revision workspace, shared API/format helpers, mobile drawer, and
+create/add-document flows are implemented. RFI register/workspace, Issuances,
+Team, and Administration remain route-level placeholders. The Document Library
+and Studio remain legacy pages; Studio has stabilized editor identity, preview,
+and save-state behavior but has not adopted the application component system.
 
-The application currently loads `public/base.css` and `public/app-shell.css`
-together. CSS separation is therefore a UI-2 deliverable, not a completed
-foundation. There is no React/Vite, Radix, Lucide, or Tabulator dependency on
-current `main`, and no `BaseDataGrid` exists yet.
+UI-2 separates the authenticated entry point from document layout CSS: the app
+loads `public/brand-tokens.css`, generated `public/app/app.css`, and the
+compatibility bundle, while legacy document pages continue to load
+`public/base.css`. `public/base.css` imports the neutral token bridge for
+legacy compatibility but remains the owner of document geometry and renderer
+selectors. No feature routes have been migrated to React, and Radix, Lucide,
+Tabulator, and `BaseDataGrid` remain future work.
 
 ## 2. Product boundary
 
@@ -40,7 +43,8 @@ Application UI: React + TypeScript + Vite (incremental target)
 Document UI:   public/engine.js + compatible JSON definitions + renderer CSS
 ```
 
-Application components may host a renderer preview, but may not reinterpret the
+Application components may host a renderer preview through the controlled
+adapter in `src/ui/app/renderer-preview.ts`, but may not reinterpret the
 definition or create a second document styling system.
 
 ## 3. Binding visual rules
@@ -58,9 +62,10 @@ Uppercase mono is reserved for real identifiers and compact labels.
 ### Tokens, spacing, and geometry
 
 The current semantic application aliases in `app-shell.css` and its 8/12/18/
-24/30 px scale are the observed starting point. UI-2 will move neutral brand
-values into a documented token source and keep application tokens separate
-from renderer tokens. Features use semantic tokens, never raw color literals.
+24/30 px scale are the observed starting point. Neutral brand values live in
+`public/brand-tokens.css`; application tokens remain in application CSS and
+renderer geometry/tokens remain in `public/base.css`. Features use semantic
+tokens, never raw color literals.
 Default controls are about 40 px high, isolated/mobile targets are at least
 44 px, radii are 4–6 px, and borders carry more structure than shadows.
 

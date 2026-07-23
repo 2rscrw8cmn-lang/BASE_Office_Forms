@@ -1,0 +1,11 @@
+/* Application-only reset and React host styles. Renderer layout selectors do
+   not belong here. Keep selectors scoped to the React host during migration. */
+
+.react-app-host,
+.react-app-host * {
+  box-sizing: border-box;
+}
+
+.react-app-host {
+  min-height: 100vh;
+}

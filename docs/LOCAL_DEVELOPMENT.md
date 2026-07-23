@@ -40,6 +40,12 @@ npm run db:migrate:local
 npm run dev
 ```
 
+`npm run dev` builds the React/Vite compatibility assets first, then starts
+Cloudflare Pages locally from `public/`. During UI work, use a second terminal
+with `npm run dev:ui` to rebuild `public/app/` on source changes; refresh the
+Pages origin after each rebuild. The Pages runtime remains the deployment
+truth, not the standalone Vite server.
+
 Wrangler prints the local origin. Verify the new platform route at:
 
 ```text
@@ -71,6 +77,7 @@ npm test
 npm run test:unit
 npm run test:integration
 npm run build
+npm run build:ui
 npm run functions:build
 ```
 

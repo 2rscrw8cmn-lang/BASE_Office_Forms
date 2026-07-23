@@ -4,25 +4,9 @@
    Change a value here and every form updates at once.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('/brand-tokens.css');
 
 :root {
-  /* ---- Color tokens ---- */
-  --ink:        #232327;   /* primary text / heavy rules   */
-  --accent:     #7a1e22;   /* BASE maroon                  */
-  --accent-dk:  #5a1418;   /* maroon hover                 */
-  --mono:       #6f6f74;   /* mono labels / metadata       */
-  --field:      #bdbdc2;   /* field box border             */
-  --divider:    #cdced2;   /* light internal divider       */
-  --row:        #e4e4e8;   /* table / TOC row divider      */
-  --page-bg:    #e7e7ea;   /* screen background behind sheet */
-  --hover:      #faf3f3;   /* row hover tint               */
-  --paper:      #ffffff;
-
-  /* ---- Type tokens ---- */
-  --sans: 'Archivo', system-ui, sans-serif;
-  --code: 'JetBrains Mono', ui-monospace, monospace;
-
   /* ---- Sheet geometry ---- */
   --sheet-w: 8.5in;
   --pad-y: 0.55in;

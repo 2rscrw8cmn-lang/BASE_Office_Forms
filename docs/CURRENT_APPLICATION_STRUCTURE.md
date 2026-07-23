@@ -6,13 +6,20 @@ Dashboard, Projects, Project Overview, and project Records register surfaces
 
 ## Runtime shape
 
-The repository is a Cloudflare Pages application with static browser assets, Pages
-Functions, one D1 database binding, and one private R2 bucket binding. It does not
-use a client framework or a server framework.
+The repository is a Cloudflare Pages application with static browser assets, a
+small React/Vite application entry, Pages Functions, one D1 database binding,
+and one private R2 bucket binding. The React entry is a compatibility host;
+feature routes remain in the existing browser modules until later UI phases.
 
 ```text
 Browser
-├── public/index.html and public/app-shell.js  authenticated workspace shell
+├── public/index.html                         authenticated app entry
+├── public/brand-tokens.css                   neutral brand token bridge
+├── public/app/app.js and public/app/app.css  generated React/Vite entry assets
+├── src/ui/app/main.tsx                       React entry and root mount
+├── src/ui/app/LegacyApplicationHost.tsx      legacy shell compatibility host
+├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
+├── public/app-shell.js                        existing authenticated shell
 ├── public/app-routing.js                      browser route definitions
 ├── public/app-shell.css                       responsive shell styles
 ├── public/app-api.js                          shared /api/v2 browser client
@@ -32,7 +39,8 @@ Browser
 ├── public/viewer.html                        public definition viewer
 ├── public/library-api.js                     legacy /api client
 ├── public/engine.js                          renderer (preserved)
-└── public/base.css                           shared visual system (preserved)
+├── public/base.css                           document/renderer CSS (preserved)
+└── vite.config.ts                             deterministic UI asset build
 
 Cloudflare Pages Functions
 ├── functions/api/[[path]].ts                 legacy shared-library API
@@ -58,13 +66,13 @@ snapshots plus `project_issuance_sequences` for project-wide issue numbering.
 
 ## Frontend architecture and design inventory
 
-The browser application remains framework-free static HTML, CSS, and JavaScript.
-`public/index.html` is the single entry point for new application routes and loads
-browser-native ES modules: `app-routing.js` owns route matching and selected
-navigation state, while `app-shell.js` owns composition, history navigation,
-session/project requests, focus management, mobile drawer behavior, and the
-lifecycle of per-route feature modules. No frontend runtime framework or build
-pipeline was added.
+`public/index.html` is the single entry point for new application routes and
+mounts the generated React/Vite entry. `main.tsx` renders
+`LegacyApplicationHost`, which dynamically loads the existing `app-shell.js`
+compatibility module. The legacy shell still owns route matching, composition,
+history navigation, session/project requests, focus management, mobile drawer
+behavior, and the lifecycle of per-route feature modules. This is an
+incremental build boundary, not a feature-screen migration.
 
 The shell delegates the data-backed routes to focused feature modules rather
 than rendering their data, forms, and state itself:
@@ -97,12 +105,14 @@ only the overview read model and never issues a second project-detail request;
 the shell's existing project-context request continues to populate the project
 header and tabs.
 
-The shell extends rather than replaces the existing `base.css` visual system:
+The authenticated shell now uses an application/document CSS boundary:
 
-- **CSS and tokens:** `base.css` remains the source of `--ink`, `--accent`,
-  `--accent-dk`, `--mono`, `--field`, `--divider`, `--row`, `--page-bg`,
-  `--hover`, and `--paper`. `app-shell.css` adds semantic shell aliases and an
-  8/12/18/24/30 px spacing scale derived from existing usage.
+- **CSS and tokens:** `brand-tokens.css` owns only neutral brand values and
+  font imports. The authenticated entry does not load `base.css`; its
+  generated app CSS and `app-shell.css` own application styling. `base.css`
+  imports the neutral bridge for legacy document pages and retains document
+  geometry and renderer selectors. `app-shell.css` adds semantic shell aliases
+  and an 8/12/18/24/30 px spacing scale derived from existing usage.
 - **Typography:** Archivo remains the application and control face, JetBrains
   Mono remains the metadata/code face, and Georgia is reserved for page and
   section headings.

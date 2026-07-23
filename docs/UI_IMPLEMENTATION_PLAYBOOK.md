@@ -1,6 +1,6 @@
 # BASE UI Implementation Playbook
 
-**Status:** UI-1 audit contract restored and completed 2026-07-23  
+**Status:** UI-2 CSS/build foundation completed 2026-07-23
 **Authority:** Use with `APP_UI_FOUNDATION.md` and `UI_PROGRAM_STATUS.md`.
 
 ## Required preamble for UI work
@@ -23,7 +23,7 @@ next smallest safe action.
 ```text
 Spike 0  Tabulator behavior proof
 UI-1     Audit, design contract, and decisions                 [complete]
-UI-2     Application/document CSS boundary + React/Vite        [next]
+UI-2     Application/document CSS boundary + React/Vite        [complete]
 UI-3     BASE components + UI Lab
 UI-4     React application shell and route parity
 UI-5     RFI register through BaseDataGrid
@@ -83,7 +83,9 @@ compatibility mount while preserving all current routes, `/api/v2`, Studio,
 Library, `public/engine.js`, valid definitions, and official output. Extract
 neutral brand tokens only where justified. Keep `public/base.css` renderer-owned
 and prove the authenticated app no longer depends on document layout classes.
-Do not migrate feature screens in this phase.
+Do not migrate feature screens in this phase. The completed implementation uses
+`public/app/` as the committed Cloudflare Pages asset output and keeps the
+existing `app-shell.js` behind `LegacyApplicationHost` until UI-4.
 
 ## UI-3 — BASE components and UI Lab
 

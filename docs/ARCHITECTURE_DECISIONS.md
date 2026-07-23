@@ -187,6 +187,34 @@ and accessibility.
 version, license, bundle/security impact, behavior gaps, and an acceptable
 adapter contract.
 
+## ADR-026 — React compatibility host before feature migration
+
+**Decision:** The authenticated entry will mount a React/Vite host that boots
+the existing `createAppShell()` implementation. Feature routes remain in their
+current browser modules until their migration phase.
+
+**Reason:** This establishes the new deterministic asset/runtime boundary while
+keeping route, API, focus, session, and feature behavior unchanged and
+reversible.
+
+**Consequence:** The host owns only bootstrap/error/unmount lifecycle in UI-2.
+It must not duplicate feature state or import renderer definitions into the
+React bundle.
+
+## ADR-027 — Neutral brand token bridge
+
+**Decision:** Put only shared BASE color and type tokens in
+`public/brand-tokens.css`. The application entry loads that file plus
+application CSS; controlled-document pages load it through `public/base.css`.
+Document geometry and layout selectors remain in `base.css`.
+
+**Reason:** The authenticated app currently inherits renderer tokens and
+document-level body rules from `base.css`. A small explicit token bridge
+separates the systems without changing official renderer output.
+
+**Consequence:** Token values must remain synchronized until a later cleanup can
+remove the renderer compatibility import with approved visual evidence.
+
 ## Deferred decisions
 
 These choices are intentionally deferred until their roadmap phase:

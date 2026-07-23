@@ -728,8 +728,16 @@ export function createAppShell(options = {}) {
   };
 }
 
-if (typeof window !== "undefined" && typeof document !== "undefined") {
-  const start = () => createAppShell();
+export function bootAppShell(options = {}) {
+  return createAppShell(options);
+}
+
+if (
+  typeof window !== "undefined" &&
+  typeof document !== "undefined" &&
+  !window.__BASE_REACT_APP_HOST__
+) {
+  const start = () => bootAppShell();
   if (document.readyState === "loading")
     document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
