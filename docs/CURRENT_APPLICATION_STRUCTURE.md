@@ -1,7 +1,8 @@
 # Current Application Structure
 
 **Status:** Authenticated workspace inventory — application shell plus the
-Dashboard, Projects, Project Overview, and project Records register surfaces
+Dashboard, Projects, Project Overview, and project Records register surfaces,
+and the UI-3 BASE component library and UI Lab
 **Updated:** 2026-07-23
 
 ## Runtime shape
@@ -34,6 +35,16 @@ Browser
 ├── src/ui/app/main.tsx                       React entry and root mount
 ├── src/ui/app/LegacyApplicationHost.tsx      legacy shell compatibility host
 ├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
+├── src/ui/theme/tokens.css                    application semantic tokens (single source)
+├── src/ui/theme/tokens.ts                     token registry for enforcement tests
+├── src/ui/components/index.ts                 BASE component library barrel + CSS import
+├── src/ui/components/base-components.css       single application component stylesheet
+├── src/ui/components/icons/Icon.tsx            the one Lucide icon component
+├── src/ui/components/primitives/*              Button, inputs, Field, Badge, Tooltip, …
+├── src/ui/components/interactive/*             Dialog, Menu, Popover, Tabs, Toast, Drawer, …
+├── src/ui/components/patterns/*                PageHeader, RegisterPage, EmptyState, …
+├── src/ui/lab/UiLab.tsx + catalog.tsx          development-only UI Lab (real components)
+├── vite.lab.config.ts                          dev-only UI Lab build/serve (never shipped)
 ├── public/app-shell.js                        existing authenticated shell
 ├── public/app-routing.js                      browser route definitions
 ├── public/app-shell.css                       responsive shell styles
@@ -178,6 +189,56 @@ The authenticated shell now uses an application/document CSS boundary:
   logo, breadcrumbs, search, and account placeholder. The shell translates that
   quiet hierarchy into the global sidebar and project header without changing
   the Studio navigation.
+
+## UI-3 BASE component library and UI Lab
+
+UI-3 introduces the reusable BASE application component library that later
+phases (UI-4 onward) compose into the React shell and feature routes. The
+library is present and tested but not yet mounted by the legacy shell, so the
+production `public/app/app.js` bundle is unchanged in size; feature adoption
+happens in the migration phases.
+
+- **Token source.** `src/ui/theme/tokens.css` is the single source of
+  application colour, geometry, typography, spacing, elevation, and motion,
+  declared as `--app-*` custom properties on `:root` (so Radix-portalled
+  surfaces resolve them) with inline fallbacks to `public/brand-tokens.css`.
+  `src/ui/theme/tokens.ts` mirrors the token names for the enforcement test.
+  BASE maroon (`--app-accent`) carries primary action, focus, selection, and
+  active navigation; danger red is a separate token and is never used for
+  ordinary focus or borders.
+- **One stylesheet.** `src/ui/components/base-components.css` styles every
+  component through those tokens with no raw colour literals and no
+  feature-specific selectors. A feature builds a register or workspace by
+  composing components; it adds no new global visual CSS.
+- **One icon component.** `src/ui/components/icons/Icon.tsx` wraps a curated set
+  of Lucide icons. It is the only module that imports `lucide-react`
+  (enforced), it is decorative by default, and it takes a `title` to expose an
+  accessible name.
+- **Primitives** (`src/ui/components/primitives/`): Button, IconButton,
+  TextInput, TextArea, Select, Checkbox, RadioGroup, DateInput, Field, Label,
+  HelpText, ValidationMessage, Badge, Tooltip, Divider, Spinner, Skeleton.
+  `Field` provides a context that wires each control's id, `required`,
+  `aria-invalid`, and `aria-describedby` to its label, help, and error.
+- **Interactive** (`src/ui/components/interactive/`): Dialog, AlertDialog,
+  DropdownMenu, Popover, Tabs, Toast, CommandMenu, Collapsible, Drawer. Radix
+  primitives supply focus trap, keyboard, and dismissal behaviour; BASE owns the
+  rendered styling and component contract. `radix-ui` is imported only inside
+  `src/ui/components/` (enforced).
+- **Application patterns** (`src/ui/components/patterns/`): AppShell, PageHeader,
+  ProjectHeader, ProjectTabs, RegisterPage, RegisterToolbar, FilterChip, Panel,
+  MetadataStrip, FileRow, ActivityFeed, EmptyState, ErrorState, PermissionState,
+  FormDialog, WorkspaceSection, Breadcrumbs, plus `StatusBadge` (the one
+  centralized status vocabulary and tone map) and `SaveIndicator`
+  (Saving/Saved/Failed/Conflict). `RegisterPage` renders exactly one of the
+  required loading/populated/first-use-empty/filtered-empty/error states.
+- **UI Lab.** `src/ui/lab/` is a development-only route/artifact. `catalog.tsx`
+  is the shared component/state matrix that instantiates the real production
+  components (no duplicated demo markup); `UiLab.tsx` renders it across the
+  required default/hover/focus/selected/disabled/loading/error/long-text/empty
+  states with desktop and mobile frames. It is built only through
+  `vite.lab.config.ts` (`npm run lab` / `npm run lab:build` → gitignored
+  `dist/ui-lab/`) and is never part of the production application bundle.
+  Committed desktop and mobile captures live in `docs/evidence/ui-3/`.
 
 ## Application shell and routes
 
@@ -561,6 +622,36 @@ canonical file downloads, empty draft upload, successful refresh, upload failure
 with retained file context and request ID, publication reload, and immutable
 published rendering.
 
+### UI-3 component library tests
+
+The UI-3 library adds five focused suites, run under Happy DOM with Testing
+Library (opted in per file with a `// @vitest-environment happy-dom` docblock;
+`tests/helpers/setup-component-dom.ts` registers jest-dom, auto-cleanup, and the
+Radix pointer/observer polyfills):
+
+- `tests/unit/base-components-behavior.test.tsx` — component behaviour and
+  explicit states: Button click/`type=button`/loading-blocks-interaction,
+  keyboard checkbox toggle, and Field wiring (`required`, `aria-invalid`, the
+  two-id `aria-describedby`, and the linked error alert).
+- `tests/unit/base-components-keyboard.test.tsx` — keyboard and focus for the
+  overlay/navigation components: Dialog labelling + focus-into-subtree + Escape,
+  Drawer open/Escape/focus-restoration, Tabs arrow-key selection and
+  tab/tabpanel roles, DropdownMenu open-on-Enter + item activation, and
+  CommandMenu filter + arrow/Enter selection.
+- `tests/unit/base-components-accessibility.test.tsx` — accessible names for
+  icon-only controls, decorative-vs-meaningful icon exposure, status conveyed as
+  text, labelled radio groups and breadcrumbs, the filter-chip remove name, and
+  the error/save live regions.
+- `tests/unit/base-component-tokens.test.ts` — token enforcement: no raw colour
+  literals in the component or lab CSS, every referenced `--app-*` token is
+  registered and declared, brand tokens are only read through documented
+  fallbacks, and `lucide-react`/`radix-ui` are imported only from their single
+  allowed locations.
+- `tests/unit/ui-lab-catalog.test.tsx` — the UI Lab renders the real production
+  components: every required state is covered across the catalog, all three
+  component groups are present, every example mounts without throwing, and the
+  lab shell renders with viewport controls.
+
 `tests/integration/read-models.test.ts` exercises the dashboard and overview
 read models end to end: organization isolation, assigned-project filtering,
 org_admin/document_control_admin visibility, the draft/ready-to-issue/active-RFI
@@ -765,12 +856,22 @@ src/application/read-models/ dashboard and project-overview read-model services
 src/http/                   platform response and routing utilities
 src/rendering/               schema validator
 src/infrastructure/storage/  R2 file storage adapter
-tests/unit/                  schema, renderer, and domain regressions
+src/ui/theme/                application semantic tokens (single source)
+src/ui/components/            BASE component library (primitives/interactive/patterns)
+src/ui/lab/                   development-only UI Lab (real components, dev-only build)
+tests/unit/                  schema, renderer, domain, and UI-3 component regressions
 tests/integration/           Worker-runtime, D1, R2 (local/test binding), and API regressions
-tests/helpers/               reusable D1 and route test harnesses
+tests/helpers/               reusable D1, route, and component-DOM test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
+docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 .github/workflows/           pull-request validation
 ```
 
 The integration suite runs in the Cloudflare Workers runtime with an isolated local
-D1 database and applies the repository migrations before tests.
+D1 database and applies the repository migrations before tests. The UI-3 component
+suites run in the default unit project under Happy DOM.
+
+Application scripts: `npm run build`/`build:ui` emit the production application
+bundle to `public/app/` (unchanged by UI-3, which ships no mounted feature yet);
+`npm run lab` serves the UI Lab and `npm run lab:build` emits the dev-only
+`dist/ui-lab/` artifact. Neither lab script touches `public/`.

@@ -1,9 +1,20 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-23
-**Current phase:** RFI Slice 1 complete and closed out in production. UI-3 is the next active implementation phase.
-**Active PR:** None — PR #36 and PR #41 are both merged. UI-3 has not been started.
+**Current phase:** UI-3 (BASE component library + UI Lab) implemented on branch `claude/base-components-ui-lab-5l05ux`, ready for review. RFI Slice 1, UI-1, and UI-2 are complete.
+**Active PR:** UI-3 on `claude/base-components-ui-lab-5l05ux` (open for review, not merged). PR #36 and PR #41 are merged.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+
+> **2026-07-23 UI-3 implementation:**
+> The BASE application component library, a development-only UI Lab, and the
+> component/keyboard/accessibility/token test suites are implemented on
+> `claude/base-components-ui-lab-5l05ux`. Full `npm run check` passes (Prettier,
+> Cloudflare types, TypeScript, ESLint, 301 unit + 119 integration tests, the
+> production build, Pages Functions build, `npm audit` clean, and the secret
+> scan). Desktop and mobile UI Lab captures are committed under
+> `docs/evidence/ui-3/`. The library is present and tested but not yet mounted by
+> the legacy shell, so the shipped `public/app/app.js` bundle is unchanged; feature
+> adoption happens in UI-4 onward. See §"UI-3 complete" below. No merge occurred.
 
 > **2026-07-23 RFI Slice 1 production closeout:**
 > PR #36 (`feature/rfi-slice-1-register-workspace`) was squash-merged to `main`
@@ -235,6 +246,81 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
 
 **RFI Slice 1 is complete.**
 
+## 5A. UI-3 complete — component library and UI Lab
+
+Branch `claude/base-components-ui-lab-5l05ux`. Not merged.
+
+### Scope delivered
+
+- **Application token source.** `src/ui/theme/tokens.css` is the single source
+  of application colour, geometry, typography, spacing, elevation, and motion as
+  `--app-*` custom properties (on `:root` so Radix-portalled surfaces resolve
+  them; inline fallbacks to `public/brand-tokens.css`). `src/ui/theme/tokens.ts`
+  mirrors the names for enforcement. BASE maroon carries primary action, focus,
+  selection, and active navigation; danger red is a separate token.
+- **Primitives.** Button, IconButton, TextInput, TextArea, Select, Checkbox,
+  RadioGroup, DateInput, Field, Label, HelpText, ValidationMessage, Badge,
+  Tooltip, Divider, Spinner, Skeleton. `Field` wires each control's id,
+  `required`, `aria-invalid`, and `aria-describedby` to its label/help/error.
+- **Interactive.** Dialog, AlertDialog, DropdownMenu, Popover, Tabs, Toast,
+  CommandMenu, Collapsible, Drawer — Radix behaviour with BASE-owned styling.
+- **Application patterns.** AppShell, PageHeader, ProjectHeader, ProjectTabs,
+  RegisterPage, RegisterToolbar, FilterChip, Panel, MetadataStrip, FileRow,
+  ActivityFeed, EmptyState (first-use vs filtered), ErrorState, PermissionState,
+  FormDialog, WorkspaceSection, Breadcrumbs, plus `StatusBadge` (the one
+  centralized status vocabulary) and `SaveIndicator` (Saving/Saved/Failed/
+  Conflict).
+- **One icon component.** `src/ui/components/icons/Icon.tsx` wraps Lucide; it is
+  the only module importing `lucide-react` (enforced).
+- **One stylesheet, no raw colours.** `src/ui/components/base-components.css`
+  styles everything through tokens with no raw colour literals and no
+  feature-specific selectors, so a feature can build a register or workspace
+  without new global CSS.
+- **Development-only UI Lab.** `src/ui/lab/` renders the real production
+  components (shared `catalog.tsx`, no duplicated demo markup) across default,
+  hover, focus, selected, disabled, loading, error, long-text, empty, and
+  desktop/mobile states. Built only via `vite.lab.config.ts`
+  (`npm run lab`/`lab:build` → gitignored `dist/ui-lab/`); never in the
+  production bundle.
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **301 unit tests**, **119 Worker integration tests**, the Vite
+production build, static-asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan. New
+UI-3 suites: `base-components-behavior`, `base-components-keyboard` (Dialog,
+Drawer, Tabs, DropdownMenu, CommandMenu keyboard/focus), `base-components-
+accessibility`, `base-component-tokens` (token enforcement + single-source
+Radix/Lucide imports), and `ui-lab-catalog` (real components across every
+required state). Component suites run under Happy DOM via
+`tests/helpers/setup-component-dom.ts`.
+
+### Evidence
+
+Desktop (1280px) and mobile (390px) UI Lab captures are committed at
+`docs/evidence/ui-3/ui-lab-desktop.png` and `ui-lab-mobile.png`, generated from
+the built lab with the pre-installed Chromium.
+
+### Known limitations
+
+- The library is not yet mounted by the legacy shell, so `public/app/app.js` is
+  unchanged in size; feature routes adopt the components in UI-4 onward. This is
+  intentional for UI-3 (build the library; do not migrate screens).
+- Screenshots are static full-page captures; live hover/focus pseudo-states are
+  demonstrated interactively in the lab and asserted structurally in tests. No
+  automated pixel-baseline visual-regression harness is added yet — that is
+  UI-10's scope.
+- Google Fonts (Archivo) load over the network; in the offline capture the lab
+  falls back to `system-ui`, which does not affect layout or component contracts.
+
+### Next recommended action
+
+UI-4 (React application shell and route parity): compose `AppShell`,
+`ProjectTabs`, navigation, TanStack Query, toast, and error-boundary providers
+around the shared components, preserving canonical URLs and `/api/v2`. RFI
+Slice 2 issuance UI is now unblocked for its component needs.
+
 ## 6. Phase status
 
 | Phase                        | Status                     | Next gate                                        |
@@ -243,8 +329,8 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
 | UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
-| UI-3 — Components + UI Lab   | **Next active phase**      | Begin implementation                             |
-| UI-4 — React shell           | Not started                | UI-3 shared patterns stable                      |
+| UI-3 — Components + UI Lab   | **Implemented; ready for review** (`claude/base-components-ui-lab-5l05ux`) | Review and merge |
+| UI-4 — React shell           | **Now unblocked**          | Compose shared components into the shell         |
 | UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
 | UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
@@ -252,7 +338,7 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
 | UI-9 — Library + Studio      | Not started                | Application foundation stable                    |
 | UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                |
 | RFI Slice 2A — backend architecture | Not started; may begin after `main` is pulled and stable | Independent of UI-3 |
-| RFI Slice 2 — issuance UI     | Paused                     | UI-3 shared components must exist first          |
+| RFI Slice 2 — issuance UI     | Unblocked for components; still gated on review/merge | UI-3 shared components now exist  |
 
 ## 7. Current constraints and risks
 
@@ -267,8 +353,11 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
 
 ## 8. Next action
 
-UI-3 (Components + UI Lab) is the next active implementation phase. RFI
-Slice 2A backend architecture work may begin independently once `main` is
-pulled and stable, since it does not depend on UI-3. RFI Slice 2 issuance UI
-work stays paused until UI-3's shared component patterns are in place. No
-UI-3 or Slice 2 work was started in this task.
+UI-3 (Components + UI Lab) is implemented on
+`claude/base-components-ui-lab-5l05ux` and awaits review and merge; the exit
+gate — a feature team can build a standard register or detail workspace without
+new global visual CSS — is met by the shared component set, the single tokenized
+stylesheet, and the token-enforcement test. Once merged, UI-4 (React shell and
+route parity) is the next active phase and composes these components; RFI
+Slice 2A backend architecture may proceed independently once `main` is pulled
+and stable.

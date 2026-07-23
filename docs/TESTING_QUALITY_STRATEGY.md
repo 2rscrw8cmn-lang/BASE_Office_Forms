@@ -254,6 +254,35 @@ Shared application components and migrated routes require:
 
 A UI migration is not accepted because it looks cleaner. Behavioral parity, accessibility, authoritative permissions, failure recovery, and documentation closeout are required.
 
+### 12A-i. UI-3 component library test coverage (implemented)
+
+The UI-3 BASE component library satisfies the §12A component requirements with
+five Happy DOM + Testing Library suites (opted in per file with
+`// @vitest-environment happy-dom`; shared setup in
+`tests/helpers/setup-component-dom.ts` registers jest-dom, auto-cleanup, and the
+Radix pointer/observer polyfills):
+
+- `tests/unit/base-components-behavior.test.tsx` — explicit variants/states
+  (button click/type/loading, keyboard checkbox toggle, Field id/required/
+  aria-invalid/aria-describedby/error wiring).
+- `tests/unit/base-components-keyboard.test.tsx` — keyboard and focus for
+  dialogs, drawers, tabs, menus, and the command palette (labelling, focus trap,
+  Escape, focus restoration, arrow navigation, activation).
+- `tests/unit/base-components-accessibility.test.tsx` — accessible names for
+  icon-only controls, decorative-vs-meaningful icons, text-not-colour status,
+  labelled groups/landmarks, and error/save live regions.
+- `tests/unit/base-component-tokens.test.ts` — token/lint enforcement: no raw
+  colour literals in component or lab CSS, every `--app-*` token registered and
+  declared, brand tokens read only through documented fallbacks, and
+  `lucide-react`/`radix-ui` imported only from their single allowed locations.
+- `tests/unit/ui-lab-catalog.test.tsx` — the UI Lab renders the real production
+  components across every required state (default/hover/focus/selected/disabled/
+  loading/error/long-text/empty) without throwing.
+
+Committed desktop and mobile UI Lab captures provide the visual evidence for the
+shared patterns (`docs/evidence/ui-3/`). An automated pixel-baseline
+visual-regression harness remains UI-10 scope.
+
 ### 12B. RFI Slice 1 reconciliation evidence
 
 Before production approval, run the guarded remote rehearsal in
