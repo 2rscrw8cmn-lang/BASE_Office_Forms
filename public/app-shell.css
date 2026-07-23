@@ -3275,70 +3275,23 @@ html {
 .rfi-sort-arrow {
   font-size: 0.95em;
 }
-.rfi-table .rfi-grid-cell {
-  position: relative;
-  min-height: 58px;
-  padding: 0;
-  color: var(--shell-ink);
-  cursor: cell;
+/* Register cells are plain read-only summaries — the base table padding
+   applies; identity/subject/updated keep their own top-aligned padding. */
+.rfi-table tbody td,
+.rfi-table tbody th {
   vertical-align: top;
-  outline: none;
-}
-td.rfi-grid-cell > span:not(.rfi-cell-save-state) {
-  display: block;
-  padding-inline: 14px;
-}
-td.rfi-grid-cell > span:first-child:not(.rfi-cell-save-state) {
-  padding-top: 11px;
-}
-td.rfi-grid-cell > span:last-child:not(.rfi-cell-save-state) {
-  padding-bottom: 11px;
-}
-.rfi-grid-cell.is-selected {
-  z-index: 2;
-  box-shadow: inset 0 0 0 2px var(--app-accent);
-  background: #fffdfd;
-}
-.rfi-grid-cell.is-editing {
-  z-index: 3;
-  box-shadow: inset 0 0 0 2px var(--app-accent);
-  background: #fff;
-}
-.rfi-cell-editor {
-  width: 100%;
-  min-height: 58px;
-  padding: 11px 14px;
-  border: 0;
-  border-radius: 0;
-  background: #fff;
-  color: var(--shell-ink);
-  font: inherit;
-  resize: vertical;
-  outline: none;
-}
-select.rfi-cell-editor,
-input.rfi-cell-editor[type="date"] {
-  min-height: 58px;
 }
 .rfi-cell-save-state {
-  position: absolute;
-  right: 6px;
-  bottom: 4px;
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.94);
+  display: inline-block;
   color: var(--shell-muted);
-  font-size: 0.68rem;
-  line-height: 1.2;
+  font-size: 0.72rem;
+  line-height: 1.3;
 }
 .rfi-cell-save-state.is-saved {
   color: #27613b;
 }
 .rfi-cell-save-state.is-failed {
-  left: 6px;
-  right: 6px;
   color: var(--app-error);
-  white-space: normal;
 }
 
 /* Column 1 — RFI identity: number/draft label stacked over a plain status
@@ -3384,65 +3337,39 @@ input.rfi-cell-editor[type="date"] {
   font-size: 0.72em;
 }
 
-/* Column 2 — Subject: the dominant column. Default state is a workspace
-   link plus a compact, quiet Edit/Details pair — never both a link and an
-   ambiguous click-to-edit cell at once. Question preview and reference
-   metadata are quieter and smaller, and are omitted when there's nothing to
-   show. */
+/* Column 2 — Subject: the dominant column. Editable drafts render the
+   subject as a button that toggles the row's inline editor; locked rows
+   render it as a plain workspace link. Question preview and reference
+   metadata are quieter and smaller, and are omitted when nothing to show. */
 .rfi-table .rfi-cell-subject {
   width: auto;
-}
-/* Read-state td only (data-subject-cell) — the editing-state td reuses the
-   shared .rfi-grid-cell padding/position rules instead, so padding isn't
-   applied twice around the inline editor. */
-.rfi-table td[data-subject-cell] {
   padding: 11px 14px;
   vertical-align: top;
-  position: relative;
 }
-.rfi-subject-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
+.rfi-subject-open,
 .rfi-subject-link {
   display: -webkit-box;
+  max-width: 100%;
+  padding: 0;
   overflow: hidden;
   color: var(--ink);
+  background: none;
+  border: 0;
+  text-align: left;
   font: 600 13px/1.35 var(--sans);
   text-decoration: none;
+  cursor: pointer;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
+.rfi-subject-open:hover,
+.rfi-subject-open[aria-expanded="true"],
 .rfi-subject-link:hover {
   color: var(--app-accent);
   text-decoration: underline;
 }
+.rfi-subject-open:focus-visible,
 .rfi-subject-link:focus-visible {
-  outline: 2px solid var(--app-focus-ring);
-  outline-offset: 2px;
-}
-.rfi-edit-subject-trigger {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  color: var(--shell-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: 500 10.5px/1 var(--sans);
-}
-.rfi-edit-subject-trigger .app-icon {
-  width: 12px;
-  height: 12px;
-}
-.rfi-edit-subject-trigger:hover,
-.rfi-edit-subject-trigger:focus-visible {
-  color: var(--app-accent);
-}
-.rfi-edit-subject-trigger:focus-visible {
   outline: 2px solid var(--app-focus-ring);
   outline-offset: 2px;
 }
@@ -3521,92 +3448,73 @@ input.rfi-cell-editor[type="date"] {
   white-space: nowrap;
 }
 
-.rfi-edit-details-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  color: var(--shell-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: 500 10.5px/1 var(--sans);
-}
-.rfi-edit-details-trigger .app-icon {
-  width: 13px;
-  height: 13px;
-}
-.rfi-edit-details-trigger:hover,
-.rfi-edit-details-trigger:focus-visible,
-.rfi-edit-details-trigger[aria-expanded="true"] {
-  color: var(--app-accent);
-}
-.rfi-edit-details-trigger:focus-visible {
-  outline: 2px solid var(--app-focus-ring);
-  outline-offset: 2px;
-}
-
-/* Secondary editor panel — expands beneath the row for the long-form fields.
-   Hidden by default via [hidden]; only one row's panel is open at a time. */
-.rfi-secondary-row td {
+/* Inline editor panel — clicking a draft's subject expands this beneath the
+   row with every editable field as an ordinary form control. Hidden via
+   [hidden]; only one row's panel is open at a time. */
+.rfi-editor-row > td {
   padding: 14px 16px 16px;
   background: #faf8f6;
   border-bottom: 1px solid var(--shell-border-soft);
 }
-.rfi-secondary-panel {
+.rfi-editor-panel {
+  display: grid;
+  gap: 12px;
+}
+.rfi-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 20px;
 }
-.rfi-secondary-field {
-  display: grid;
-  gap: 4px;
+.rfi-editor-field {
+  min-width: 0;
+  margin: 0;
 }
-.rfi-secondary-label {
+.rfi-editor-field.is-wide {
+  grid-column: 1 / -1;
+}
+.rfi-editor-field > label {
+  display: block;
+  margin-bottom: 4px;
   color: var(--shell-muted);
   font: 600 10px/1.3 var(--sans);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.rfi-secondary-cell {
-  position: relative;
-  min-height: 38px;
-  background: #fff;
+.rfi-editor-field input,
+.rfi-editor-field select,
+.rfi-editor-field textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
   border: 1px solid var(--shell-border);
   border-radius: 4px;
-  outline: none;
-}
-.rfi-secondary-cell .rfi-cell-text {
-  display: block;
-  padding: 8px 10px;
+  background: #fff;
   color: var(--shell-ink);
-  white-space: pre-wrap;
+  font: inherit;
 }
-.rfi-secondary-cell.is-selected {
-  box-shadow: inset 0 0 0 2px var(--app-accent);
+.rfi-editor-field textarea {
+  min-height: 62px;
+  resize: vertical;
 }
-.rfi-secondary-cell.is-editing {
-  box-shadow: inset 0 0 0 2px var(--app-accent);
+.rfi-editor-field input:focus,
+.rfi-editor-field select:focus,
+.rfi-editor-field textarea:focus {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 0;
+  border-color: var(--app-accent);
 }
-.rfi-secondary-cell .rfi-cell-editor {
-  min-height: 38px;
-  padding: 8px 10px;
+.rfi-field-state {
+  display: block;
+  min-height: 14px;
+  margin-top: 3px;
 }
-.rfi-secondary-cell .rfi-cell-save-state {
-  right: 4px;
-  bottom: -20px;
-  background: none;
-  padding: 0;
-}
-
-/* Locked (non-draft) rows read as normal records — no dimming, no disabled
-   look — they simply have no edit affordances rendered at all. */
-.app-data-row.is-locked .rfi-grid-cell {
-  cursor: default;
+.rfi-editor-foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 900px) {
-  .rfi-secondary-panel {
+  .rfi-editor-grid {
     grid-template-columns: 1fr;
   }
 }

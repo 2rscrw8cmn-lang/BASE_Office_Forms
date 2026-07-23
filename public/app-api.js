@@ -176,6 +176,11 @@ export function createApiClient(options = {}) {
         `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`,
         { ...(opts || {}), method: "PATCH", body: input },
       ),
+    recordRfiResponse: (projectId, rfiId, input, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/respond`,
+        { ...(opts || {}), method: "POST", body: input },
+      ),
     uploadRfiAttachment: (projectId, rfiId, role, file, opts) => {
       const form = new FormData();
       form.append("role", role);
