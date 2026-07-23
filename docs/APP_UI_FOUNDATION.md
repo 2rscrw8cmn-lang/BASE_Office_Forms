@@ -1,199 +1,433 @@
 # BASE Application UI Foundation
 
-**Status:** Binding application design contract after UI-1 audit  
-**Updated:** 2026-07-23  
-**Applies to:** Authenticated application UI, Studio controls, and Document
-Library chrome  
-**Does not replace:** `public/engine.js`, controlled-document definitions, or
-official document output
+**Status:** Binding application design direction
+**Owner:** Product/architecture
+**Applies to:** Authenticated application workspace, Studio controls, and Document Library application chrome
+**Does not replace:** `public/engine.js`, controlled-document definitions, or official document output
 
-## 1. Current implementation truth
+## 1. Purpose
 
-The authenticated workspace now has a React/TypeScript/Vite compatibility host,
-but its route and feature behavior remains the existing browser-module shell.
-The shell, Dashboard, Projects, Project Overview, Records register, Record
-workspace, Revision workspace, shared API/format helpers, mobile drawer, and
-create/add-document flows are implemented. RFI register/workspace, Issuances,
-Team, and Administration remain route-level placeholders. The Document Library
-and Studio remain legacy pages; Studio has stabilized editor identity, preview,
-and save-state behavior but has not adopted the application component system.
+The application must look and behave like one coherent construction operations platform. Individual features may not invent their own page headers, buttons, badges, forms, filters, dialogs, tables, spacing, or responsive rules.
 
-UI-2 separates the authenticated entry point from document layout CSS: the app
-loads `public/brand-tokens.css`, generated `public/app/app.css`, and the
-compatibility bundle, while legacy document pages continue to load
-`public/base.css`. `public/base.css` imports the neutral token bridge for
-legacy compatibility but remains the owner of document geometry and renderer
-selectors. No feature routes have been migrated to React, and Radix, Lucide,
-Tabulator, and `BaseDataGrid` remain future work.
+The immediate problem is structural inconsistency:
+
+- controlled-document CSS and application CSS are loaded together;
+- application patterns exist mainly as repeated markup and CSS conventions rather than reusable components;
+- similar controls change size and appearance based on feature-specific selectors;
+- feature modules reproduce filtering, loading, errors, dialogs, responsive tables, and save states independently;
+- the current stylesheet has accumulated shell, feature, document-workspace, and exception rules in one place.
+
+This document establishes the binding UI direction and the boundary between the application and the controlled-document renderer.
+
+### Current implementation checkpoint — UI-1 and UI-2
+
+UI-1 audited Dashboard, Projects, Project Overview, the Records register,
+Record and Revision workspaces, RFI register/workspace, create/edit dialogs,
+Studio, and Document Library. The audit found that the existing shell has the
+strongest shared behavior (route focus, project context, API errors/request
+IDs, drawer behavior, and responsive thresholds), while page headers,
+registers, cards, dialogs, statuses, file rows, and history remain mostly local
+markup and CSS. The resulting component, state, and responsive contracts in
+this document are binding for later migrations.
+
+UI-2 has implemented its build and CSS boundary, but remains active until its
+runtime smoke tests and complete gate pass. The authenticated entry now loads
+neutral `public/brand-tokens.css`, Vite output in `public/app/`, and the
+existing shell through a React compatibility host. It no longer loads
+`public/base.css`. `public/base.css` continues to own controlled-document
+geometry and renderer selectors, while legacy Studio, Library, fill, and viewer
+pages retain their compatible renderer path. No feature route or domain rule
+has been migrated into React.
+
+The target for application headings is **Archivo**. Existing browser-module
+screens may still show Georgia because they retain their legacy shell CSS; UI-2
+does not need to perform that later typography migration. UI-3/UI-4 component
+and shell work must apply Archivo to migrated application headings without
+altering controlled-document typography.
+
+Spike 0 is complete: Tabulator is rejected for the RFI register because its
+documented keyboard model cannot preserve BASE's select-then-edit and
+non-editing arrow-key workflow. It remains a conditional candidate for future
+high-volume registers, logs, or exports, only through `BaseDataGrid` and only
+after a separate acceptance decision.
 
 ## 2. Product boundary
 
-The application workspace manages projects, records, revisions, files, RFIs,
-issuances, contacts, activity, administration, the Document Library, and
-Studio controls. The controlled-document system remains the authority for
-definition rendering, print layout, and official artifact presentation.
+### 2.1 Application workspace
+
+The application workspace manages projects, records, revisions, RFIs, submittals, files, issuances, contacts, activity, administration, the Document Library, and Studio controls.
+
+Target application stack:
 
 ```text
-Application UI: React + TypeScript + Vite (incremental target)
-              React Router + TanStack Query (target)
-              Radix behavior + BASE-owned components
-              Lucide through one icon component
-              Tabulator only behind BaseDataGrid
-
-Document UI:   public/engine.js + compatible JSON definitions + renderer CSS
+React + TypeScript + Vite
+├── React Router
+├── TanStack Query
+├── Radix behavior primitives
+├── BASE-owned component source and styling
+├── Tabulator through BaseDataGrid only if a future adoption is accepted
+└── application-only CSS
 ```
 
-Application components may host a renderer preview through the controlled
-adapter in `src/ui/app/renderer-preview.ts`, but may not reinterpret the
-definition or create a second document styling system.
+React is introduced incrementally. Existing routes and APIs remain authoritative during migration.
 
-## 3. Binding visual rules
+### 2.2 Controlled-document system
 
-### Typography
-
-Use Archivo for application controls and body text, JetBrains Mono sparingly
-for identifiers and metadata, and the existing renderer typography for official
-documents. Current application headings use Georgia through the shared legacy
-CSS; UI-2 must make that inheritance explicit and scoped rather than silently
-changing the heading voice. Normal application body text must remain readable
-(13–14 px minimum); supporting text is 12–13 px and metadata is at least 11 px.
-Uppercase mono is reserved for real identifiers and compact labels.
-
-### Tokens, spacing, and geometry
-
-The current semantic application aliases in `app-shell.css` and its 8/12/18/
-24/30 px scale are the observed starting point. Neutral brand values live in
-`public/brand-tokens.css`; application tokens remain in application CSS and
-renderer geometry/tokens remain in `public/base.css`. Features use semantic
-tokens, never raw color literals.
-Default controls are about 40 px high, isolated/mobile targets are at least
-44 px, radii are 4–6 px, and borders carry more structure than shadows.
-
-Maroon is for primary action, focus, selection, and active navigation. Success,
-warning, danger, and informational tones are semantic and textual; red is not
-an ordinary focus treatment.
-
-### Icons
-
-Lucide is the target application icon family, exposed through one BASE icon
-component. Current shell and legacy pages use local inline SVG families; those
-are preserve-until-migrated assets, not permission to add another icon family.
-Icons supplement labels and decorative icons are hidden from assistive
-technology.
-
-## 4. Page patterns
-
-### Directory/register
-
-Use for Projects, Records, RFIs, Issuances, and contacts:
+The controlled-document system remains framework-independent:
 
 ```text
-context → PageHeader → RegisterToolbar → register surface
-                    └ primary action when server capability allows
+public/engine.js
+public/base.css
+JSON definitions
+renderer adapters
+print and official artifact output
 ```
 
-The toolbar owns search, compact filters, sort, active chips, and result count.
-The surface owns loading, populated, first-use empty, filtered empty, and
-retryable error states. URL filter state belongs to the feature/router, not a
-grid implementation.
+The renderer remains the authority for document presentation. Application components may host a renderer preview but may not reinterpret the definition or create a second document styling system.
 
-### Record workspace
+### 2.3 Required separation
 
-Use for Record, Revision, RFI, Submittal, and Issuance detail:
+The main application must stop depending on document layout classes such as generic `.field`, `.grid`, `.section`, and document-level `body` rules. Shared brand values may be extracted into a neutral token file, but application components and document components must use separate selectors and stylesheets.
+
+## 3. Design principles
+
+1. **Project context first.** Project identity, record identity, status, responsible party, due date, and current work state remain visible where they affect decisions.
+2. **One visual language.** Shared problems use shared components. A feature may not create a local version of a button, dialog, badge, page header, filter toolbar, or empty state.
+3. **Compact, not cramped.** The system should support working registers and dense construction information while keeping labels and controls readable.
+4. **Maroon has a job.** BASE maroon communicates primary action, focus, selection, or active navigation. It is not general decoration.
+5. **Official actions are unmistakable.** Issue, publish, void, archive, delete, and other consequential transitions require explicit presentation and confirmation.
+6. **Status is textual and semantic.** Status never relies on color alone and uses one centralized vocabulary and tone map.
+7. **The backend remains authoritative.** Client capabilities improve UX but never replace server authorization, validation, lifecycle rules, numbering, or conflict checks.
+8. **Mobile is designed, not squeezed.** Mobile may use cards, sheets, prioritized metadata, or reduced columns. Desktop tables do not simply overflow onto phones.
+9. **Accessibility is a component requirement.** Focus, keyboard operation, labels, live announcements, reduced motion, and error relationships are part of component acceptance.
+10. **No silent design drift.** Raw colors, local button classes, direct Tabulator initialization, and custom modal implementations are prohibited outside the UI foundation.
+
+## 4. Visual direction
+
+The application should feel like a modern commercial construction operations platform: dependable, direct, calm, and information-dense. It should not resemble a marketing site, government form, consumer finance app, or generic component-library demo.
+
+### 4.1 Typography
+
+| Role                          | Standard                                                   |
+| ----------------------------- | ---------------------------------------------------------- |
+| Application interface         | Archivo                                                    |
+| Metadata, IDs, codes          | JetBrains Mono, used sparingly                             |
+| Official controlled documents | Existing renderer typography                               |
+| Application page headings     | Archivo; Georgia is removed from the application workspace |
+| Body text                     | 13–14 px minimum under normal conditions                   |
+| Supporting text               | 12–13 px                                                   |
+| Metadata                      | 11–12 px minimum                                           |
+
+Uppercase mono labels are reserved for true identifiers, compact metadata, and controlled terminology. They are not the default treatment for every caption.
+
+### 4.2 Color roles
+
+Exact token values are maintained in the application token source. Features use semantic names, not raw hex values.
+
+| Token role    | Usage                                                 |
+| ------------- | ----------------------------------------------------- |
+| Workspace     | Main application background                           |
+| Surface       | Panels, dialogs, cards, menus                         |
+| Border subtle | Internal divisions and quiet grouping                 |
+| Border strong | Controls and deliberate boundaries                    |
+| Text primary  | Main content                                          |
+| Text muted    | Supporting information                                |
+| Accent        | Primary action, focus, selected/active state          |
+| Success       | Completed, active, issued where semantically positive |
+| Warning       | Due soon, reconciliation, attention required          |
+| Danger        | Errors, destructive actions, invalid states           |
+| Info          | Neutral informational notice                          |
+
+Red is not used for ordinary focus or normal form borders. Error and danger treatments remain distinct from BASE maroon.
+
+### 4.3 Geometry and density
+
+| Element                | Standard                                           |
+| ---------------------- | -------------------------------------------------- |
+| Default control height | 40 px                                              |
+| Compact control height | 32–34 px                                           |
+| Minimum touch target   | 44 px where isolated or mobile                     |
+| Radius                 | 4–6 px                                             |
+| Page gutter            | Responsive token; consistent across page patterns  |
+| Panel shadow           | Minimal; borders carry most structure              |
+| Register row height    | Compact but readable; standardized by BaseDataGrid |
+
+Component variants must be explicit, such as `size="compact"`, rather than changed by a parent feature selector.
+
+### 4.4 Icons
+
+Use Lucide icons through one application icon component. Do not mix arbitrary SVG families, text glyphs, emoji, or CSS-generated symbols. Icons supplement labels; they do not replace consequential action labels unless the control is universally understood and has an accessible name.
+
+## 5. Approved page patterns
+
+Every route must use one of these patterns.
+
+### 5.1 Directory/register page
+
+Use for Projects, Records, RFIs, Submittals, Issuances, and contacts.
+
+Required structure:
 
 ```text
-Breadcrumbs → IdentityHeader → MetadataStrip → CurrentWorkPanel
-                                        → files/content/response
-                                        → history/activity as secondary context
+Project/global context
+PageHeader
+├── title and compact supporting context
+└── one primary action when authorized
+RegisterToolbar
+├── search
+├── compact filters
+├── sort where needed
+├── active filter chips
+└── result count
+Register surface
+├── loading
+├── populated
+├── filtered empty
+├── first-use empty
+└── error/retry
 ```
 
-Every important fact has one authoritative visual location. A current action is
-primary; secondary/destructive actions use an overflow or explicit confirmation.
-Issue, publish, void, archive, and delete are not ordinary saves.
+### 5.2 Record workspace
 
-### Dashboard/overview
+Use for Record, Revision, RFI, Submittal, and Issuance detail.
 
-Use one compact summary strip, then attention-first work, recent activity, and
-canonical workflow links. Empty attention is compact, not a large decorative
-blank area. Counts do not become a second copy of the same fact elsewhere on
-the page.
+Required structure:
 
-### Dialog/sheet
+```text
+Breadcrumbs
+IdentityHeader
+├── number/title/status
+├── primary current action
+└── overflow actions
+MetadataStrip
+CurrentWorkPanel
+Files/response/current content
+History or activity as secondary context
+```
 
-Use for concise create/edit work only. It has a labelled purpose, grouped
-fields, inline errors linked to fields, a submission error surface, explicit
-loading, stable footer actions, focus trap, Escape close, focus restoration,
-and mobile sheet behavior. Complex multi-step work belongs on a route.
+Duplicate facts are prohibited. Each important fact has one authoritative location in the visual hierarchy.
 
-### Studio/editor
+### 5.3 Dashboard/overview
 
-Studio keeps its document/definition navigation, editing surface, and renderer
-preview. Its controls, menus, dialogs, toasts, and save state migrate to the
-application system later; the preview remains renderer-owned.
+Use for cross-project Dashboard and Project Overview.
 
-## 5. Shared component contract
+Required structure:
 
-The target catalog contains Button, IconButton, TextInput, TextArea, Select,
-Checkbox, RadioGroup, DateInput, Field, Label, HelpText, ValidationMessage,
-Badge, Tooltip, Divider, Spinner, Skeleton, Dialog, AlertDialog, DropdownMenu,
-Popover, Tabs, Toast, CommandMenu, Collapsible, Drawer, AppShell, PageHeader,
-ProjectHeader, ProjectTabs, RegisterPage, RegisterToolbar, FilterChip, Panel,
-MetadataStrip, FileRow, ActivityFeed, EmptyState, ErrorState, PermissionState,
-FormDialog, WorkspaceSection, and Breadcrumbs.
+- one compact summary strip rather than many equal decorative cards;
+- work requiring attention as the primary section;
+- recent activity and navigation as secondary sections;
+- counts link to canonical destinations when available;
+- no large empty decorative areas.
 
-Radix may supply accessible behavior primitives. BASE owns component source,
-markup, styling, tokens, semantics, and tests; stock shadcn/template styling
-is not the final theme.
+### 5.4 Form dialog or sheet
 
-`BaseDataGrid` is the only Tabulator integration. It owns mount/destroy,
-density/theme, selection/focus, keyboard behavior, capability-based editing,
-save/rollback hooks, Saving/Saved/Failed/Conflict states, loading/empty
-overlays, responsive behavior, announcements, and test utilities. Feature code
-provides columns, data mapping, actions, and API callbacks. Adoption remains
-conditional on an accepted Spike 0 behavior and licensing report.
+Use for concise create/edit workflows.
 
-## 6. Standard state contract
+Required structure:
 
-Every data-backed feature covers the states that apply: initial loading,
-background refresh, populated, first-use empty, filtered empty, permission
-limited, request failure with retry, validation failure, saving, saved, version
-conflict with recovery, offline/network interruption for editable flows,
-destructive confirmation, and successful completion/navigation.
+- clear title and purpose;
+- grouped fields;
+- inline validation plus a submission error summary when needed;
+- explicit loading state;
+- stable footer with secondary and primary actions;
+- focus trap, Escape behavior, focus restoration, and mobile sheet layout.
 
-The current shell already provides session/project loading, generic not-found,
-retryable errors, request IDs, announcements, and stale-request protection.
-Current record/revision mutations surface server errors but do not yet provide a
-shared optimistic-concurrency conflict UI. RFI UI has no implementation yet.
-These are migration facts, not waived requirements.
+Complex work belongs on a route, not inside an oversized modal.
 
-## 7. Responsive and accessibility rules
+### 5.5 Studio/editor workspace
 
-Preserve the observed shell thresholds: 950 px for compact tablet behavior and
-620 px for phone navigation. Desktop may use a full register and pinned
-identity columns. Tablet wraps toolbars deliberately. Mobile uses the controlled
-drawer, cards or a reduced-column/detail pattern, a filter row/sheet, and keeps
-status, responsibility, due date, and next action reachable without horizontal
-scrolling. Studio's existing 1050 px and 760 px rules remain local until its
-controls migrate.
+Studio uses a three-part working layout:
 
-All routes use semantic landmarks, one meaningful heading, visible focus,
-keyboard-operable dialogs/menus/tabs/grids/drawers, accessible icon names,
-field-linked errors, text status, live announcements where useful, focus
-restoration, reduced-motion behavior, and WCAG AA contrast.
+- document/definition navigation;
+- controlled editing surface;
+- preview.
 
-## 8. Prohibited drift
+Controls, block cards, settings groups, save state, menus, and dialogs use the application component library. The preview continues to use the controlled-document renderer.
 
-Do not add feature-local button, badge, dialog, form, status vocabulary, focus
-ring, typography family, grid abstraction, or raw application color. Do not
-initialize or theme Tabulator outside `BaseDataGrid`. Do not put application
-styles in `public/base.css`, renderer styles in application CSS, or client-side
-role-string authorization in feature code. Do not delete legacy renderer assets
-until route parity and rollback evidence exist.
+## 6. Core component inventory
 
-## 9. Definition of done
+### 6.1 Primitives
 
-A UI change uses an approved pattern, preserves server authority and canonical
-URLs, covers applicable async/empty/error/permission/conflict states, works at
-desktop/tablet/mobile widths, tests keyboard/focus behavior, adds no silent
-visual convention, and records visual evidence, checks, limitations, and the
-next action in the program tracker. Official renderer output is unchanged.
+- Button
+- IconButton
+- TextInput
+- TextArea
+- Select
+- Checkbox
+- RadioGroup
+- DateInput
+- Field
+- Label
+- HelpText
+- ValidationMessage
+- Badge
+- Tooltip
+- Divider
+- Spinner
+- Skeleton
+
+### 6.2 Interactive components
+
+- Dialog
+- AlertDialog
+- DropdownMenu
+- Popover
+- Tabs
+- Toast
+- CommandMenu
+- Collapsible
+- Drawer
+
+Radix may provide behavior, but BASE owns the rendered styling and component contract.
+
+### 6.3 Application patterns
+
+- AppShell
+- PageHeader
+- ProjectHeader
+- ProjectTabs
+- RegisterPage
+- RegisterToolbar
+- FilterChip
+- Panel
+- MetadataStrip
+- FileRow
+- ActivityFeed
+- EmptyState
+- ErrorState
+- PermissionState
+- FormDialog
+- WorkspaceSection
+- Breadcrumbs
+
+### 6.4 BaseDataGrid
+
+If a future high-volume register adopts Tabulator, it must be wrapped by one
+`BaseDataGrid` integration. Feature modules may configure columns and feature
+actions but may not instantiate or theme Tabulator directly. The RFI register
+remains on its controlled custom table after Spike 0 rejected Tabulator's
+keyboard behavior.
+
+`BaseDataGrid` owns:
+
+- Tabulator mount/destroy lifecycle;
+- BASE theme and density;
+- standard header, cell, selection, focus, error, and disabled styles;
+- capability-based editability;
+- edit/save/rollback hooks;
+- Saving, Saved, Failed, and Conflict states;
+- row refresh without unnecessary grid replacement;
+- keyboard contract;
+- accessibility labels and announcements;
+- empty and loading overlays;
+- responsive behavior;
+- test utilities.
+
+The server remains authoritative for validation, permissions, lock versions, lifecycle, and official actions.
+
+## 7. Standard interaction states
+
+Every data-backed feature must intentionally implement:
+
+- initial loading;
+- background refreshing where applicable;
+- populated state;
+- first-use empty state;
+- filtered/no-results state;
+- permission-limited state;
+- request failure with retry;
+- validation failure;
+- saving;
+- saved confirmation where useful;
+- version conflict with recovery;
+- offline/network interruption when the feature supports edits;
+- destructive confirmation;
+- successful completion and navigation.
+
+A feature is incomplete when these states are left to generic browser behavior or undocumented assumptions.
+
+## 8. Responsive requirements
+
+### Desktop
+
+- persistent global navigation;
+- full project context;
+- registers may use Tabulator and pinned identity columns;
+- toolbars remain compact and aligned with the register width.
+
+### Tablet
+
+- navigation may compact but retains labels;
+- toolbars wrap deliberately;
+- detail workspaces reduce secondary metadata before primary actions.
+
+### Mobile
+
+- global navigation becomes a controlled drawer;
+- primary actions remain reachable without horizontal scrolling;
+- registers use either a deliberate reduced-column grid or a purpose-built card/detail pattern;
+- filters use a horizontal compact row or filter sheet;
+- editing workflows use sheets or routed detail when a cell editor is not practical;
+- status, responsible party, due date, and next action take priority.
+
+## 9. Accessibility requirements
+
+- Semantic landmarks and headings.
+- One meaningful page heading.
+- Visible focus for every interactive control.
+- Keyboard operation for menus, dialogs, tabs, grids, and drawers.
+- Accessible names for icon-only controls.
+- Error messages linked to fields.
+- Status conveyed through text, not color alone.
+- `aria-live` announcements for result counts, saves, errors, and route changes where needed.
+- Focus restoration after dialogs, drawers, and recoverable grid errors.
+- Reduced-motion behavior.
+- Minimum contrast consistent with WCAG AA.
+
+## 10. Dependency decisions
+
+### Approved direction
+
+- React, TypeScript, and Vite for the application workspace.
+- React Router for application routing.
+- TanStack Query for remote server state.
+- Radix primitives for complex accessible behavior.
+- Lucide for application icons.
+- Tabulator through `BaseDataGrid` only for a future accepted high-volume
+  register; it is not adopted for the RFI register.
+
+### Conditions
+
+Each dependency addition records purpose, license, maintenance signal, bundle/runtime impact, security posture, and replacement strategy. Dependencies may not move domain logic, permissions, or official workflow authority into the browser.
+
+## 11. Prohibited patterns
+
+Feature code may not introduce:
+
+- raw color literals except approved visualization needs;
+- new global button, badge, dialog, or form classes;
+- direct Tabulator initialization;
+- a second grid abstraction;
+- feature-specific focus rings;
+- custom modal/focus-trap implementations;
+- document styles inside application stylesheets;
+- application styles inside `public/base.css`;
+- client-derived authorization based on role-name strings;
+- duplicate status vocabularies;
+- unreviewed new typography or icon families;
+- silent replacement of visual-regression baselines.
+
+## 12. Definition of done for UI work
+
+A UI change is complete only when:
+
+- it uses approved page patterns and components;
+- desktop, tablet, and mobile behavior are implemented;
+- loading, empty, filtered empty, error, permission, and conflict states are covered as applicable;
+- keyboard and focus behavior are tested;
+- no new raw visual conventions are introduced;
+- API capabilities and server authority remain intact;
+- screenshots or visual evidence are attached;
+- the UI program tracker and current-structure documentation are updated;
+- tests and `npm run check` pass;
+- known limitations and the next recommended action are recorded.

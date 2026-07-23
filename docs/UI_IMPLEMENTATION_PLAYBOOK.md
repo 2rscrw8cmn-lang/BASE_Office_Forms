@@ -1,135 +1,534 @@
-# BASE UI Implementation Playbook
+# BASE UI Foundation Implementation Playbook
 
-**Status:** UI-2 CSS/build foundation completed 2026-07-23
-**Authority:** Use with `APP_UI_FOUNDATION.md` and `UI_PROGRAM_STATUS.md`.
+**Status:** Execution guide for the binding direction in `APP_UI_FOUNDATION.md`
+**Rule:** Complete phases in order unless a documented dependency requires a narrow overlap.
 
-## Required preamble for UI work
+## 1. How to use this playbook
 
-Work in repository `2rscrw8cmn-lang/BASE_Office_Forms`.
+Before starting any UI phase, an agent must read:
 
-Before changing code, read, in order: `README.md`, `docs/README.md`,
-`docs/APP_UI_FOUNDATION.md`, this playbook, `docs/UI_PROGRAM_STATUS.md`,
-`docs/CURRENT_APPLICATION_STRUCTURE.md`, `docs/ENGINEERING_STANDARDS.md`,
-`docs/TESTING_QUALITY_STRATEGY.md`, and the product/API/workflow documents for
-the phase. Inspect current `main` and open work before selecting a base. Do not
-merge unless explicitly requested.
+1. `README.md` — repository entry point and required workflow;
+2. `docs/README.md` — architecture index;
+3. `docs/APP_UI_FOUNDATION.md` — binding design direction;
+4. `docs/UI_PROGRAM_STATUS.md` — current phase, completed work, active branches, and next action;
+5. this playbook's phase section;
+6. the applicable product, API, workflow, testing, and current-structure documents.
 
-Every UI phase must leave the tracker current and must record tests, visual
-evidence or its absence, limitations, compatibility/rollback notes, and the
-next smallest safe action.
+At completion the agent must update the repository documentation described in the closeout section. A chat summary or PR description alone is not a durable handoff.
 
-## Program sequence
+## 2. Program sequencing
 
 ```text
-Spike 0  Tabulator behavior proof
+Spike 0  Tabulator behavior proof                              [complete: reject for RFI]
 UI-1     Audit, design contract, and decisions                 [complete]
-UI-2     Application/document CSS boundary + React/Vite        [complete]
-UI-3     BASE components + UI Lab
+UI-2     Application/document CSS separation + React/Vite foundation [active: runtime gate]
+UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
-UI-5     RFI register through BaseDataGrid
+UI-5     RFI register using BaseDataGrid + Tabulator
 UI-6     Projects and Records registers
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
-UI-10    Drift prevention, visual regression, and cleanup
+UI-10    Drift prevention, E2E, visual regression, and cleanup
 ```
 
-The RFI product vertical slice may proceed separately, but it may not establish
-competing page, status, form, or grid conventions.
+The RFI product workflow continues in parallel only where its work does not establish competing UI conventions. Any new production UI created before its migration must use existing shared patterns and remain easy to replace.
 
-## Spike 0 — Tabulator behavior proof
+## 3. Spike 0 — Tabulator behavior proof
 
-Prove mount/destroy, selection, keyboard editing, changed-only saves,
-validation, rollback, async states, conflict recovery, focus preservation,
-URL-owned filters, accessibility, mobile feasibility, testability, bundle
-impact, and licensing. No production feature may instantiate Tabulator directly.
-The output is a recommendation and a `BaseDataGrid` interface, not final
-styling.
+### Objective
 
-## UI-1 — Audit, design contract, and decisions
+Prove that Tabulator can support BASE register behavior without weakening server authority or accessibility.
 
-### Required screens
+### In scope
 
-Dashboard, Projects, Project Overview, Records register, Record workspace,
-Revision workspace, RFI register, RFI workspace, create/edit dialogs, Studio,
-and Document Library.
+- mount and destroy lifecycle;
+- conditional cell editability;
+- click selection and keyboard navigation;
+- Enter, Tab, Shift+Tab, Escape, arrow behavior;
+- changed-only save behavior;
+- async save states;
+- validation and rollback;
+- optimistic-concurrency conflict recovery;
+- focused row/cell preservation where practical;
+- URL filters remaining outside the grid;
+- desktop and mobile feasibility;
+- testing approach.
 
-### Required audit record
+### Out of scope
 
-For every screen, record its page pattern, primary user question and action,
-duplicated facts, shared components, local controls, typography/spacing/status
-inconsistencies, loading/empty/error/permission/conflict behavior, desktop /
-tablet / mobile behavior, and components to preserve, replace, or retire.
+- final visual design;
+- broad app framework migration;
+- new backend contracts unless a blocking gap is documented;
+- direct adoption across multiple registers;
+- official workflow changes.
 
-### Required decisions
+### Required output
 
-Record the application/document CSS boundary, incremental React/Vite strategy,
-Radix behavior versus BASE-owned component source, Lucide icon ownership,
-Tabulator through `BaseDataGrid`, token ownership, component catalog/UI Lab,
-and visual-regression approval rules. UI-1 changes documentation only; it does
-not migrate screens.
+Create or update a spike report containing:
+
+- tested Tabulator version and license;
+- prototype location;
+- behavior matrix;
+- gaps and workarounds;
+- recommended `BaseDataGrid` interface;
+- bundle and security impact;
+- decision: adopt, adopt with conditions, or reject;
+- files that must not be carried into production unchanged.
 
 ### Exit gate
 
-The team can describe one page header, register toolbar, workspace hierarchy,
-form/dialog contract, status vocabulary, async/error/conflict contract, and
-responsive rule without inventing a screen-specific exception. UI-2 may not
-start until the exact tracker condition in `UI_PROGRAM_STATUS.md` is met.
+No production adoption until all critical RFI keyboard, save, validation, permission, and conflict behaviors have an acceptable design.
 
-## UI-2 — CSS boundary and React/Vite foundation
+### Result
 
-Introduce a deterministic React/TypeScript/Vite application build and a
-compatibility mount while preserving all current routes, `/api/v2`, Studio,
-Library, `public/engine.js`, valid definitions, and official output. Extract
-neutral brand tokens only where justified. Keep `public/base.css` renderer-owned
-and prove the authenticated app no longer depends on document layout classes.
-Do not migrate feature screens in this phase. The completed implementation uses
-`public/app/` as the committed Cloudflare Pages asset output and keeps the
-existing `app-shell.js` behind `LegacyApplicationHost` until UI-4.
+Spike 0 is complete and rejects Tabulator for the RFI register. The prototype
+could not preserve the required select-then-edit/non-editing-arrow keyboard
+workflow through documented APIs. Retain the controlled custom RFI table.
+Tabulator may be reconsidered for a future high-volume register, log, or
+export surface through `BaseDataGrid`, with a new acceptance decision.
 
-## UI-3 — BASE components and UI Lab
+## 4. UI-1 — Audit, design contract, and decisions
 
-Build BASE-owned primitives, interactions, application patterns, the one icon
-component, and a development-only UI Lab using production components. Cover
-hover, focus, selected, disabled, loading, error, long text, empty, desktop,
-and mobile states. Add keyboard, accessibility, behavior, visual, and token
-enforcement tests.
+**Status:** Complete. The audit and binding decisions are recorded in the UI
+foundation, ADRs, and program tracker.
 
-## UI-4 — React shell and route parity
+### Objective
 
-Move navigation, session/project context, router integration, loading,
-not-found, error boundary, tabs, focus management, announcements, and mobile
-drawer behavior into the foundation. Keep compatibility mounts for unmigrated
-features. Prove canonical URLs, query/hash handling, history, safe 403/404,
-and selected project tabs.
+Turn design intent into a binding, reviewable contract and identify existing inconsistencies before code migration.
 
-## UI-5 — RFI register through BaseDataGrid
+### Required audit screens
 
-After Spike 0 is accepted, configure one `BaseDataGrid` for the RFI register.
-Preserve project-contact IDs, keyboard editing, draft-only capability, URL
-filters, Saving/Saved/Failed/Conflict states, row refresh, explicit workspace
-navigation, loading/empty/error states, and deliberate mobile behavior. Do not
-enable incomplete official issuance.
+- Dashboard;
+- Projects;
+- Project Overview;
+- Records register;
+- Record workspace;
+- Revision workspace;
+- RFI register;
+- RFI workspace;
+- create/edit dialogs;
+- Studio;
+- Document Library.
 
-## UI-6 through UI-10
+### For each screen document
 
-- **UI-6:** migrate Projects and Records to shared register patterns without
-  duplicating Record, Revision, or File identity.
-- **UI-7:** unify RFI, Record, and Revision detail routes around the workspace
-  hierarchy; issued/published/archived work remains immutable.
-- **UI-8:** migrate Dashboard, Overview, forms, Team, and Administration using
-  shared summaries, forms, states, and server-derived capabilities.
-- **UI-9:** migrate Library and Studio application chrome while preserving
-  compatible definitions and renderer output.
-- **UI-10:** add route journeys, responsive/visual baselines, accessibility
-  checks, raw-color/direct-Tabulator enforcement, dependency records, bundle
-  monitoring, and cleanup only after route parity and rollback confidence.
+- page pattern;
+- primary user question;
+- primary action;
+- duplicated facts;
+- shared components present;
+- local one-off controls;
+- typography and spacing inconsistencies;
+- status treatment;
+- loading, empty, error, permission, and conflict states;
+- desktop/tablet/mobile behavior;
+- components to preserve, replace, or retire.
 
-## Mandatory closeout
+### Decisions to record
 
-Update `UI_PROGRAM_STATUS.md` for every phase. Update
-`CURRENT_APPLICATION_STRUCTURE.md` when runtime, routes, dependencies, styles,
-components, or file locations change. Update ADRs and API/workflow/testing docs
-when their contracts change. The handoff must state branch/PR, exact scope,
-checks, screenshots or why unavailable, documentation, limitations, rollback,
-and the next phase. No UI phase is complete on a chat summary alone.
+- application/document CSS boundary;
+- React/Vite incremental migration;
+- Radix/shadcn source ownership approach;
+- Tabulator through `BaseDataGrid`;
+- icon system;
+- token source;
+- component catalog strategy;
+- visual-regression approval rules.
+
+### Deliverables
+
+- updated `APP_UI_FOUNDATION.md` where audit findings refine the rules;
+- ADR entries;
+- screen inventory or linked issue set;
+- UI program tracker update;
+- ordered implementation issues with dependencies.
+
+### Exit gate
+
+The team can answer, without inventing per-screen rules:
+
+- what a page header looks like;
+- what a register toolbar looks like;
+- what a detail workspace looks like;
+- how actions and statuses are presented;
+- how forms and dialogs behave;
+- how every standard async/error state appears;
+- what is application UI versus official document rendering.
+
+## 5. UI-2 — CSS separation and React/Vite foundation
+
+**Status:** Active. The implementation boundary is present; UI-2 may be marked
+complete only after the merged branch passes runtime smoke testing and the full
+exit gate.
+
+### Objective
+
+Create a safe technical boundary for the application UI without changing official document output.
+
+### Target structure
+
+```text
+public/
+├── brand-tokens.css       shared neutral BASE brand values
+├── base.css               controlled-document styles only
+├── engine.js              authoritative renderer
+└── generated app assets   Vite build output
+
+src/ui/
+├── app/
+├── components/
+├── features/
+├── grid/
+├── styles/
+└── test/
+```
+
+The exact structure may differ if documented, but document and application styling must remain separate.
+
+### Required work
+
+- add React, TypeScript, and Vite;
+- establish deterministic build output compatible with Cloudflare Pages;
+- remove `base.css` from the authenticated application entry point;
+- extract only neutral shared brand tokens where needed;
+- add application reset, semantic tokens, theme, and utilities;
+- provide an adapter for rendering controlled-document previews;
+- keep legacy Studio and Library pages operational;
+- preserve existing route URLs and `/api/v2` contracts;
+- add dependency/license documentation;
+- add regression tests proving renderer output and legacy pages remain stable.
+
+### Do not
+
+- rewrite the renderer;
+- migrate every screen in this PR;
+- move domain rules into React;
+- change storage, migrations, or authorization without an independently justified requirement;
+- import default shadcn or template styling as the final BASE theme.
+
+### Exit gate
+
+- application builds and deploys through current Cloudflare workflow;
+- official document output is unchanged;
+- authenticated app does not inherit generic document classes;
+- legacy routes remain available;
+- tests and build gate pass;
+- rollback is documented.
+
+## 6. UI-3 — Component library and UI Lab
+
+### Objective
+
+Create the reusable components that will prevent further visual drift.
+
+### Required component groups
+
+Implement the primitives, interactive components, and application patterns listed in `APP_UI_FOUNDATION.md`.
+
+### UI Lab
+
+Provide a development-only route or build artifact showing each component in:
+
+- default;
+- hover;
+- focus;
+- active/selected;
+- disabled;
+- loading;
+- error;
+- long-text;
+- empty;
+- desktop and mobile widths.
+
+The UI Lab must use the production components, not duplicate demo markup.
+
+### Testing
+
+- component behavior tests;
+- keyboard/focus tests for dialogs, menus, drawers, and tabs;
+- accessibility scan where supported;
+- visual screenshots for all shared patterns;
+- token enforcement tests or lint rules.
+
+### Exit gate
+
+A feature team can build a standard register or detail workspace without adding new global visual CSS.
+
+## 7. UI-4 — React application shell and route parity
+
+### Objective
+
+Move global application composition into the new foundation while keeping feature routes operational.
+
+### Scope
+
+- global navigation;
+- mobile navigation drawer;
+- session and organization context;
+- project context;
+- React Router route map;
+- TanStack Query provider and query conventions;
+- toast provider;
+- error boundary;
+- route loading and not-found states;
+- project tabs;
+- page containers;
+- focus and route announcements;
+- compatibility mounting for not-yet-migrated feature screens.
+
+### Required parity
+
+- all existing canonical URLs resolve;
+- query strings and hashes survive normalization;
+- browser back/forward behavior remains correct;
+- generic 403/404 treatment remains safe;
+- project tabs select correctly for descendants;
+- mobile drawer focus trap and restoration remain correct;
+- authorization stays server-derived.
+
+### Exit gate
+
+The shell is stable enough that feature migrations no longer need to modify global navigation or invent page containers.
+
+## 8. UI-5 — RFI register and BaseDataGrid decision
+
+### Objective
+
+Migrate the RFI register with the controlled custom-table interaction model.
+Do not adopt Tabulator for this route: Spike 0 rejected it because its keyboard
+behavior regressed. The detailed `BaseDataGrid` contract below is retained for
+a future accepted high-volume register, not as an RFI delivery prerequisite.
+
+### Required behavior
+
+- all current RFI fields and authoritative IDs;
+- click-to-select;
+- Enter to edit/save;
+- Tab and Shift+Tab save-and-move;
+- Escape cancel;
+- arrow navigation;
+- changed-only blur commits;
+- capability-based draft-only editing;
+- Saving, Saved, Failed, and Conflict states;
+- row refresh with URL/filter preservation;
+- contact selection by project-contact ID;
+- search, filters, active chips, sort, and result count;
+- inline Add RFI focused on Subject;
+- explicit navigation into workspace;
+- desktop frozen identity columns;
+- deliberate mobile behavior;
+- loading, empty, filtered empty, missing, and retry states.
+
+### Architecture rules
+
+- feature code does not instantiate Tabulator; any future accepted use
+  configures `BaseDataGrid`;
+- API remains authoritative;
+- role strings are not interpreted in the client;
+- official issuance remains outside grid editing;
+- filter URL state is owned by the feature/router rather than hidden in Tabulator internals.
+
+### Exit gate
+
+Behavioral parity is demonstrated through tests and visual evidence. Cleaner appearance alone is not acceptance. RFI acceptance is against the controlled
+custom-table keyboard contract, not the rejected Tabulator prototype.
+
+## 9. UI-6 — Projects and Records registers
+
+### Objective
+
+Standardize non-editable and lightly interactive registers using the same page and toolbar system.
+
+### Projects guide
+
+- compact project identity;
+- status, location, and updated information;
+- search and status filter;
+- capability-gated Create Project;
+- no redundant Open action column;
+- desktop table and mobile card/detail behavior;
+- canonical project navigation.
+
+### Records guide
+
+- stable record identity separated from revision and files;
+- filters for type, discipline, revision status, and archive visibility;
+- authoritative current revision;
+- drafts shown without impersonating the published revision;
+- file count and updated information;
+- capability-gated Add Document;
+- canonical record navigation.
+
+### Exit gate
+
+Projects, Records, and RFIs share the same page header, toolbar, chips, states, status components, density, and responsive logic.
+
+## 10. UI-7 — RFI, Record, and Revision workspaces
+
+### Objective
+
+Unify detail routes around the Record Workspace pattern.
+
+### Required hierarchy
+
+- breadcrumbs;
+- identity header;
+- one primary current action;
+- overflow menu for secondary/destructive actions;
+- metadata strip;
+- current work panel;
+- files/content/response section;
+- version history and activity as secondary context.
+
+### RFI workspace guide
+
+- subject/number/status prominent;
+- responsible party and due date visible;
+- one authoritative question/suggestion/reference area;
+- response separated from the question;
+- supporting, response, and clarification file roles visible;
+- issued/closed states read-only where required;
+- official issue action guarded and server-confirmed.
+
+### Record workspace guide
+
+- stable document identity;
+- current version/current work as the primary panel;
+- readable file types and roles;
+- version naming standardized;
+- archived/published immutability clear;
+- history not duplicated in header facts.
+
+### Revision workspace guide
+
+- exact revision context;
+- draft upload/publish actions only when permitted;
+- issued/published revisions immutable;
+- current files and change summary;
+- issue/publish actions never represented as ordinary save.
+
+### Exit gate
+
+The three workspaces clearly belong to the same product while retaining their domain-specific content.
+
+## 11. UI-8 — Dashboard, forms, Team, and Administration
+
+### Dashboard and Overview
+
+- compact score/summary strip;
+- attention-first hierarchy;
+- recent activity;
+- meaningful canonical links;
+- compact empty state.
+
+### Forms
+
+- use `FormDialog` or routed workspace according to complexity;
+- standard field grouping, validation, loading, error summary, and footer;
+- no feature-specific modal systems.
+
+### Team and Administration
+
+- separate operational project contacts from organization administration;
+- use standard registers and forms;
+- preserve deny-by-default permissions;
+- surface invitation, inactive, or unresolved states explicitly.
+
+### Exit gate
+
+All daily project-control routes use the application foundation. Remaining legacy UI is limited to the Library and Studio transition.
+
+## 12. UI-9 — Document Library and Studio
+
+### Document Library objective
+
+Clarify the distinction among templates, shared definitions, controlled documents, and project records. The Library is not a substitute for the project Records register.
+
+### Library guide
+
+- clear content type and lifecycle labels;
+- stable search/filter behavior;
+- application-standard page header and toolbar;
+- explicit Open, Use Template, Edit, Publish/Retire, or Add to Project actions according to authority;
+- avoid exposing edit tokens or legacy implementation terminology;
+- preserve current compatible definitions and links during migration.
+
+### Studio objective
+
+Replace accumulated control inconsistencies while preserving definition compatibility and renderer output.
+
+### Studio guide
+
+- application-standard toolbar, menus, dialogs, toast, and save state;
+- block cards visually correspond to preview blocks;
+- clicking a preview section selects its editor block where practical;
+- permanent block IDs;
+- controlled block/input types rather than arbitrary strings;
+- sections, add-block controls, and document settings are progressively disclosed;
+- renderer preview failure retains the last valid preview;
+- save/update/delete actions state their destination and consequence clearly;
+- no second renderer or incompatible definition format.
+
+### Exit gate
+
+Library and Studio use the application component system while official previews remain renderer-owned.
+
+## 13. UI-10 — Drift prevention and cleanup
+
+### Required controls
+
+- Playwright critical-route tests;
+- desktop, tablet, and mobile screenshots;
+- visual baseline review process;
+- accessibility scans and keyboard journeys;
+- lint restriction for raw application colors;
+- lint/code-review restriction against direct Tabulator use;
+- dependency and license register;
+- removal of retired CSS/JS only after route parity and rollback confidence;
+- bundle and performance monitoring.
+
+### Exit gate
+
+The old application shell and redundant CSS are removed or isolated, all approved routes use the shared foundation, and CI prevents ordinary feature work from recreating inconsistent patterns.
+
+## 14. Mandatory agent closeout
+
+Every implementation agent must complete all applicable items before handoff.
+
+### Repository updates
+
+- update `docs/UI_PROGRAM_STATUS.md` with completed scope, commit/PR, tests, screenshots, limitations, and next recommended action;
+- update `docs/CURRENT_APPLICATION_STRUCTURE.md` when runtime, routes, dependencies, styles, components, or file locations change;
+- update this playbook or `APP_UI_FOUNDATION.md` if an approved implementation decision changes the contract;
+- update ADRs for significant technical decisions;
+- update API/workflow/data/testing docs when their contracts change;
+- update README links if a new primary guide is created.
+
+### Pull request evidence
+
+- problem and scope;
+- architecture and UI-foundation references;
+- dependency/license impact;
+- API/schema/security impact;
+- migration/rollback impact;
+- test results;
+- desktop and mobile screenshots for UI work;
+- accessibility/keyboard checks;
+- known limitations;
+- explicit next step.
+
+### Return message
+
+The final agent response must state:
+
+1. branch and PR;
+2. exact scope completed;
+3. tests and checks run;
+4. screenshots or why unavailable;
+5. documentation updated;
+6. known limitations;
+7. next recommended prompt/phase;
+8. confirmation that no merge occurred unless the user explicitly requested a merge.
+
+An agent may not report “done” while leaving the tracker and current-structure documentation stale.

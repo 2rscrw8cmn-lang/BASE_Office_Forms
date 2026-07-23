@@ -37,6 +37,8 @@ Browser
 ├── public/builder.html and public/studio.js  definition editor
 ├── public/form-generator.html                fillable form surface
 ├── public/viewer.html                        public definition viewer
+├── public/pdf-export.js                      controlled-document PDF export helper
+├── public/vendor/pdf-lib.min.js              vendored PDF export runtime
 ├── public/library-api.js                     legacy /api client
 ├── public/engine.js                          renderer (preserved)
 ├── public/base.css                           document/renderer CSS (preserved)
@@ -113,9 +115,10 @@ The authenticated shell now uses an application/document CSS boundary:
   imports the neutral bridge for legacy document pages and retains document
   geometry and renderer selectors. `app-shell.css` adds semantic shell aliases
   and an 8/12/18/24/30 px spacing scale derived from existing usage.
-- **Typography:** Archivo remains the application and control face, JetBrains
-  Mono remains the metadata/code face, and Georgia is reserved for page and
-  section headings.
+- **Typography:** Archivo is the target application heading and control face;
+  JetBrains Mono remains the metadata/code face. Existing legacy browser
+  headings may still use Georgia until their later UI-phase migration. UI-2
+  deliberately establishes the boundary without performing that migration.
 - **Color:** the shell uses BASE maroon, ink, paper, and the existing warm-gray
   direction. It does not add a separate application palette or gradients.
 - **Controls:** quiet white bordered controls, the existing maroon primary
@@ -442,6 +445,11 @@ navigates to it, and the viewer now carries the same fill, answer
 import/export, and PDF-export capabilities. It remains reachable at its
 direct URL for existing bookmarks, but it is a candidate for retirement in a
 future cleanup rather than a destination to surface in navigation.
+
+`pdf-export.js` and the vendored `pdf-lib` runtime preserve the current
+controlled-document PDF export path. They remain outside the React/Vite host;
+the UI-2 merge retains this current-main capability rather than moving document
+rendering or PDF generation into React.
 
 The former root shared-library markup is preserved at `library.html`,
 continuing to load `engine.js`, `library-api.js`, `global-search.js`, and

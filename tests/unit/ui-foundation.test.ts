@@ -25,11 +25,12 @@ describe("UI-2 application boundary", () => {
     expect(appShellCss).toContain(".app-shell-body");
   });
 
-  it("keeps the official renderer source byte-for-byte stable", () => {
-    // UI-2 changes the application entry boundary only. This guard makes an
-    // accidental renderer edit fail loudly until it has an intentional review.
+  it("keeps the reviewed renderer source byte-for-byte stable", () => {
+    // This baseline includes the intentional current-main PDF-export merge.
+    // UI-2 changes the application entry boundary only, so a later renderer
+    // edit fails loudly until it receives an intentional review.
     expect(createHash("sha256").update(engineSource).digest("hex")).toBe(
-      "0c8c1567b6e62ad4ef69dcf5db94dd9abfdb812577b7439fb134ceb3a5d57e5b",
+      "ee7e27ed3e36305057e7d3ab6bacf069efef00fb5d715e234c90bd00f5e4c128",
     );
   });
 

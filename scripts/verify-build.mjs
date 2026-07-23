@@ -14,6 +14,8 @@ const requiredFiles = [
   "public/builder.html",
   "public/studio.js",
   "public/engine.js",
+  "public/pdf-export.js",
+  "public/vendor/pdf-lib.min.js",
   "public/library-api.js",
   "public/form-generator.html",
   "public/viewer.html",

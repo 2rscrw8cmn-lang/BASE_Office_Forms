@@ -1,183 +1,177 @@
 # BASE UI Program Status
 
-**Status date:** 2026-07-23  
-**Current phase:** UI-2 — CSS separation and React/Vite foundation complete
-**Authority:** Living handoff for the UI foundation program
+**Status date:** 2026-07-23
+**Current phase:** UI-2 — CSS separation and React/Vite foundation active
+**Active PR:** [#41 — UI-2 — CSS separation and React/Vite foundation](https://github.com/2rscrw8cmn-lang/BASE_Office_Forms/pull/41) (`ui-2-css-react-vite-foundation`)
+**Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 ## 1. Current direction
 
-Preserve the D1/R2 domain model, authorization, numbering, lifecycle, revision
-and file identity, immutable issuance architecture, JSON definitions,
-`public/engine.js`, and official document output. Introduce React + TypeScript +
-Vite incrementally for application UI, separate application CSS from renderer
-CSS, use Radix behavior with BASE-owned components, use Lucide through one icon
-component, and evaluate Tabulator only through `BaseDataGrid`.
+- Preserve the document-control domain, D1/R2 model, authorization,
+  revision/file identity, immutable issuance architecture, compatible JSON
+  definitions, `public/engine.js`, and official document output.
+- Introduce React + TypeScript + Vite incrementally for the authenticated
+  workspace; preserve canonical routes, `/api/v2`, Cloudflare Pages, Studio,
+  and Document Library while feature routes migrate later.
+- Keep application CSS separate from controlled-document CSS. Only neutral
+  brand tokens may cross the boundary.
+- Use Radix behavior with BASE-owned components and Lucide through one icon
+  component when components are introduced in UI-3.
+- Do not adopt Tabulator for the RFI register. Spike 0 rejected it for a
+  documented keyboard regression; reassess it only for a future high-volume
+  register, log, or export through `BaseDataGrid`.
 
-UI-2 adds the React/TypeScript/Vite build and compatibility host without
-migrating feature routes or changing domain behavior. The existing shell still
-owns all current authenticated route behavior; Studio and Document Library
-remain legacy pages.
+## 2. Completed discovery and decisions
 
-## 2. Audit completion
+### Spike 0 — complete, rejected for the RFI register
 
-The audit covered the requested screens against current `main` and
-`docs/CURRENT_APPLICATION_STRUCTURE.md`:
+The Tabulator RFI prototype proved save, validation, conflict, URL-state, and
+mobile-card behavior, but its documented API cannot faithfully preserve BASE's
+click-to-select, Enter/type-to-edit, and non-editing arrow-key workflow. The
+expected RFI list size also does not justify the lazy-loaded ~102 KB gzip
+dependency. Keep the controlled custom table. See
+`docs/spikes/TABULATOR_RFI_REGISTER_SPIKE.md` on the spike branch for the
+behavior matrix and visual evidence. A later high-volume use needs a new
+decision, assistive-technology evidence, and bundle plan.
 
-| Surface | Current pattern and task | Facts / shared vs local | State and responsive audit | UI-1 disposition |
-|---|---|---|---|---|
-| Dashboard | Dashboard/overview; answer “what needs attention today?” and open the canonical revision, issue, RFI, or issuance route. | Reuses shell, API, format, status, reason, and activity helpers. Counts overlap with Project Overview when the user narrows scope; attention items are locally rendered. | Loading, partial empty, full empty, retry/error, request ID, stale-request guard, and announcements exist. Shell drawer/table-width rules apply. | Preserve information hierarchy; replace local summary/attention markup with shared patterns in UI-8. |
-| Projects | Directory/register; find a project and create one when authorized. | Shared shell/API/status/date helpers; local toolbar, table, mobile cards, and Create Project dialog. Project identity and Open affordance are repeated across desktop/card variants. | Search/filter/no-results, loading, retry/error, capability-gated create, keyboard dialog behavior. Table becomes cards on mobile. | Preserve server fields and capability gate; replace local register/dialog styling in UI-6/UI-8. |
-| Project Overview | Dashboard/overview; understand project health and choose Records, Issuances, RFIs, or Team. | Reuses project header/tabs and shared format/activity helpers. Summary, attention, activity, and shortcuts are local; counts overlap with Dashboard and project header status. | Loading, empty attention, retry/error, not-found via project access, announcements. Shared 950/620 shell behavior. | Preserve attention-first layout; replace local metric/shortcut blocks with shared overview patterns in UI-8. |
-| Records | Directory/register; locate a stable document identity and open its current work. | Shared shell/API/format/options/dialog primitives, but local filters, desktop table, mobile cards, archive control, and Add Document flow. Record, current revision, draft, and file facts are intentionally distinct but visually repeated between table/card/detail. | Loading, filtered empty, retry/error, capability-gated add/edit/archive, recoverable staged create/upload failure with request ID. Mobile cards are deliberate. | Preserve authoritative read model and terminology; replace local register surface with shared register pattern in UI-6. |
-| Record workspace | Record workspace; understand stable document identity and open current/history work. | Shell/project context plus local breadcrumbs, identity header, metadata, current-work panel, files, history, dialogs. Title/number/type/current version appear in multiple hierarchy levels. | Loading, not-found, server mutation errors, archive/read-only state, upload/publish loading; no shared conflict recovery. Desktop table + mobile history cards. | Preserve identity/revision/file separation; consolidate duplicate facts under Workspace pattern in UI-7. |
-| Revision workspace | Record workspace; upload files or publish a permitted draft revision. | Reuses shell, API, format, status/button/dialog CSS, but local revision identity, file list, publish/upload dialogs, and read-only notices. Record title, revision label/number, status, files, and issuance context recur. | Loading, missing/error, upload/publish busy states, invalid lifecycle/read-only states, request IDs; no standardized conflict recovery. Mobile stacks files/history. | Preserve immutable published/superseded behavior and explicit publish action; replace local workspace chrome in UI-7. |
-| RFI register | Route placeholder today; eventual directory/register task is to find, filter, edit eligible drafts, and open an RFI workspace. | API/domain lifecycle exists, but no browser register, shared grid, contact picker, or UI status implementation exists. | No RFI UI loading/empty/error/conflict/responsive behavior exists. Spike 0 must prove keyboard/edit/save/conflict behavior first. | Do not infer current completion. Build in UI-5 through `BaseDataGrid`. |
-| RFI workspace | Route placeholder today; eventual workspace task is to review question, responsibility, due date, response, files, and lifecycle action. | API supports detail, responses, and transitions; no browser component or shared workspace implementation exists. | No UI states exist; server 409 lifecycle errors are authoritative. | Build after RFI register and shared workspace contract in UI-7; keep official issue actions gated. |
-| Create/edit dialogs | Form dialog/sheet; create a project, record, revision/file, or RFI draft with validation and server confirmation. | Project, record, add-document, record-detail, and revision dialogs each implement local markup/field grouping. Shared `app-dialog-*` CSS and API/error formatting exist, but no component library. | Focus trap/Escape/restoration and inline errors are strongest in project/add-document flows; server error/request IDs exist; conflict treatment is not a common pattern. Mobile dialogs become full-width/stacked. | Preserve recoverability and server authority; replace local dialog systems with `FormDialog`/`AlertDialog` in UI-3/UI-8. |
-| Studio | Legacy editor workspace; edit definitions, preview, save/library, import/export, and template actions. | Local three-part editor/preview, inline SVG icon family, native controls, local panels, toast/state system, and renderer. Definition title/type/number/settings repeat in editor and preview by design. | Draft/Saving/Saved/Offline/Error state and last-valid-preview fallback exist; local 1050/760 breakpoints; library/template API errors are local. | Preserve definition compatibility, renderer, permanent IDs, and last-valid preview; replace chrome only in UI-9. |
-| Document Library | Legacy directory/library; search/open/use/edit/delete/share compatible definitions. | Local top bar, search/table rows, legacy API, edit/view links and tokens. It is intentionally distinct from project Records but terminology and action treatment are not application-standard. | Legacy loading/error/empty behavior is not under the shell state contract; desktop-first table and local responsive rules. No shared conflict state. | Preserve routes, definitions, and links; clarify content/lifecycle distinction and migrate chrome in UI-9. |
+### UI-1 — complete
 
-## 3. Cross-screen findings
+The audit covered the required screens and produced the binding contracts in
+`APP_UI_FOUNDATION.md`, `UI_IMPLEMENTATION_PLAYBOOK.md`, and the ADR record.
 
-- The shell has the strongest existing shared foundation: project context, tabs,
-  route focus, drawer behavior, API errors/request IDs, semantic status badges,
-  page containers, and responsive thresholds.
-- The current implementation still duplicates feature CSS and markup for page
-  headers, registers, cards, action buttons, dialogs, status tones, file rows,
-  and history. The repetition is the main migration target; it is not evidence
-  that React components already exist.
-- Application headings use Georgia through the currently shared CSS, while
-  controls/body use Archivo and identifiers use JetBrains Mono. The prior
-  “Georgia removed” rule was not truthful and is corrected in the foundation.
-- Status is partly semantic but not centralized: project status maps most values
-  to neutral, record/revision status classes differ, dashboard uses reason
-  badges, Studio uses Draft/Saving/Saved/Offline/Error, and Library has local
-  action/version text. UI-3 must define one vocabulary and tone map.
-- Async handling is mature for implemented app routes but conflict recovery is
-  not a shared client behavior. RFI UI is absent even though RFI API/domain
-  services exist. No phase may claim the RFI register/workspace is implemented.
-- UI-2 now keeps document geometry in `public/base.css`, neutral brand values in
-  `public/brand-tokens.css`, and application entry CSS in generated
-  `public/app/app.css` plus `public/app-shell.css`. The authenticated entry no
-  longer loads `base.css`; legacy document pages continue to do so through the
-  token bridge.
+| Surface                      | Current disposition                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| Dashboard / Project Overview | Preserve attention-first hierarchy; migrate shared summary/activity patterns in UI-8.               |
+| Projects / Records           | Preserve server read models and capability gates; replace local register chrome in UI-6.            |
+| Record / Revision workspaces | Preserve document, revision, and file identity; unify workspace chrome in UI-7.                     |
+| RFI register / workspace     | Browser route remains outside UI-2; use the controlled table, not Tabulator, in its delivery phase. |
+| Create/edit dialogs          | Preserve validation, recovery, and server authority; move to shared dialog patterns in UI-3/UI-8.   |
+| Studio / Document Library    | Preserve renderer-compatible operation; migrate application chrome in UI-9.                         |
 
-## 4. Decisions recorded by UI-1
+The audit found that the shell already centralizes project context, route focus,
+mobile drawer behavior, API errors/request IDs, and responsive thresholds, but
+headers, registers, cards, dialogs, status tones, file rows, and history remain
+mostly local markup and CSS. The application heading target is Archivo; UI-2
+does not perform the later legacy-Georgia typography migration.
 
-1. **Application/document CSS separation:** keep `public/engine.js`, compatible
-   definitions, and renderer CSS authoritative; UI-2 extracts only neutral
-   brand tokens and stops authenticated application routes from depending on
-   document classes. Full retirement of legacy document CSS imports remains a
-   later cleanup after route parity.
-2. **Incremental React/Vite:** introduce a deterministic application build and
-   compatibility mount first; migrate route-by-route while preserving canonical
-   URLs, `/api/v2`, legacy Library/Studio operation, and rollback to static
-   mounts. UI-1 established the decision; UI-2 adds only the compatibility
-   runtime and build dependencies needed for that boundary.
-3. **Radix/BASE components:** Radix may provide behavior primitives; BASE owns
-   source, styling, tokens, markup, accessibility contract, and tests. Do not
-   ship stock shadcn/template styling as the theme.
-4. **Lucide:** use one BASE icon component backed by Lucide for migrated app
-   UI. Existing inline SVGs are preserved until their owning route migrates.
-5. **Tabulator/BaseDataGrid:** feature code may never instantiate Tabulator.
-   Adoption is conditional on Spike 0 proving keyboard, save, validation,
-   conflict, permission, accessibility, mobile, bundle, and licensing needs.
-6. **Read-only registers:** UI-1 leaves the choice between `BaseDataGrid` and a
-   lighter shared table open for Projects/Records; RFI edit behavior must be the
-   first production grid proof.
-7. **Visual approval:** every shared pattern needs desktop/tablet/mobile
-   evidence and keyboard/accessibility checks. A baseline changes only with a
-   recorded reason and reviewer approval; visual polish alone is not parity.
+## 3. UI-2 active work — PR #41
 
-## 5. Ordered implementation slices
+### Implemented on the branch
 
-| Slice | Issue-ready scope | Depends on |
-|---|---|---|
-| UI-1 | Restore the program contract, complete screen audit, record decisions, and set the UI-2 gate. | Current `main`; complete |
-| Spike 0 | Prove Tabulator behavior and publish `BaseDataGrid` contract, version/license, gaps, and tests. | Current RFI API/domain; may run in parallel with UI-2 |
-| UI-2A | Extract neutral brand tokens; split application and renderer CSS; prove document output and legacy pages unchanged. | UI-1; current-main baseline; complete |
-| UI-2B | Add React/TypeScript/Vite deterministic build, compatibility mount, and rollback path without feature migration. | UI-2A; complete |
-| UI-3A | Build BASE primitives, status map, icon component, dialogs, focus, and state primitives. | UI-2B |
-| UI-3B | Build PageHeader, RegisterToolbar, workspace patterns, responsive helpers, and UI Lab. | UI-3A |
-| UI-4 | Migrate shell/navigation/context/router/query/error/focus parity. | UI-3B |
-| UI-5 | Build RFI register through `BaseDataGrid`, including keyboard saves and conflict recovery. | UI-4; accepted Spike 0 |
-| UI-6 | Migrate Projects and Records with shared read-only register/table contract. | UI-5; UI-3B |
-| UI-7 | Migrate RFI, Record, and Revision workspaces. | UI-5; UI-6; shared workspace patterns |
-| UI-8 | Migrate Dashboard, Overview, forms, Team, and Administration. | UI-4; UI-6; UI-7 |
-| UI-9 | Migrate Library and Studio application chrome in reviewable slices. | UI-3; UI-8; renderer regression coverage |
-| UI-10 | Add enforcement, E2E/visual/accessibility baselines, bundle monitoring, and retire redundant app CSS only after parity. | UI-4 through UI-9 |
+- React/TypeScript/Vite deterministic build emitted to `public/app/` for
+  Cloudflare Pages.
+- `LegacyApplicationHost` boots the existing `app-shell.js`; no feature route
+  or domain behavior has been migrated into React.
+- Authenticated `index.html` no longer loads `public/base.css`; neutral brand
+  values live in `public/brand-tokens.css`, while `base.css` remains renderer
+  and controlled-document CSS.
+- Controlled renderer-preview adapter, renderer source stability regression,
+  dependency/license record, build verification, local-development guidance,
+  and rollback notes are present.
 
-## 6. Exact UI-2 start condition
+### Current blockers
 
-UI-2 may start only when all of these are true:
+1. Resolve or formally accept the four high-severity transitive `sharp`
+   advisories reported by `npm audit`. The only offered remediation is a
+   breaking `npm audit fix --force` upgrade of the Cloudflare test/tooling
+   chain, which this UI-2 PR must not apply implicitly.
+2. Capture the authenticated preview Project Overview response: HTTP status,
+   API error code, request ID, and response body, then compare the same request
+   against current main. Direct requests from this environment stop at the
+   Cloudflare Access HTML sign-in page, so they cannot supply API evidence.
+3. Run the browser smoke suite against the merged preview, including a real
+   direct-route refresh, history navigation, mobile navigation, and controlled
+   document preview.
+4. Update PR #41 evidence with the resolved conflict decisions, smoke results,
+   runtime diagnosis, rollback, limitations, screenshots or factual absence,
+   and next step.
 
-- this UI-1 document set is present on the selected current-main base;
-- Spike 0 is accepted, or its open gaps are explicitly recorded as non-blocking
-  for the CSS/build portion and cannot affect the renderer boundary;
-- the current-main baseline passes the existing build/check gates relevant to
-  the touched surfaces, including renderer/legacy route regression evidence;
-- the UI-2 branch names its CSS rollback boundary and does not overlap an
-  uncoordinated broad `app-shell.css` rewrite;
-- UI-2's first PR is limited to CSS/token/build separation and compatibility
-  mounting; it does not migrate React feature routes.
+UI-2 must remain active until every blocker above is resolved. Its
+implementation work is not permission to mark the phase complete early.
 
-UI-2 is complete when the implementation and regression checks listed in the
-latest-work section pass. The current production follow-up is remediation or
-formal acceptance of the existing Cloudflare development-tool audit findings;
-do not use `npm audit fix --force` without a dependency review.
+### Automated validation after merge
 
-## 7. Open questions
+`npm install` regenerated `package-lock.json` from the resolved manifest.
+The 2026-07-23 `npm run check` run passed Prettier, generated Cloudflare types,
+TypeScript, ESLint, 231 unit tests, 101 Worker integration tests, the Vite
+application build, static asset verification, and Pages Functions compilation.
+It stopped at `npm audit --audit-level=high` with four high-severity transitive
+`sharp` findings through Wrangler/Miniflare; `npm run security:secrets` was
+then run separately and passed (243 tracked files). No browser screenshots or
+interactive smoke evidence can be produced here because no Access-authorized
+browser is available.
 
-- Which Radix package set should UI-3 adopt while preserving the pinned React /
-  Vite runtime documented in `docs/UI_DEPENDENCIES.md`?
-- Which dependency owner will remediate or accept the existing high-severity
-  Cloudflare dev/test dependency chain reported by `npm audit`?
-- Which visual-regression runner and artifact retention policy will be approved?
-- After Spike 0, which read-only Projects/Records surfaces use `BaseDataGrid`
-  versus a lighter shared table?
-- What is the smallest safe conflict payload/recovery contract for the future
-  RFI grid and editable workspaces?
+### Preview Project Overview investigation (2026-07-23)
 
-## 8. Phase table
+The requested authenticated failure cannot be reproduced from this execution
+environment because Cloudflare Access intercepts the request before the Pages
+Function. A direct request to the PR preview and the same request to the
+current-main deployment both returned `302 Found` with
+`Www-Authenticate: Cloudflare-Access`, a Cloudflare HTML `302 Found` body, and
+no application error code or `x-request-id`. The observed PR-preview edge
+request was `CF-RAY: a1fb58d33c0df436-MIA`; this is an Access response, not an
+API request ID.
 
-| Phase | Status | Gate |
-|---|---|---|
-| Spike 0 — Tabulator | In progress / separate evidence required | Accepted behavior and adapter recommendation |
-| UI-1 — Audit and decisions | Complete | This document, foundation, playbook, ADR entries |
-| UI-2 — CSS + React/Vite | Complete; audit follow-up open | Build, route-boundary, renderer, and rollback evidence below |
-| UI-3 — Components + UI Lab | Not started | UI-2 merged |
-| UI-4 — React shell | Not started | UI-3 patterns stable |
-| UI-5 — RFI register | Not started | UI-4 + accepted Spike 0 |
-| UI-6 — Projects + Records | Not started | Shared register contract |
-| UI-7 — Workspaces | Not started | Shared workspace contract |
-| UI-8 — Dashboard/forms/admin | Not started | Shared shell/forms stable |
-| UI-9 — Library + Studio | Not started | Application foundation stable |
-| UI-10 — Enforcement/cleanup | Not started | Route parity and baselines |
+The source for `/api/v2/projects/:projectId/overview` and its D1 read model is
+identical on the UI-2 branch and current main. The configured remote D1
+database contains the overview tables and applied migrations, and the overview
+count/activity queries succeed for a live project. No preview migration or
+binding change is justified from that evidence. Capture the authenticated API
+status, error code, request ID, and JSON body in an Access-authorized browser
+before classifying the report as a code failure or preview drift; then apply
+and prove any required correction.
 
-## 9. Latest completed work
+## 4. UI-2 exit gate
 
-- **Phase:** UI-2
-- **Branch/PR/commit:** local implementation; no PR created or merged
-- **Scope:** added the pinned React/TypeScript/Vite compatibility build, split
-  neutral brand tokens from document CSS, preserved the legacy shell behind
-  `LegacyApplicationHost`, added the controlled renderer-preview adapter,
-  documented dependencies and rollback, and kept all feature routes on their
-  existing implementations.
-- **Checks:** `npm run format:check`, `npm run lint`, `npm run typecheck`,
-  `npm run build`, `npm run test:unit`, `npm run functions:build`, and
-  `npm run security:secrets` pass. `npm audit --audit-level=high` reports four
-  high-severity findings in the existing Cloudflare development/test chain
-  (`@cloudflare/vitest-pool-workers` → `miniflare`/`sharp`/`wrangler`); no
-  force-fix was applied. Renderer unit coverage and the new UI-foundation
-  boundary tests pass.
-- **Screenshots:** not produced; UI-2 changes the entry/build boundary and does
-  not migrate feature-screen markup. Browser visual baselines remain a UI-10
-  deliverable.
-- **Known limitations:** Spike 0 remains separate; RFI UI, shared BASE
-  components, Radix, Lucide, Tabulator, `BaseDataGrid`, and React feature-route
-  migration remain future work. Generated assets in `public/app/` are required
-  for the committed Pages deployment output.
-- **Rollback:** follow [`UI2_ROLLBACK.md`](UI2_ROLLBACK.md) to restore the
-  previous static entry while retaining API, data, and renderer assets.
-- **Next action:** resolve or explicitly accept the dependency audit findings,
-  then begin UI-3 primitives and UI Lab without moving feature behavior yet.
+UI-2 is complete only when all of these are true:
+
+- the merged application builds and deploys through the current Cloudflare
+  Pages workflow;
+- official document output and valid definitions remain compatible;
+- the authenticated app does not inherit generic document classes or
+  document-level body rules;
+- legacy Studio and Document Library routes remain available;
+- session, Dashboard, Projects, Project Overview, Records, direct refresh,
+  browser history, controlled preview, and mobile navigation pass smoke tests;
+- `npm run check` passes after lockfile regeneration;
+- the preview overview failure is fixed or evidenced as an environment
+  configuration/schema problem and corrected in preview;
+- rollback notes, dependency documentation, current structure, ADRs, tracker,
+  and PR #41 evidence are current.
+
+## 5. Phase status
+
+| Phase                        | Status                     | Next gate                                                    |
+| ---------------------------- | -------------------------- | ------------------------------------------------------------ |
+| Spike 0 — Tabulator          | Complete; rejected for RFI | Future high-volume proposal only                             |
+| UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded                          |
+| UI-2 — CSS + React/Vite      | Active in PR #41           | Conflict resolution, preview diagnosis, smoke, and full gate |
+| UI-3 — Components + UI Lab   | Not started                | UI-2 exit gate passes                                        |
+| UI-4 — React shell           | Not started                | UI-3 shared patterns stable                                  |
+| UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency             |
+| UI-6 — Projects + Records    | Not started                | Shared register contract                                     |
+| UI-7 — Detail workspaces     | Not started                | Shared workspace contract                                    |
+| UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable                          |
+| UI-9 — Library + Studio      | Not started                | Application foundation stable                                |
+| UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                            |
+
+## 6. Current constraints and risks
+
+- The configured remote D1 database has the overview tables and migrations and
+  its overview SQL succeeds for a live project. The PR and current-main
+  overview server source are identical. This makes a branch code or shared-D1
+  schema regression unlikely, but it is not a replacement for an authenticated
+  preview response; Cloudflare Access/browser availability currently blocks
+  that capture.
+- Official RFI issuance remains incomplete and must fail closed.
+- Existing renderer output and valid definitions remain compatible.
+- Browser capability presentation never replaces server authorization.
+- The existing Cloudflare development/test dependency audit findings must be
+  resolved or formally accepted before a production release; do not use
+  `npm audit fix --force` without a review.
+
+## 7. Next action
+
+Complete PR #41's merge, runtime diagnosis, smoke evidence, and full gate.
+Only after UI-2's exit gate passes may UI-3 begin with BASE primitives and the
+UI Lab. Do not merge this PR from this task.

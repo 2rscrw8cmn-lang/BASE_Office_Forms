@@ -135,19 +135,27 @@
     return form;
   }
 
+  // A field with `break: true` starts a new stacked row; otherwise all fields render in one row.
   function fieldsBlock(fields, fill, tall, namePrefix) {
     const normalized = fields.map((field, index) => field.id ? field : normField(field, value => value + "_" + index, null, "text"));
-    const template = normalized.map(field => `${field.w}fr`).join(" ");
-    return `<div class="grid" style="--tpl:${template};">` + normalized.map(field => {
-      const height = tall ? Math.max(76, field.height) : field.height;
-      // Input style is explicit -- a tall box (e.g. a stamp) never silently
-      // becomes a textarea; only an explicit multiline/type setting does.
-      const isMultiline = field.type === "multiline" || Boolean(field.multiline);
-      const htmlType = field.type === "date" || field.type === "number" ? field.type : "text";
-      const input = writeBox(fill, isMultiline, (namePrefix || "") + field.id, field.textHeight, htmlType);
-      const align = field.align && field.align !== "top" ? ` field-align-${field.align}` : "";
-      return `<div class="field${height >= 70 ? " field-tall" : ""}${align}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
-    }).join("") + `</div>`;
+    const rows = [];
+    normalized.forEach(field => {
+      if (field.break || !rows.length) rows.push([]);
+      rows[rows.length - 1].push(field);
+    });
+    return rows.map(row => {
+      const template = row.map(field => `${field.w}fr`).join(" ");
+      return `<div class="grid" style="--tpl:${template};">` + row.map(field => {
+        const height = tall ? Math.max(76, field.height) : field.height;
+        // Input style is explicit -- a tall box (e.g. a stamp) never silently
+        // becomes a textarea; only an explicit multiline/type setting does.
+        const isMultiline = field.type === "multiline" || Boolean(field.multiline);
+        const htmlType = field.type === "date" || field.type === "number" ? field.type : "text";
+        const input = writeBox(fill, isMultiline, (namePrefix || "") + field.id, field.textHeight, htmlType);
+        const align = field.align && field.align !== "top" ? ` field-align-${field.align}` : "";
+        return `<div class="field${height >= 70 ? " field-tall" : ""}${align}" style="--fh:${height}px"><div class="field-label">${esc(field.label)}</div>${input}</div>`;
+      }).join("") + `</div>`;
+    }).join("");
   }
 
   function checksBlock(section, fill, namePrefix) {

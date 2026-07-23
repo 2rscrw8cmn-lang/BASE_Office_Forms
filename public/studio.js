@@ -216,9 +216,10 @@
         <option value="center"${align === "center" ? " selected" : ""}>Middle</option>
         <option value="bottom"${align === "bottom" ? " selected" : ""}>Bottom</option>
       </select>`)}
+      ${fieldCell("Row", `<label class="toggle compact"><input type="checkbox" data-path="${base}.${index}.break" data-value-type="bool"${field.break ? " checked" : ""}><span>New line</span></label>`)}
       <button class="mini del" data-action="delete-field" data-base="${base}" data-index="${index}" title="Delete field">×</button>
     </div>`;
-    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. The preview shows a dashed outline where it will sit.</div>`;
+    }).join("") + `<button class="addrow" data-action="add-field" data-base="${base}">+ field</button><div class="micro">Width is relative. Height sets the outer box. Write-in height (optional) sizes just the typed area — pair it with Top/Middle/Bottom to place a small write-in line inside a tall box, like a stamp. Input style controls single line, multiline, date, or number entry — height no longer switches it automatically. Check "New line" to start this field on a fresh row below the previous ones. The preview shows a dashed outline where it will sit.</div>`;
   }
 
   function cardHead(type, index, noun) {
@@ -1144,7 +1145,18 @@
   $("#shareButton").addEventListener("click", copyShareLink);
   $("#aiButton").addEventListener("click", copyAIKit);
   $("#aiImportButton").addEventListener("click", importAI);
-  $("#printButton").addEventListener("click", () => { renderPreview(); setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140); });
+  $("#printButton").addEventListener("click", () => {
+    const target = rootDefinition();
+    if (target.kind === "form") {
+      status("Generating fillable PDF…");
+      BASE_PDF.downloadFormPdf(clean(target))
+        .then(() => status("PDF downloaded"))
+        .catch(error => status(error.message || "Could not export PDF", "error"));
+      return;
+    }
+    renderPreview();
+    setTimeout(() => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); window.print(); }, 140);
+  });
   setupToolbarMenus();
   window.addEventListener("beforeprint", () => { BASE.paginate($("#pv")); BASE.updatePackageIndex($("#pv")); });
   window.addEventListener("resize", fit);
