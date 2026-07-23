@@ -7,6 +7,15 @@ import {
   rfiStatusLabel,
   rfiStatusTone,
 } from "./app-format.js";
+import {
+  TABULATOR_GRID_MODE,
+  readGridMode,
+  createRfiTabulatorGrid,
+  loadTabulator,
+  validateField as tabulatorValidateField,
+  normalizeCellValue,
+  buildPatchPayload,
+} from "./rfi-tabulator-adapter.js";
 
 const SORT_KEYS = {
   number: { label: "RFI number", defaultDir: "asc" },
@@ -75,6 +84,10 @@ export function createRfisView({
   announce,
   requestRender,
   projectId,
+  // Spike A/B: the Tabulator desktop grid is activated by ?grid=tabulator. The
+  // Tabulator loader is injectable so tests can drive the prototype with a test
+  // double instead of importing the vendored ESM build.
+  tabulatorLoader = loadTabulator,
 }) {
   let state = { status: "loading", data: null, error: null };
   let filters = defaultFilters();
@@ -84,6 +97,8 @@ export function createRfisView({
   let editing = null; // { id, field, original, initialText, committing }
   let selected = null; // { id, field }
   let creating = false;
+  let gridMode = "custom"; // "custom" (default) | "tabulator" (spike prototype)
+  let tabulatorGrid = null;
   const cellStates = new Map(); // row:field -> { status, message }
 
   async function reload({ quiet = false } = {}) {
@@ -424,8 +439,14 @@ export function createRfisView({
 
   function updateResults(container) {
     if (state.status !== "loaded") return;
-    const region = container.querySelector("[data-results]");
-    if (region) region.innerHTML = resultsMarkup(state.data.rfis);
+    if (gridMode === TABULATOR_GRID_MODE) {
+      updateTabulatorResults(container);
+    } else {
+      const region = container.querySelector("[data-results]");
+      if (region) region.innerHTML = resultsMarkup(state.data.rfis);
+      bindResults(container);
+      focusActive(container);
+    }
     const filtered = applyFilters(state.data.rfis);
     const total = state.data.rfis.length;
     const count = container.querySelector("[data-result-count]");
@@ -436,8 +457,119 @@ export function createRfisView({
     const headingCount = container.querySelector(".app-register-count");
     if (headingCount)
       headingCount.textContent = `${total} RFI${total === 1 ? "" : "s"}`;
-    bindResults(container);
-    focusActive(container);
+  }
+
+  // --- Tabulator prototype (desktop grid only) -----------------------------
+
+  function ensureGrid() {
+    if (tabulatorGrid) return tabulatorGrid;
+    tabulatorGrid = createRfiTabulatorGrid({
+      projectId,
+      loadTabulator: tabulatorLoader,
+      getRows: () => applyFilters(state.data.rfis),
+      getContacts: () => state.data.responsibleContacts,
+      commit: tabulatorCommit,
+      onOpen: (id) => navigate(rfiWorkspaceHref(projectId, id)),
+      announce,
+      window: appWindow,
+    });
+    return tabulatorGrid;
+  }
+
+  function destroyGrid() {
+    tabulatorGrid?.destroy();
+    tabulatorGrid = null;
+  }
+
+  // Authoritative save for a single Tabulator cell edit. Sends only the changed
+  // field plus the current lock version, updates the authoritative row on
+  // success, and reloads the authorized list on a version conflict or
+  // permission loss — always keeping the URL filter/sort state.
+  async function tabulatorCommit({ id, field, value }) {
+    const rfi = state.data.rfis.find((item) => item.id === id);
+    if (!rfi) return { status: "error", message: "This RFI is no longer available." };
+    const validation = tabulatorValidateField(field, value);
+    if (validation) return { status: "invalid", message: validation };
+    const normalized = normalizeCellValue(value);
+    if (normalized === normalizeCellValue(rawValue(rfi, field)))
+      return { status: "unchanged" };
+    try {
+      const { data } = await api.updateRfi(
+        projectId,
+        id,
+        buildPatchPayload(field, value, rfi.lockVersion),
+      );
+      Object.assign(rfi, data || {});
+      return { status: "saved", row: { ...rfi } };
+    } catch (error) {
+      if (error.status === 409) {
+        try {
+          await refreshLatestRows();
+        } catch {
+          // Keep the current rows if the refresh itself fails.
+        }
+        return {
+          status: "conflict",
+          message: "Changed elsewhere. Latest value loaded; review and retry.",
+          rows: applyFilters(state.data.rfis),
+        };
+      }
+      if (error.status === 403) {
+        try {
+          await refreshLatestRows();
+        } catch {
+          // Capabilities may not refresh; the cell still becomes read-only.
+        }
+        return {
+          status: "permission",
+          message: "You no longer have permission to edit this draft.",
+          rows: applyFilters(state.data.rfis),
+        };
+      }
+      return {
+        status: "error",
+        message: error.message || "Could not save. Try again.",
+      };
+    }
+  }
+
+  function bindTabulatorRegion(container) {
+    container
+      .querySelectorAll("[data-results] [data-clear-filters]")
+      .forEach((button) =>
+        button.addEventListener("click", () => clearFilters(container)),
+      );
+    container
+      .querySelector("[data-results] [data-create-rfi]")
+      ?.addEventListener("click", () => addRfi(container));
+  }
+
+  function updateTabulatorResults(container) {
+    const region = container.querySelector("[data-results]");
+    if (!region) return;
+    const rfis = state.data.rfis;
+    const filtered = applyFilters(rfis);
+    if (!rfis.length) {
+      destroyGrid();
+      region.innerHTML = `<div class="records-empty"><h3>No RFIs yet</h3><p>Create the first working draft.</p>${canCreate() ? '<button class="secondary-button" type="button" data-create-rfi>Add RFI</button>' : ""}</div>`;
+      bindTabulatorRegion(container);
+      return;
+    }
+    let host = region.querySelector("[data-tabulator-host]");
+    if (!host) {
+      region.innerHTML = `<div class="records-table-wrap rfi-table-wrap rfi-tabulator-wrap" role="region" aria-label="Project RFI working register (Tabulator prototype)"><div class="rfi-tabulator-host" data-tabulator-host></div></div>
+      <p class="rfi-tabulator-empty" role="status" data-filtered-empty${filtered.length ? " hidden" : ""}>No RFIs match these filters. <button class="text-link" type="button" data-clear-filters>Clear all</button></p>
+      <ul class="rfi-cards" aria-label="Project RFIs" data-rfi-cards>${cards(filtered)}</ul>`;
+      host = region.querySelector("[data-tabulator-host]");
+      ensureGrid();
+      tabulatorGrid.mount(host);
+      bindTabulatorRegion(container);
+    }
+    tabulatorGrid?.setRows(filtered);
+    const cardsEl = region.querySelector("[data-rfi-cards]");
+    if (cardsEl) cardsEl.innerHTML = cards(filtered);
+    const emptyNote = region.querySelector("[data-filtered-empty]");
+    if (emptyNote) emptyNote.hidden = filtered.length > 0;
   }
 
   function startEdit(container, id, field, initialText = null) {
@@ -689,6 +821,7 @@ export function createRfisView({
       ? params.get("direction")
       : SORT_KEYS[next.sort].defaultDir;
     filters = next;
+    gridMode = readGridMode(appWindow?.location.search || "");
   }
 
   function syncUrl(push) {
@@ -702,6 +835,9 @@ export function createRfisView({
     if (filters.sort !== "number") params.set("sort", filters.sort);
     if (filters.direction !== SORT_KEYS[filters.sort].defaultDir)
       params.set("direction", filters.direction);
+    // The A/B switch is preserved across every register URL update so a reviewer
+    // stays in the same implementation while filtering, sorting, and navigating.
+    if (gridMode === TABULATOR_GRID_MODE) params.set("grid", TABULATOR_GRID_MODE);
     const query = params.toString();
     appWindow.history[push ? "pushState" : "replaceState"](
       {},
@@ -748,7 +884,12 @@ export function createRfisView({
       selected = { id: data.id, field: "subject" };
       creating = false;
       updateResults(container);
-      startEdit(container, data.id, "subject");
+      if (gridMode === TABULATOR_GRID_MODE) {
+        await tabulatorGrid?.setRows(applyFilters(state.data.rfis));
+        await tabulatorGrid?.editCell({ id: data.id, field: "subject" });
+      } else {
+        startEdit(container, data.id, "subject");
+      }
       announce?.("New RFI draft added. Subject is ready to edit.");
     } catch (error) {
       creating = false;
@@ -787,6 +928,11 @@ export function createRfisView({
     appWindow = container.ownerDocument.defaultView;
     readFiltersFromUrl();
     if (state.status === "loaded") syncUrl(false);
+    // A full re-render replaces the feature container's HTML, detaching any
+    // live Tabulator host. Drop the stale instance so the grid is recreated
+    // cleanly into the new host; in-register interactions use updateResults
+    // (targeted DOM updates) and keep the same instance alive.
+    destroyGrid();
     container.innerHTML = `<section class="workspace-page rfis-view app-register-page">${heading()}${body()}</section>`;
     container
       .querySelector("[data-rfis-retry]")
@@ -803,6 +949,7 @@ export function createRfisView({
   function destroy() {
     destroyed = true;
     controller?.abort();
+    destroyGrid();
   }
 
   return { mount, reload, destroy };

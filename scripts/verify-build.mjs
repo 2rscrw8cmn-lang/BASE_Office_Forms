@@ -13,6 +13,8 @@ const requiredFiles = [
   "public/engine.js",
   "public/pdf-export.js",
   "public/vendor/pdf-lib.min.js",
+  "public/vendor/tabulator/tabulator_esm.min.js",
+  "public/vendor/tabulator/tabulator.min.css",
   "public/library-api.js",
   "public/form-generator.html",
   "public/viewer.html",
