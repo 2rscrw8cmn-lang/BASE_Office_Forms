@@ -26,6 +26,85 @@ export function formatDate(value) {
   return DATE_FORMAT.format(date);
 }
 
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+const SHORT_DATE_FORMAT_WITH_YEAR = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+// Compact "Jul 28" style date for dense register columns. Falls back to
+// including the year only when it differs from the reference year, since a
+// bare month/day is ambiguous across a year boundary.
+export function formatShortDate(value, now = new Date()) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const format =
+    date.getFullYear() === now.getFullYear()
+      ? SHORT_DATE_FORMAT
+      : SHORT_DATE_FORMAT_WITH_YEAR;
+  return format.format(date);
+}
+
+function startOfDay(date) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
+}
+
+function calendarDayDiff(from, to) {
+  return Math.round((startOfDay(to) - startOfDay(from)) / 86_400_000);
+}
+
+// Presentational "2 hr ago" / "Yesterday" / "Jul 12" text for a timestamp.
+// Purely a display convenience over an already-known timestamp — it never
+// determines any authoritative state on its own.
+export function formatRelativeUpdated(value, now = new Date()) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const dayDiff = calendarDayDiff(date, now);
+  if (dayDiff <= 0) {
+    const minutes = Math.max(
+      0,
+      Math.round((now.getTime() - date.getTime()) / 60_000),
+    );
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    return `${hours} hr ago`;
+  }
+  if (dayDiff === 1) return "Yesterday";
+  return formatShortDate(value, now);
+}
+
+// Due-column text: "Overdue"/"Due" framing comes from the server-computed
+// isOverdue flag (never recomputed here); the day count is presentational
+// arithmetic over the same requestedResponseDate the server already sent.
+export function rfiDueUrgencyText(
+  requestedResponseDate,
+  isOverdue,
+  now = new Date(),
+) {
+  if (!requestedResponseDate) return "No due date";
+  const due = new Date(`${requestedResponseDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return "";
+  const dayDiff = calendarDayDiff(now, due);
+  if (isOverdue) {
+    const days = Math.max(1, -dayDiff);
+    return `Overdue by ${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (dayDiff === 0) return "Due today";
+  if (dayDiff > 0) return `Due in ${dayDiff} day${dayDiff === 1 ? "" : "s"}`;
+  return "";
+}
+
 const PURPOSE_LABELS = {
   for_information: "For information",
   for_review: "For review",
@@ -53,7 +132,8 @@ export function readyToIssueReason(fileCount) {
 }
 
 export function activeRfiReason(status) {
-  if (status === "response_received") return "Response received and awaiting close";
+  if (status === "response_received")
+    return "Response received and awaiting close";
   if (status === "returned_for_clarification")
     return "Returned for clarification";
   return "RFI awaiting response";

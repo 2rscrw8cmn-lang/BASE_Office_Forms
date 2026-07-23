@@ -1,9 +1,15 @@
-// Spreadsheet-style project RFI register. Draft cells commit deliberately on
-// Enter, Tab, Shift+Tab, or blur; optimistic-concurrency failures keep URL
-// state and keyboard focus intact while the latest row is reloaded.
+// Project RFI register. Rows are a clean read-only summary; clicking an
+// editable draft's subject opens one inline editor panel beneath the row with
+// every editable field as an ordinary form control, each saved on commit
+// (blur / Enter / selection) through the per-field update service. Only one
+// row's editor is open at a time. Optimistic-concurrency failures reload the
+// latest values while preserving URL filter/sort state.
 import {
   escapeHtml,
   formatDate,
+  formatRelativeUpdated,
+  formatShortDate,
+  rfiDueUrgencyText,
   rfiStatusLabel,
   rfiStatusTone,
 } from "./app-format.js";
@@ -11,10 +17,23 @@ import {
 const SORT_KEYS = {
   number: { label: "RFI number", defaultDir: "asc" },
   updated: { label: "Recently updated", defaultDir: "desc" },
+  // "created" has no dedicated header (the register only sorts by its five
+  // visible columns) but stays a valid key so old bookmarked/shared URLs
+  // still parse instead of silently resetting to the default sort.
   created: { label: "Newest", defaultDir: "desc" },
   subject: { label: "Subject A–Z", defaultDir: "asc" },
+  responsible: { label: "Party", defaultDir: "asc" },
   due: { label: "Response due date", defaultDir: "asc" },
 };
+
+// Header label + sort key for each sortable desktop column, in display order.
+const SORT_HEADERS = [
+  ["number", "RFI"],
+  ["subject", "Subject"],
+  ["responsible", "Party"],
+  ["due", "Due"],
+  ["updated", "Updated"],
+];
 
 const DUE_OPTIONS = [
   ["all", "Any due status"],
@@ -22,19 +41,22 @@ const DUE_OPTIONS = [
   ["due_soon", "Due soon"],
 ];
 
+// Every field the register editor can edit, in panel display order. `wide`
+// fields span both columns of the editor grid.
 const EDITABLE_FIELDS = {
-  subject: { label: "Subject", type: "text" },
-  responsiblePartyId: { label: "Responsible party", type: "contact" },
+  subject: { label: "Subject", type: "text", wide: true },
+  responsiblePartyId: { label: "Party", type: "contact" },
   requestedResponseDate: { label: "Response due", type: "date" },
-  question: { label: "Question", type: "textarea" },
-  contractorSuggestion: { label: "Contractor suggestion", type: "textarea" },
-  drawingReferences: { label: "Drawing references", type: "text" },
-  specificationReferences: {
-    label: "Specification references",
-    type: "text",
+  question: { label: "Question", type: "textarea", wide: true },
+  contractorSuggestion: {
+    label: "Contractor suggestion",
+    type: "textarea",
+    wide: true,
   },
+  drawingReferences: { label: "Drawing references", type: "text" },
+  specificationReferences: { label: "Specification references", type: "text" },
 };
-const EDITABLE_ORDER = Object.keys(EDITABLE_FIELDS);
+const PANEL_ORDER = Object.keys(EDITABLE_FIELDS);
 
 function defaultFilters() {
   return {
@@ -61,6 +83,9 @@ function collateNumber(a, b) {
 function compareDate(a, b) {
   return (Date.parse(a || "") || 0) - (Date.parse(b || "") || 0);
 }
+function responsibleSortKey(rfi) {
+  return rfi.responsibleParty || rfi.responsiblePartyLegacyText || "";
+}
 function truncate(value, max = 140) {
   const text = String(value || "").trim();
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
@@ -81,18 +106,17 @@ export function createRfisView({
   let controller = null;
   let destroyed = false;
   let appWindow = null;
-  let editing = null; // { id, field, original, initialText, committing }
-  let selected = null; // { id, field }
   let creating = false;
-  const cellStates = new Map(); // row:field -> { status, message }
+  let editorOpen = null; // rfi id whose inline editor panel is open
+  let focusAfterRender = null; // selector to focus once after a full render
+  const fieldStates = new Map(); // "id:field" -> { status, message }
 
   async function reload({ quiet = false } = {}) {
     controller?.abort();
     controller = new AbortController();
     if (!quiet) {
       state = { status: "loading", data: null, error: null };
-      editing = null;
-      selected = null;
+      editorOpen = null;
       requestRender();
     }
     try {
@@ -211,6 +235,8 @@ export function createRfisView({
       let comparison = 0;
       if (filters.sort === "subject")
         comparison = collate(a.subject, b.subject);
+      else if (filters.sort === "responsible")
+        comparison = collate(responsibleSortKey(a), responsibleSortKey(b));
       else if (filters.sort === "updated")
         comparison = compareDate(a.updatedAt, b.updatedAt);
       else if (filters.sort === "created")
@@ -250,8 +276,69 @@ export function createRfisView({
     return `<span class="status-badge status-${rfiStatusTone(rfi.status)}">${escapeHtml(rfiStatusLabel(rfi.status))}</span>${flag}`;
   }
 
-  function rawValue(rfi, field) {
-    return rfi[field] ?? "";
+  // Desktop "RFI" identity column: number/draft label stacked above a plain
+  // status text line. Kept separate from numberCell/statusCell above so the
+  // unchanged mobile cards keep their existing inline number+badge layout.
+  function identityCell(rfi) {
+    const isLegacyIncomplete =
+      rfi.issuanceReconciliationState === "legacy_incomplete";
+    const numberText = rfi.rfiNumber || "Unnumbered";
+    const numberClass = rfi.rfiNumber
+      ? "rfi-id-number"
+      : "rfi-id-number rfi-id-number-draft";
+    const statusText = isLegacyIncomplete
+      ? "Needs issue repair"
+      : rfiStatusLabel(rfi.status);
+    const legacy = rfi.legacyReference
+      ? `<span class="rfi-id-legacy">Legacy ${escapeHtml(rfi.legacyReference)}</span>`
+      : "";
+    return `<span class="${numberClass}">${escapeHtml(numberText)}</span><span class="rfi-id-status${isLegacyIncomplete ? " is-attention" : ""}">${escapeHtml(statusText)}</span>${legacy}`;
+  }
+
+  // Subject cell. Editable drafts render the subject as a button that toggles
+  // the row's inline editor; locked rows render it as a plain workspace link.
+  function subjectCell(rfi, href) {
+    const editable = rfi.capabilities?.updateDraft === true;
+    const questionPreview = truncate(rfi.question, 90);
+    const refs = [rfi.drawingReferences, rfi.specificationReferences]
+      .filter(Boolean)
+      .join(" · ");
+    const subjectText = escapeHtml(rfi.subject || "Untitled RFI");
+    const title = editable
+      ? `<button type="button" class="rfi-subject-open" data-subject-edit data-id="${escapeHtml(rfi.id)}" aria-expanded="${editorOpen === rfi.id}" aria-controls="rfi-editor-${escapeHtml(rfi.id)}"><span class="rfi-subject-open-text">${subjectText}</span></button>`
+      : `<a class="rfi-subject-link" href="${href}" data-app-link title="${escapeHtml(rfi.subject || "")}">${subjectText}</a>`;
+    return `<td class="rfi-cell-subject" data-subject-cell data-id="${escapeHtml(rfi.id)}">
+      ${title}
+      ${questionPreview ? `<span class="rfi-subject-secondary">${escapeHtml(questionPreview)}</span>` : ""}
+      ${refs ? `<span class="rfi-subject-meta">${escapeHtml(refs)}</span>` : ""}
+    </td>`;
+  }
+
+  function responsibleDisplay(rfi) {
+    if (rfi.responsiblePartyLegacyText) {
+      return `<span class="rfi-cell-text">${escapeHtml(rfi.responsiblePartyLegacyText)} <span class="rfi-responsible-legacy">(unresolved)</span></span>`;
+    }
+    if (!rfi.responsibleParty) {
+      return '<span class="rfi-cell-text rfi-responsible-empty">Unassigned</span>';
+    }
+    const contact = state.data.responsibleContacts.find(
+      (item) => item.id === rfi.responsiblePartyId,
+    );
+    const company = contact?.companyName
+      ? `<span class="rfi-responsible-company">${escapeHtml(contact.companyName)}</span>`
+      : "";
+    return `<span class="rfi-cell-text">${escapeHtml(rfi.responsibleParty)}</span>${company}`;
+  }
+
+  function dueDisplay(rfi) {
+    const dateText = formatShortDate(rfi.requestedResponseDate) || "—";
+    const urgency = rfiDueUrgencyText(rfi.requestedResponseDate, rfi.isOverdue);
+    const tone = rfi.isOverdue
+      ? " is-overdue"
+      : rfi.dueSoon
+        ? " is-due-soon"
+        : "";
+    return `<span class="rfi-cell-text rfi-due-date">${escapeHtml(dateText)}</span>${urgency ? `<span class="rfi-due-urgency${tone}">${escapeHtml(urgency)}</span>` : ""}`;
   }
 
   function displayValue(rfi, field) {
@@ -264,11 +351,19 @@ export function createRfisView({
     return rfi[field] || "—";
   }
 
-  function editorMarkup(rfi, field) {
+  function fieldStateInner(id, field) {
+    const st = fieldStates.get(`${id}:${field}`);
+    return st
+      ? `<span class="rfi-cell-save-state is-${st.status}" role="${st.status === "failed" ? "alert" : "status"}">${escapeHtml(st.message)}</span>`
+      : "";
+  }
+
+  function panelControl(rfi, field, inputId) {
     const meta = EDITABLE_FIELDS[field];
-    const value = rawValue(rfi, field);
+    const value = rfi[field] ?? "";
+    const attrs = `id="${inputId}" data-field-input data-id="${escapeHtml(rfi.id)}" data-field="${field}"`;
     if (meta.type === "contact") {
-      return `<select class="rfi-cell-editor" data-cell-editor aria-label="${escapeHtml(meta.label)}">
+      return `<select ${attrs}>
         <option value="">Unassigned</option>
         ${state.data.responsibleContacts
           .map(
@@ -279,44 +374,55 @@ export function createRfisView({
       </select>`;
     }
     if (meta.type === "textarea") {
-      return `<textarea class="rfi-cell-editor" data-cell-editor rows="3" aria-label="${escapeHtml(meta.label)}">${escapeHtml(editing?.initialText ?? value)}</textarea>`;
+      return `<textarea ${attrs} rows="3">${escapeHtml(value)}</textarea>`;
     }
-    return `<input class="rfi-cell-editor" data-cell-editor type="${meta.type}" value="${escapeHtml(editing?.initialText ?? value)}" aria-label="${escapeHtml(meta.label)}">`;
+    return `<input ${attrs} type="${meta.type}" value="${escapeHtml(value)}">`;
   }
 
-  function editableCell(rfi, field, className = "") {
-    const active = selected?.id === rfi.id && selected?.field === field;
-    const isEditing = editing?.id === rfi.id && editing?.field === field;
-    const cellState = cellStates.get(`${rfi.id}:${field}`);
-    const editable = rfi.capabilities?.updateDraft === true;
-    const status = cellState
-      ? `<span class="rfi-cell-save-state is-${cellState.status}" role="${cellState.status === "failed" ? "alert" : "status"}">${escapeHtml(cellState.message)}</span>`
-      : "";
-    return `<td class="rfi-grid-cell ${className}${active ? " is-selected" : ""}${isEditing ? " is-editing" : ""}" data-cell data-id="${escapeHtml(rfi.id)}" data-field="${field}" tabindex="${editable ? "0" : "-1"}" aria-readonly="${editable ? "false" : "true"}"${active ? ' aria-selected="true"' : ""}>
-      ${isEditing ? editorMarkup(rfi, field) : `<span class="rfi-cell-text" title="${escapeHtml(displayValue(rfi, field))}">${escapeHtml(displayValue(rfi, field))}</span>`}
-      ${status}
-    </td>`;
+  function panelField(rfi, field) {
+    const meta = EDITABLE_FIELDS[field];
+    const inputId = `rfi-edit-${rfi.id}-${field}`;
+    const legacyNote =
+      field === "responsiblePartyId" && rfi.responsiblePartyLegacyText
+        ? `<small class="rfi-legacy-note">Legacy value “${escapeHtml(rfi.responsiblePartyLegacyText)}” remains until a contact is selected.</small>`
+        : "";
+    return `<div class="app-field rfi-editor-field${meta.wide ? " is-wide" : ""}">
+      <label for="${inputId}">${escapeHtml(meta.label)}</label>
+      ${panelControl(rfi, field, inputId)}
+      ${legacyNote}
+      <span class="rfi-field-state" data-field-state="${escapeHtml(rfi.id)}:${field}">${fieldStateInner(rfi.id, field)}</span>
+    </div>`;
+  }
+
+  function editorRow(rfi) {
+    if (rfi.capabilities?.updateDraft !== true) return "";
+    const open = editorOpen === rfi.id;
+    return `<tr class="rfi-editor-row" id="rfi-editor-${escapeHtml(rfi.id)}" data-editor-row="${escapeHtml(rfi.id)}"${open ? "" : " hidden"}>
+      <td colspan="5">
+        <div class="rfi-editor-panel" role="group" aria-label="Edit ${escapeHtml(rfi.subject || "this RFI")}">
+          <div class="rfi-editor-grid">
+            ${PANEL_ORDER.map((field) => panelField(rfi, field)).join("")}
+          </div>
+          <div class="rfi-editor-foot"><button type="button" class="secondary-button is-quiet" data-editor-done data-id="${escapeHtml(rfi.id)}">Done</button></div>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function mainRowCells(rfi) {
+    const href = rfiWorkspaceHref(projectId, rfi.id);
+    return `<th scope="row" class="rfi-cell-id"><a class="rfi-id-link" href="${href}" data-app-link aria-label="Open RFI ${escapeHtml(rfi.rfiNumber || "Unnumbered")}">${identityCell(rfi)}</a></th>
+      ${subjectCell(rfi, href)}
+      <td class="rfi-cell-responsible">${responsibleDisplay(rfi)}</td>
+      <td class="rfi-cell-due">${dueDisplay(rfi)}</td>
+      <td class="rfi-cell-updated"><span class="rfi-updated-text" title="${escapeHtml(formatDate(rfi.updatedAt) || "")}">${escapeHtml(formatRelativeUpdated(rfi.updatedAt) || "—")}</span></td>`;
   }
 
   function tableRows(rfis) {
     return rfis
       .map((rfi) => {
-        const href = rfiWorkspaceHref(projectId, rfi.id);
-        return `<tr class="app-data-row" data-rfi-row="${escapeHtml(rfi.id)}">
-          <th scope="row" class="rfi-cell-number"><a href="${href}" data-app-link>${numberCell(rfi)}</a></th>
-          ${editableCell(rfi, "subject", "rfi-cell-subject")}
-          <td class="rfi-cell-status">${statusCell(rfi)}</td>
-          ${editableCell(rfi, "responsiblePartyId", "rfi-cell-responsible")}
-          ${editableCell(rfi, "requestedResponseDate", "rfi-cell-due")}
-          ${editableCell(rfi, "question", "rfi-cell-long")}
-          ${editableCell(rfi, "contractorSuggestion", "rfi-cell-long")}
-          ${editableCell(rfi, "drawingReferences", "rfi-cell-reference")}
-          ${editableCell(rfi, "specificationReferences", "rfi-cell-reference")}
-          <td class="rfi-cell-long"><span class="rfi-cell-text" title="${escapeHtml(rfi.latestResponse || "")}">${escapeHtml(truncate(rfi.latestResponse) || "—")}</span></td>
-          <td class="cell-date">${escapeHtml(formatDate(rfi.issuedAt) || "—")}</td>
-          <td class="cell-date">${escapeHtml(formatDate(rfi.updatedAt) || "—")}</td>
-          <td class="cell-open"><a class="open-link" href="${href}" data-app-link aria-label="Open ${escapeHtml(rfi.subject)}">Open <span aria-hidden="true">→</span></a></td>
-        </tr>`;
+        const editable = rfi.capabilities?.updateDraft === true;
+        return `<tr class="app-data-row${editable ? "" : " is-locked"}" data-rfi-row="${escapeHtml(rfi.id)}">${mainRowCells(rfi)}</tr>${editorRow(rfi)}`;
       })
       .join("");
   }
@@ -332,13 +438,27 @@ export function createRfisView({
             <span class="rfi-card-question">${escapeHtml(truncate(rfi.question, 120))}</span>
           </a>
           <dl class="rfi-card-facts">
-            <div><dt>Responsible</dt><dd>${escapeHtml(displayValue(rfi, "responsiblePartyId"))}</dd></div>
+            <div><dt>Party</dt><dd>${escapeHtml(displayValue(rfi, "responsiblePartyId"))}</dd></div>
             <div><dt>Response due</dt><dd>${escapeHtml(formatDate(rfi.requestedResponseDate) || "—")}</dd></div>
             <div><dt>Updated</dt><dd>${escapeHtml(formatDate(rfi.updatedAt) || "—")}</dd></div>
           </dl>
         </li>`;
       })
       .join("");
+  }
+
+  function sortHeader(key, label) {
+    const active = filters.sort === key;
+    const direction = filters.direction === "asc" ? "ascending" : "descending";
+    const arrow = filters.direction === "asc" ? "↑" : "↓";
+    const nextDirectionLabel = active
+      ? filters.direction === "asc"
+        ? "descending"
+        : "ascending"
+      : SORT_KEYS[key].defaultDir === "asc"
+        ? "ascending"
+        : "descending";
+    return `<th scope="col" aria-sort="${active ? direction : "none"}"><button type="button" class="rfi-sort-header${active ? " is-active" : ""}" data-sort-header="${key}" aria-label="Sort by ${escapeHtml(label)}, ${nextDirectionLabel}">${escapeHtml(label)}${active ? ` <span class="rfi-sort-arrow" aria-hidden="true">${arrow}</span>` : ""}</button></th>`;
   }
 
   function resultsMarkup(rfis) {
@@ -350,13 +470,10 @@ export function createRfisView({
       return '<div class="records-empty" role="status"><p>No RFIs match these filters.</p><button class="secondary-button" type="button" data-clear-filters>Clear all</button></div>';
     }
     return `<div class="records-table-wrap rfi-table-wrap" role="region" aria-label="Project RFI working register" tabindex="0">
-      <table class="records-table app-data-table rfi-table" role="grid">
+      <table class="records-table app-data-table rfi-table" role="grid" aria-describedby="rfi-register-hint">
         <caption class="sr-only">Editable project RFI register</caption>
         <thead><tr>
-          <th>RFI No.</th><th>Subject</th><th>Status</th><th>Responsible Party</th>
-          <th>Response Due</th><th>Question</th><th>Contractor Suggestion</th>
-          <th>Drawing References</th><th>Specification References</th>
-          <th>Response</th><th>Issued</th><th>Updated</th><th><span class="sr-only">Open</span></th>
+          ${SORT_HEADERS.map(([key, label]) => sortHeader(key, label)).join("")}
         </tr></thead>
         <tbody>${tableRows(filtered)}</tbody>
       </table>
@@ -374,14 +491,8 @@ export function createRfisView({
         <div class="app-field app-search-field app-register-search app-register-control"><label class="sr-only" for="rfi-search">Search RFIs</label><input id="rfi-search" type="search" placeholder="Search RFIs…" value="${escapeHtml(filters.q)}"></div>
         <div class="app-register-filters">
           ${selectMarkup("rfi-status", "All statuses", statusOptions(rfis), filters.status)}
-          ${selectMarkup("rfi-responsible", "All responsible parties", responsibleOptions(rfis), filters.responsible)}
+          ${selectMarkup("rfi-responsible", "All parties", responsibleOptions(rfis), filters.responsible)}
           ${selectMarkup("rfi-due", "Any due status", DUE_OPTIONS.slice(1), filters.due)}
-          ${selectMarkup(
-            "rfi-sort",
-            "Sort",
-            Object.entries(SORT_KEYS).map(([key, meta]) => [key, meta.label]),
-            filters.sort,
-          )}
         </div>
       </div>
       <div class="app-register-filter-state"><button class="text-link" type="button" data-clear-filters${hasActiveFilters() ? "" : " hidden"}>Clear all</button><p class="app-register-result-count" aria-live="polite" data-result-count></p></div>
@@ -390,7 +501,13 @@ export function createRfisView({
 
   function heading() {
     const total = state.status === "loaded" ? state.data.rfis.length : null;
-    return `<header class="app-register-header rfi-heading app-container-register"><div class="app-register-title"><div><h2 id="rfis-title" tabindex="-1">RFIs</h2><p class="rfi-register-hint">Select a draft cell, then press Enter or type to edit.</p></div>${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}</div>${canCreate() ? `<button class="primary-button" type="button" data-create-rfi${creating ? " disabled" : ""}>${creating ? "Adding…" : "Add RFI"}</button>` : ""}</header>`;
+    return `<header class="app-register-header rfi-heading app-container-register">
+      <div class="app-register-title">
+        <h2 id="rfis-title" tabindex="-1">RFIs</h2>${total === null ? "" : `<span class="app-register-count">${total} RFI${total === 1 ? "" : "s"}</span>`}
+      </div>
+      <p class="sr-only" id="rfi-register-hint">Click a draft RFI's subject to edit its fields inline. Click a column header to sort.</p>
+      ${canCreate() ? `<button class="primary-button" type="button" data-create-rfi${creating ? " disabled" : ""}>${creating ? "Adding…" : "Add RFI"}</button>` : ""}
+    </header>`;
   }
 
   function body() {
@@ -401,25 +518,6 @@ export function createRfisView({
     if (state.status === "error")
       return `<div class="records-body app-container-register"><section class="inline-error" role="alert"><p>The RFIs could not be loaded. No changes were made.</p><button class="secondary-button" type="button" data-rfis-retry>Try again</button></section></div>`;
     return `<div class="records-body app-container-register">${toolbar(state.data.rfis)}<div class="records-results" data-results></div></div>`;
-  }
-
-  function focusActive(container) {
-    const matchingCell = (reference) =>
-      [...container.querySelectorAll("[data-cell]")].find(
-        (candidate) =>
-          candidate.getAttribute("data-id") === reference.id &&
-          candidate.getAttribute("data-field") === reference.field,
-      );
-    if (editing) {
-      const editor = matchingCell(editing)?.querySelector("[data-cell-editor]");
-      editor?.focus();
-      if (editor && editing.initialText == null && editor.select)
-        editor.select();
-      return;
-    }
-    if (selected) {
-      matchingCell(selected)?.focus();
-    }
   }
 
   function updateResults(container) {
@@ -437,46 +535,33 @@ export function createRfisView({
     if (headingCount)
       headingCount.textContent = `${total} RFI${total === 1 ? "" : "s"}`;
     bindResults(container);
-    focusActive(container);
+    if (focusAfterRender) {
+      const selector = focusAfterRender;
+      focusAfterRender = null;
+      container.querySelector(selector)?.focus();
+    }
   }
 
-  function startEdit(container, id, field, initialText = null) {
+  function toggleEditor(container, id) {
+    if (editorOpen === id) {
+      closeEditor(container);
+      return;
+    }
     const rfi = state.data.rfis.find((item) => item.id === id);
     if (!rfi?.capabilities?.updateDraft) return;
-    selected = { id, field };
-    editing = {
-      id,
-      field,
-      original: String(rawValue(rfi, field)),
-      initialText,
-      committing: false,
-    };
-    cellStates.delete(`${id}:${field}`);
+    editorOpen = id;
+    focusAfterRender = `#rfi-edit-${id}-subject`;
     updateResults(container);
+    announce?.(`Editing ${rfi.subject || "RFI"}.`);
   }
 
-  function cancelEdit(container) {
-    if (!editing) return;
-    selected = { id: editing.id, field: editing.field };
-    editing = null;
+  function closeEditor(container) {
+    const id = editorOpen;
+    if (!id) return;
+    editorOpen = null;
+    focusAfterRender = `[data-subject-edit][data-id="${id}"]`;
     updateResults(container);
-  }
-
-  function orderedCellRefs() {
-    const rows = applyFilters(state.data.rfis).filter(
-      (rfi) => rfi.capabilities?.updateDraft,
-    );
-    return rows.flatMap((rfi) =>
-      EDITABLE_ORDER.map((field) => ({ id: rfi.id, field })),
-    );
-  }
-
-  function adjacentCell(id, field, direction) {
-    const cells = orderedCellRefs();
-    const index = cells.findIndex(
-      (cell) => cell.id === id && cell.field === field,
-    );
-    return cells[index + direction] || cells[index] || null;
+    announce?.("Editor closed.");
   }
 
   function validationMessage(field, value) {
@@ -501,100 +586,110 @@ export function createRfisView({
       : state.data.responsibleContacts;
   }
 
-  async function commitEdit(container, { move = 0, target = null } = {}) {
-    if (!editing || editing.committing) return;
-    const edit = editing;
-    const cell = [...container.querySelectorAll("[data-cell]")].find(
-      (candidate) =>
-        candidate.getAttribute("data-id") === edit.id &&
-        candidate.getAttribute("data-field") === edit.field,
+  function setFieldState(container, id, field, status, message) {
+    if (status) fieldStates.set(`${id}:${field}`, { status, message });
+    else fieldStates.delete(`${id}:${field}`);
+    const slot = container.querySelector(`[data-field-state="${id}:${field}"]`);
+    if (slot) slot.innerHTML = fieldStateInner(id, field);
+  }
+
+  // Refresh a row's read-only summary cells in place (subject text, question
+  // preview, references, party, due) without touching the open editor panel,
+  // so a per-field save is reflected above without disturbing focus.
+  function refreshRowDisplay(container, rfi) {
+    const row = container.querySelector(
+      `tr.app-data-row[data-rfi-row="${rfi.id}"]`,
     );
-    const editor = cell?.querySelector("[data-cell-editor]");
-    if (!editor) return;
-    const nextValue = String(editor.value ?? "").trim();
-    const normalized = nextValue || null;
-    const current = edit.original || null;
-    const destination =
-      target || (move ? adjacentCell(edit.id, edit.field, move) : selected);
-    const validation = validationMessage(edit.field, nextValue);
+    if (!row) return;
+    row.innerHTML = mainRowCells(rfi);
+    bindRow(container, row);
+  }
+
+  async function saveField(container, id, field, rawValue) {
+    const rfi = state.data.rfis.find((item) => item.id === id);
+    if (!rfi?.capabilities?.updateDraft) return;
+    const nextText = String(rawValue ?? "").trim();
+    const normalized = nextText || null;
+    const current = (rfi[field] ?? "") || null;
+    const validation = validationMessage(field, nextText);
     if (validation) {
-      cellStates.set(`${edit.id}:${edit.field}`, {
-        status: "failed",
-        message: validation,
-      });
+      setFieldState(container, id, field, "failed", validation);
       announce?.(validation);
-      updateResults(container);
       return;
     }
-    editing.committing = true;
     if (normalized === current) {
-      editing = null;
-      selected = destination || { id: edit.id, field: edit.field };
-      updateResults(container);
+      setFieldState(container, id, field, null);
       return;
     }
-    const key = `${edit.id}:${edit.field}`;
-    const rfi = state.data.rfis.find((item) => item.id === edit.id);
-    editing = null;
-    selected = destination || { id: edit.id, field: edit.field };
-    cellStates.set(key, { status: "saving", message: "Saving…" });
-    updateResults(container);
+    setFieldState(container, id, field, "saving", "Saving…");
     announce?.("Saving…");
     try {
-      const { data } = await api.updateRfi(projectId, edit.id, {
-        [edit.field]: normalized,
+      const { data } = await api.updateRfi(projectId, id, {
+        [field]: normalized,
         lockVersion: rfi.lockVersion,
       });
       Object.assign(rfi, data || {});
-      cellStates.set(key, { status: "saved", message: "Saved" });
-      announce?.(`${EDITABLE_FIELDS[edit.field].label} saved.`);
-      updateResults(container);
+      setFieldState(container, id, field, "saved", "Saved");
+      refreshRowDisplay(container, rfi);
+      announce?.(`${EDITABLE_FIELDS[field].label} saved.`);
       appWindow?.setTimeout(() => {
-        if (cellStates.get(key)?.status === "saved") {
-          cellStates.delete(key);
-          if (!destroyed) updateResults(container);
+        if (destroyed) return;
+        if (fieldStates.get(`${id}:${field}`)?.status === "saved") {
+          setFieldState(container, id, field, null);
         }
       }, 1400);
     } catch (error) {
-      let message = error.message || "Could not save. Try again.";
       if (error.status === 409) {
         try {
           await refreshLatestRows();
         } catch {
-          // Keep the current row if the refresh itself fails.
+          // Keep current rows if the refresh itself fails.
         }
-        message = "Changed elsewhere. Latest value loaded; review and retry.";
-      } else if (error.status === 403) {
-        message = "You no longer have permission to edit this draft.";
+        fieldStates.set(`${id}:${field}`, {
+          status: "failed",
+          message: "Changed elsewhere. Latest values loaded; review and retry.",
+        });
+        announce?.("This RFI changed elsewhere. Latest values were loaded.");
+        // A conflict replaced the row data, so re-render both row and panel.
+        updateResults(container);
+        return;
       }
-      cellStates.set(key, { status: "failed", message });
+      const message =
+        error.status === 403
+          ? "You no longer have permission to edit this draft."
+          : error.message || "Could not save. Try again.";
+      setFieldState(container, id, field, "failed", message);
       announce?.(message);
-      updateResults(container);
     }
   }
 
-  function moveSelection(container, id, field, key) {
-    const cells = orderedCellRefs();
-    const index = cells.findIndex(
-      (cell) => cell.id === id && cell.field === field,
+  function bindRow(container, row) {
+    row.querySelectorAll("a[data-app-link]").forEach((link) =>
+      link.addEventListener("click", (event) => {
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey
+        )
+          return;
+        event.preventDefault();
+        navigate(link.getAttribute("href"));
+      }),
     );
-    if (index < 0) return;
-    const columns = EDITABLE_ORDER.length;
-    const delta =
-      key === "ArrowLeft"
-        ? -1
-        : key === "ArrowRight"
-          ? 1
-          : key === "ArrowUp"
-            ? -columns
-            : columns;
-    selected = cells[index + delta] || cells[index];
-    updateResults(container);
+    row.querySelectorAll("[data-subject-edit]").forEach((button) => {
+      const id = button.getAttribute("data-id");
+      button.addEventListener("click", () => toggleEditor(container, id));
+    });
   }
 
   function bindResults(container) {
     container
-      .querySelectorAll("[data-results] a[data-app-link]")
+      .querySelectorAll("[data-results] tr.app-data-row")
+      .forEach((row) => bindRow(container, row));
+    // Mobile card links live outside the table rows.
+    container
+      .querySelectorAll("[data-results] .rfi-card a[data-app-link]")
       .forEach((link) =>
         link.addEventListener("click", (event) => {
           if (
@@ -608,63 +703,58 @@ export function createRfisView({
           navigate(link.getAttribute("href"));
         }),
       );
-    container.querySelectorAll("[data-cell]").forEach((cell) => {
-      const id = cell.getAttribute("data-id");
-      const field = cell.getAttribute("data-field");
-      cell.addEventListener("click", () => {
-        if (editing && (editing.id !== id || editing.field !== field)) {
-          commitEdit(container, { target: { id, field } });
-          return;
-        }
-        if (!editing) {
-          selected = { id, field };
-          updateResults(container);
-        }
-      });
-      cell.addEventListener("keydown", (event) => {
-        if (editing?.id === id && editing?.field === field) return;
-        if (event.key === "Enter") {
-          event.preventDefault();
-          startEdit(container, id, field);
-        } else if (
-          ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(
-            event.key,
-          )
-        ) {
-          event.preventDefault();
-          moveSelection(container, id, field, event.key);
-        } else if (
-          event.key.length === 1 &&
-          !event.ctrlKey &&
-          !event.metaKey &&
-          !event.altKey &&
-          EDITABLE_FIELDS[field].type !== "contact" &&
-          EDITABLE_FIELDS[field].type !== "date"
-        ) {
-          event.preventDefault();
-          startEdit(container, id, field, event.key);
-        }
-      });
-    });
-    container.querySelectorAll("[data-cell-editor]").forEach((editor) => {
-      editor.addEventListener("keydown", (event) => {
+    container
+      .querySelectorAll("[data-editor-done]")
+      .forEach((button) =>
+        button.addEventListener("click", () => closeEditor(container)),
+      );
+    container.querySelectorAll("[data-field-input]").forEach((input) => {
+      const id = input.getAttribute("data-id");
+      const field = input.getAttribute("data-field");
+      input.addEventListener("change", () =>
+        saveField(container, id, field, input.value),
+      );
+      input.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           event.preventDefault();
-          cancelEdit(container);
-        } else if (event.key === "Enter" && !event.shiftKey) {
+          event.stopPropagation();
+          // Commit any pending change before the panel closes.
+          input.blur();
+          closeEditor(container);
+        } else if (
+          event.key === "Enter" &&
+          input.tagName !== "TEXTAREA" &&
+          !event.shiftKey
+        ) {
           event.preventDefault();
-          commitEdit(container);
-        } else if (event.key === "Tab") {
-          event.preventDefault();
-          commitEdit(container, { move: event.shiftKey ? -1 : 1 });
+          input.blur();
         }
       });
-      editor.addEventListener("blur", () => {
-        appWindow?.setTimeout(() => {
-          if (editing && !editing.committing) commitEdit(container);
-        }, 0);
+    });
+    container.querySelectorAll("[data-subject-edit]").forEach((button) => {
+      const id = button.getAttribute("data-id");
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && editorOpen === id) {
+          event.preventDefault();
+          closeEditor(container);
+        }
       });
     });
+    container
+      .querySelectorAll("[data-results] [data-sort-header]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const key = button.getAttribute("data-sort-header");
+          if (filters.sort === key) {
+            filters.direction = filters.direction === "asc" ? "desc" : "asc";
+          } else {
+            filters.sort = key;
+            filters.direction = SORT_KEYS[key].defaultDir;
+          }
+          syncUrl(true);
+          updateResults(container);
+        });
+      });
     container
       .querySelectorAll("[data-results] [data-clear-filters]")
       .forEach((button) =>
@@ -745,11 +835,11 @@ export function createRfisView({
       filters.status = "all";
       filters.q = "";
       syncUrl(false);
-      selected = { id: data.id, field: "subject" };
+      editorOpen = data.id;
+      focusAfterRender = `#rfi-edit-${data.id}-subject`;
       creating = false;
       updateResults(container);
-      startEdit(container, data.id, "subject");
-      announce?.("New RFI draft added. Subject is ready to edit.");
+      announce?.("New RFI draft added. Its subject is ready to edit.");
     } catch (error) {
       creating = false;
       announce?.(error.message || "The RFI draft could not be added.");
@@ -774,10 +864,6 @@ export function createRfisView({
     bind("#rfi-status", (value) => (filters.status = value));
     bind("#rfi-responsible", (value) => (filters.responsible = value));
     bind("#rfi-due", (value) => (filters.due = value));
-    bind("#rfi-sort", (value) => {
-      filters.sort = SORT_KEYS[value] ? value : "number";
-      filters.direction = SORT_KEYS[filters.sort].defaultDir;
-    });
     container
       .querySelector(".rfi-toolbar [data-clear-filters]")
       ?.addEventListener("click", () => clearFilters(container));

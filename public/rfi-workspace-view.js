@@ -36,8 +36,11 @@ export function createRfiWorkspaceView({
   let controller = null;
   let destroyed = false;
   let sequence = 0;
-  let editing = false;
   let busy = false;
+  // Details is the default main-content mode; Preview renders the template
+  // only when explicitly selected, so it never competes with editing by
+  // default and the renderer never runs until asked for.
+  let mode = "details";
   const registerHref = `/projects/${encodeURIComponent(projectId)}/rfis`;
   const attachmentContentHref = (attachmentId) =>
     `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments/${encodeURIComponent(attachmentId)}/content`;
@@ -47,7 +50,6 @@ export function createRfiWorkspaceView({
     controller = new AbortController();
     const current = ++sequence;
     state = { status: "loading", data: null, error: null };
-    editing = false;
     requestRender();
     try {
       const { data } = await api.getRfiWorkspace(projectId, rfiId, {
@@ -88,8 +90,8 @@ export function createRfiWorkspaceView({
   }
 
   function primaryAction(data) {
-    if (data.capabilities.updateDraft && !editing)
-      return '<button class="primary-button" type="button" data-edit-info>Edit current draft</button>';
+    // Drafts are edited inline (no enter-edit-mode button); only the issued
+    // lifecycle transitions surface as primary actions here.
     if (data.capabilities.close)
       return '<button class="primary-button" type="button" data-action="close">Close RFI</button>';
     if (data.capabilities.reopen)
@@ -102,19 +104,73 @@ export function createRfiWorkspaceView({
     const number = rfi.rfiNumber
       ? `${rfi.issuanceReconciliationState === "legacy_incomplete" ? "Reserved " : ""}${rfi.rfiNumber}`
       : "Unnumbered Draft";
+    // Breadcrumb already carries the number, so the header shows just the
+    // subject with its status beside it — no duplicated eyebrow. The rest of
+    // the metadata lives in the rail.
     return `<nav class="document-breadcrumbs" aria-label="Breadcrumb"><a href="${registerHref}" data-app-link>RFIs</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(number)}</span></nav>
       <header class="document-identity rfi-document-identity">
-        <div><p class="document-section-label">${escapeHtml(number)}</p><div class="document-title-row"><h2 id="page-title" tabindex="-1">${escapeHtml(rfi.subject)}</h2></div></div>
-        <div class="document-header-actions">${primaryAction(data)}${optionsMarkup(data)}</div>
-      </header>
-      <div class="document-header-facts rfi-metadata-strip">
-        <span><small>Status</small><strong>${displayStatus(data)}</strong></span>
-        <span><small>Responsible party</small><strong>${escapeHtml(rfi.responsibleParty || "Unassigned")}${rfi.responsiblePartyLegacyText ? ' <em class="rfi-legacy">Unresolved</em>' : ""}</strong></span>
-        <span><small>Response due</small><strong>${escapeHtml(formatDate(rfi.requestedResponseDate) || "—")}</strong></span>
-        ${rfi.issuedAt && rfi.issuanceReconciliationState !== "legacy_incomplete" ? `<span><small>Issued</small><strong>${escapeHtml(formatDate(rfi.issuedAt))}</strong></span>` : ""}
-        <span><small>Current version</small><strong>${escapeHtml(data.currentVersion?.label || "Current Draft")}</strong></span>
-      </div>
-      ${rfi.issuanceReconciliationState === "legacy_incomplete" ? '<div class="document-read-only is-warning"><strong>Legacy issue requires reconciliation</strong><span>The consumed number and timestamp were preserved, but this RFI is not presented as officially issued because no immutable issued revision or official artifact exists.</span></div>' : ""}`;
+        <div class="document-title-row"><h2 id="page-title" tabindex="-1">${escapeHtml(rfi.subject)}</h2>${displayStatus(data)}</div>
+      </header>`;
+  }
+
+  // Compact metadata rail: status, identity, responsible party, dates, and
+  // a plain attachment count — one restrained section rather than a card
+  // per field.
+  function railFacts(data) {
+    const rfi = data.rfi;
+    const fileCount =
+      (data.attachments?.supporting_attachment || []).length +
+      (data.attachments?.reference_drawing || []).length;
+    const rows = [
+      ["Status", displayStatus(data)],
+      ["RFI number", escapeHtml(rfi.rfiNumber || "Unnumbered")],
+      [
+        "Party",
+        `${escapeHtml(rfi.responsibleParty || "Unassigned")}${rfi.responsiblePartyLegacyText ? ' <em class="rfi-legacy">Unresolved</em>' : ""}`,
+      ],
+      [
+        "Response due",
+        escapeHtml(formatDate(rfi.requestedResponseDate) || "—"),
+      ],
+    ];
+    if (
+      rfi.issuedAt &&
+      rfi.issuanceReconciliationState !== "legacy_incomplete"
+    ) {
+      rows.push(["Issued", escapeHtml(formatDate(rfi.issuedAt))]);
+    }
+    rows.push(["Updated", escapeHtml(formatDate(rfi.updatedAt) || "—")]);
+    rows.push([
+      "Current version",
+      escapeHtml(data.currentVersion?.label || "Current Draft"),
+    ]);
+    rows.push([
+      "Attachments",
+      `${fileCount} file${fileCount === 1 ? "" : "s"}`,
+    ]);
+    return `<dl class="rfi-rail-facts">${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`;
+  }
+
+  function legacyWarning(data) {
+    return data.rfi.issuanceReconciliationState === "legacy_incomplete"
+      ? '<div class="document-read-only is-warning rfi-rail-warning"><strong>Legacy issue requires reconciliation</strong><span>The consumed number and timestamp were preserved, but this RFI is not presented as officially issued because no immutable issued revision or official artifact exists.</span></div>'
+      : "";
+  }
+
+  function railActions(data) {
+    const primary = primaryAction(data);
+    const options = optionsMarkup(data);
+    return primary || options
+      ? `<div class="rfi-rail-actions">${primary}${options}</div>`
+      : "";
+  }
+
+  function modeSwitch() {
+    const details = mode === "details";
+    return `<div class="rfi-mode-switch" role="group" aria-label="Workspace view">
+      <button type="button" class="rfi-mode-button${details ? " is-active" : ""}" data-mode-button="details" aria-pressed="${details}">Details</button>
+      <button type="button" class="rfi-mode-button${!details ? " is-active" : ""}" data-mode-button="preview" aria-pressed="${!details}">Preview</button>
+    </div>`;
   }
 
   function contentReadOnly(data) {
@@ -142,18 +198,18 @@ export function createRfiWorkspaceView({
 
   function contentEditForm(data) {
     const rfi = data.rfi;
-    const field = (name, label, value, textarea = false) =>
-      `<div class="app-field${textarea ? " is-wide" : ""}"><label for="rfi-f-${name}">${escapeHtml(label)}</label>${textarea ? `<textarea id="rfi-f-${name}" name="${name}" rows="4">${escapeHtml(value || "")}</textarea>` : `<input id="rfi-f-${name}" name="${name}" value="${escapeHtml(value || "")}">`}</div>`;
+    const field = (name, label, value, rows = 0) =>
+      `<div class="app-field${rows ? " is-wide" : ""}"><label for="rfi-f-${name}">${escapeHtml(label)}</label>${rows ? `<textarea id="rfi-f-${name}" name="${name}" rows="${rows}">${escapeHtml(value || "")}</textarea>` : `<input id="rfi-f-${name}" name="${name}" value="${escapeHtml(value || "")}">`}</div>`;
     return `<form data-info-form>
       <p class="app-dialog-error" role="alert" hidden></p>
       <div class="rfi-info-form">
         <div class="app-field is-wide"><label for="rfi-f-subject">Subject</label><input id="rfi-f-subject" name="subject" value="${escapeHtml(rfi.subject)}" required></div>
-        ${field("question", "Question", rfi.question, true)}
-        ${field("contractorSuggestion", "Contractor suggestion", rfi.contractorSuggestion, true)}
+        ${field("question", "Question", rfi.question, 4)}
+        ${field("contractorSuggestion", "Contractor suggestion", rfi.contractorSuggestion, 2)}
         <div class="app-field-row">${field("drawingReferences", "Drawing references", rfi.drawingReferences)}${field("specificationReferences", "Specification references", rfi.specificationReferences)}</div>
-        <div class="app-field-row"><div class="app-field"><label for="rfi-f-responsiblePartyId">Responsible party</label><select id="rfi-f-responsiblePartyId" name="responsiblePartyId">${contactOptions(data)}</select>${rfi.responsiblePartyLegacyText ? `<small class="rfi-legacy-note">Legacy value “${escapeHtml(rfi.responsiblePartyLegacyText)}” remains preserved until a project contact is selected.</small>` : ""}</div><div class="app-field"><label for="rfi-f-requestedResponseDate">Response due</label><input id="rfi-f-requestedResponseDate" name="requestedResponseDate" type="date" value="${escapeHtml(rfi.requestedResponseDate || "")}"></div></div>
+        <div class="app-field-row"><div class="app-field"><label for="rfi-f-responsiblePartyId">Party</label><select id="rfi-f-responsiblePartyId" name="responsiblePartyId">${contactOptions(data)}</select>${rfi.responsiblePartyLegacyText ? `<small class="rfi-legacy-note">Legacy value “${escapeHtml(rfi.responsiblePartyLegacyText)}” remains preserved until a project contact is selected.</small>` : ""}</div><div class="app-field"><label for="rfi-f-requestedResponseDate">Response due</label><input id="rfi-f-requestedResponseDate" name="requestedResponseDate" type="date" value="${escapeHtml(rfi.requestedResponseDate || "")}"></div></div>
       </div>
-      <div class="app-dialog-actions"><button type="button" class="secondary-button" data-cancel-info>Cancel</button><button type="submit" class="primary-button"${busy ? " disabled" : ""}>${busy ? "Saving…" : "Save draft"}</button></div>
+      <div class="app-dialog-actions"><button type="submit" class="primary-button"${busy ? " disabled" : ""}>${busy ? "Saving…" : "Save draft"}</button></div>
     </form>`;
   }
 
@@ -180,14 +236,18 @@ export function createRfiWorkspaceView({
     return `<section class="rfi-render-panel" aria-labelledby="rfi-preview-title"><div class="document-section-heading"><h3 id="rfi-preview-title">Template preview</h3><span>${data.template ? `${escapeHtml(data.template.name)} · v${escapeHtml(String(data.template.versionNumber))}` : "Template unavailable"}</span></div><div class="rfi-render-preview">${renderRfiTemplatePreview(data)}</div></section>`;
   }
 
-  function currentVersionPanel(data) {
-    return `<section class="document-work-panel is-draft rfi-current-version" aria-labelledby="work-title">
-      <div class="document-work-head"><div><p class="document-section-label">Current draft</p><div class="document-work-title"><h3 id="work-title">${escapeHtml(data.currentVersion?.label || "Draft")}</h3><span class="status-badge status-attention">Draft</span></div></div><dl class="document-work-facts"><div><dt>Updated</dt><dd>${escapeHtml(formatDate(data.rfi.updatedAt) || "—")}</dd></div><div><dt>Issue</dt><dd><span class="issuance-badge">Unavailable in Slice 1</span></dd></div></dl></div>
-      <div class="rfi-authoritative-content"><div class="document-section-heading"><h4>RFI content</h4>${data.capabilities.updateDraft && !editing ? '<button class="secondary-button" type="button" data-edit-info>Edit draft</button>' : ""}</div>${editing ? contentEditForm(data) : contentReadOnly(data)}</div>
+  // Main-content details block. Drafts show their fields directly editable —
+  // no enter-edit-mode button; once issued the content is read-only and the
+  // response becomes the only editable surface (see responseBlock).
+  function mainDetails(data) {
+    return `<section class="document-work-panel rfi-current-version" aria-labelledby="work-title">
+      <div class="rfi-authoritative-content"><div class="document-section-heading"><h3 id="work-title">RFI content</h3></div>${data.capabilities.updateDraft ? contentEditForm(data) : contentReadOnly(data)}</div>
       ${filesSection(data)}
-    </section>${previewSection(data)}`;
+    </section>`;
   }
 
+  // Recorded responses, read-only. Shown once the RFI is issued (or has any
+  // response) and the current user cannot record a new one.
   function responseSection(data) {
     const responses = data.responses || [];
     const issued = [
@@ -199,6 +259,28 @@ export function createRfiWorkspaceView({
     if (!issued && !responses.length) return "";
     const latest = responses.at(-1);
     return `<section class="rfi-response-panel" aria-labelledby="rfi-response-title"><div class="document-section-heading"><h3 id="rfi-response-title">Response</h3><span>${latest ? `Returned ${escapeHtml(formatDate(latest.createdAt) || "—")}` : "Awaiting response"}</span></div>${latest ? `<p class="rfi-response-text">${escapeHtml(latest.response)}</p><dl class="rfi-response-facts"><div><dt>Responder</dt><dd>${escapeHtml(latest.respondedBy || "Not recorded")}</dd></div><div><dt>Cost impact</dt><dd>${escapeHtml(data.rfi.costImpact || "Not recorded")}</dd></div><div><dt>Schedule impact</dt><dd>${escapeHtml(data.rfi.scheduleImpact || "Not recorded")}</dd></div></dl>` : '<p class="section-empty">No response has been recorded.</p>'}</section>`;
+  }
+
+  // Response editor — the only editable surface once an RFI is issued and
+  // awaiting a response. Gated entirely by the server capability.
+  function responseEditor(data) {
+    const prior = (data.responses || []).at(-1);
+    return `<section class="rfi-response-panel" aria-labelledby="rfi-response-title">
+      <div class="document-section-heading"><h3 id="rfi-response-title">Response</h3><span>Awaiting response</span></div>
+      ${prior ? `<p class="rfi-response-text">${escapeHtml(prior.response)}</p>` : ""}
+      <form data-response-form>
+        <p class="app-dialog-error" role="alert" hidden></p>
+        <div class="app-field is-wide"><label for="rfi-response-text">Response</label><textarea id="rfi-response-text" name="response" rows="4" required></textarea></div>
+        <div class="app-field"><label for="rfi-response-by">Responder (optional)</label><input id="rfi-response-by" name="respondedBy"></div>
+        <div class="app-dialog-actions"><button type="submit" class="primary-button"${busy ? " disabled" : ""}>${busy ? "Submitting…" : "Submit response"}</button></div>
+      </form>
+    </section>`;
+  }
+
+  function responseBlock(data) {
+    return data.capabilities.recordResponse
+      ? responseEditor(data)
+      : responseSection(data);
   }
 
   function activitySection(data) {
@@ -213,7 +295,15 @@ export function createRfiWorkspaceView({
   }
 
   function loaded(data) {
-    return `${header(data)}${currentVersionPanel(data)}${responseSection(data)}${activitySection(data)}`;
+    const main =
+      mode === "preview"
+        ? previewSection(data)
+        : `${mainDetails(data)}${responseBlock(data)}`;
+    return `${header(data)}
+      <div class="rfi-workspace-grid">
+        <div class="rfi-workspace-main">${modeSwitch()}${main}</div>
+        <aside class="rfi-workspace-aside" aria-label="RFI status and metadata">${railFacts(data)}${legacyWarning(data)}${railActions(data)}${activitySection(data)}</aside>
+      </div>`;
   }
 
   function markup() {
@@ -278,7 +368,6 @@ export function createRfiWorkspaceView({
         lockVersion: state.data.rfi.lockVersion,
       });
       busy = false;
-      editing = false;
       announce?.("RFI draft saved.");
       await reload();
     } catch (error) {
@@ -294,6 +383,42 @@ export function createRfiWorkspaceView({
         showFormError(
           liveForm,
           error?.message || "The draft could not be saved.",
+        );
+    }
+  }
+
+  async function submitResponse(container, form) {
+    if (busy || !state.data) return;
+    const read = (name) =>
+      (form.querySelector(`[name="${name}"]`)?.value || "").trim();
+    const response = read("response");
+    if (!response) {
+      showFormError(form, "A response is required.");
+      return;
+    }
+    busy = true;
+    requestRender();
+    try {
+      await api.recordRfiResponse(projectId, rfiId, {
+        response,
+        respondedBy: read("respondedBy") || null,
+      });
+      busy = false;
+      announce?.("Response recorded.");
+      await reload();
+    } catch (error) {
+      busy = false;
+      if (error?.status === 409) {
+        announce?.("This RFI changed elsewhere. Latest values were loaded.");
+        await reload();
+        return;
+      }
+      requestRender();
+      const live = container.querySelector("[data-response-form]");
+      if (live)
+        showFormError(
+          live,
+          error?.message || "The response could not be recorded.",
         );
     }
   }
@@ -351,22 +476,23 @@ export function createRfiWorkspaceView({
           runTransition(button.getAttribute("data-action")),
         ),
       );
-    container.querySelectorAll("[data-edit-info]").forEach((button) =>
+    container.querySelectorAll("[data-mode-button]").forEach((button) =>
       button.addEventListener("click", () => {
-        editing = true;
+        const next = button.getAttribute("data-mode-button");
+        if (mode === next) return;
+        mode = next;
         requestRender();
       }),
     );
-    container
-      .querySelector("[data-cancel-info]")
-      ?.addEventListener("click", () => {
-        editing = false;
-        requestRender();
-      });
     const infoForm = container.querySelector("[data-info-form]");
     infoForm?.addEventListener("submit", (event) => {
       event.preventDefault();
       saveInfo(container, infoForm);
+    });
+    const responseForm = container.querySelector("[data-response-form]");
+    responseForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitResponse(container, responseForm);
     });
     const attachmentForm = container.querySelector("[data-attachment-form]");
     attachmentForm?.addEventListener("submit", (event) => {
