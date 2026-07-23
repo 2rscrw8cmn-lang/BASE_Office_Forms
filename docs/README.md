@@ -1,6 +1,7 @@
 Exit code: 0
 Wall time: 0.2 seconds
 Output:
+
 # BASE Document Control Architecture v1.0
 
 This directory is the implementation source of truth for evolving the existing BASE Forms & Documents Kit into a project-centric document-control platform.
@@ -82,4 +83,3 @@ Submittals follow using the same record, revision, file, artifact, delivery, and
 - `UI_PROGRAM_STATUS.md` — current UI phase, audit findings, decisions, and next gate.
 - `UI_DEPENDENCIES.md` — UI package, license, security, and replacement record.
 - `UI2_ROLLBACK.md` — UI-2 deployment boundary and rollback procedure.
-

@@ -1,6 +1,7 @@
 Exit code: 0
 Wall time: 0.2 seconds
 Output:
+
 # Local Development
 
 ## Prerequisites
@@ -157,4 +158,3 @@ draft revision. It never creates RFIs, files, issuances, or production-derived
 business content. The command verifies memberships, project access, Dashboard
 and Project Overview SQL, the Records row, and the exact `0001`–`0012`
 migration ledger before reporting success.
-

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const previewDatabase = "base-office-forms-ui2-preview";
+const previewDatabase = "base-office-forms-rfi-preview";
 const previewMigrations = [
   "0001_shared_library.sql",
   "0002_schema_marker.sql",
@@ -16,61 +16,75 @@ const previewMigrations = [
   "0010_issuance_foundation.sql",
   "0011_templates_foundation.sql",
   "0012_project_record_sequences.sql",
+  "0013_rfi_slice1_register_workspace.sql",
+  "0014_rfi_document_control_alignment.sql",
 ];
 const wranglerCli = resolve("node_modules", "wrangler", "bin", "wrangler.js");
 
-function runWrangler(args, options = {}) {
+function run(args, json = false) {
   return execFileSync(process.execPath, [wranglerCli, ...args], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: options.json ? ["ignore", "pipe", "inherit"] : "inherit",
+    stdio: json ? ["ignore", "pipe", "inherit"] : "inherit",
   });
 }
 
+if (!existsSync(wranglerCli))
+  throw new Error("Local Wrangler is required; run npm install first.");
+run([
+  "d1",
+  "execute",
+  previewDatabase,
+  "--remote",
+  "--env",
+  "preview",
+  "--command",
+  "CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "--yes",
+]);
 const ledger = JSON.parse(
-  runWrangler(
+  run(
     [
       "d1",
       "execute",
       previewDatabase,
       "--remote",
       "--env",
-      "ui2",
+      "preview",
       "--command",
       "SELECT name FROM d1_migrations ORDER BY id",
       "--json",
     ],
-    { json: true },
+    true,
   ),
 );
 const applied = new Set(ledger[0]?.results?.map((row) => row.name) ?? []);
 
 for (const migration of previewMigrations) {
   if (applied.has(migration)) continue;
-
   const migrationPath = resolve("migrations", migration);
-  if (!existsSync(migrationPath)) {
-    throw new Error(`Required UI-2 preview migration is missing: ${migration}`);
-  }
-
-  runWrangler([
+  if (!existsSync(migrationPath))
+    throw new Error(
+      `Required combined-preview migration is missing: ${migration}`,
+    );
+  run([
     "d1",
     "execute",
     previewDatabase,
     "--remote",
     "--env",
-    "ui2",
+    "preview",
     "--file",
     migrationPath,
     "--yes",
   ]);
-  runWrangler([
+  run([
     "d1",
     "execute",
     previewDatabase,
     "--remote",
     "--env",
-    "ui2",
+    "preview",
     "--command",
     `INSERT INTO d1_migrations (name) VALUES ('${migration}')`,
     "--yes",
@@ -78,5 +92,5 @@ for (const migration of previewMigrations) {
 }
 
 console.log(
-  `UI-2 preview migration ledger is current (${previewMigrations.length} migrations).`,
+  `Combined RFI preview migration ledger is current (${previewMigrations.length} migrations).`,
 );

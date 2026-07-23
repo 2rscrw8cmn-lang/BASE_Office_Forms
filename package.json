@@ -32,6 +32,8 @@
     "db:migrations:list:preview": "wrangler d1 migrations list base-office-forms-ui2-preview --remote --env preview",
     "db:fixture:preview": "node scripts/ui2-preview-fixture.mjs seed",
     "db:fixture:preview:cleanup": "node scripts/ui2-preview-fixture.mjs cleanup",
+    "db:migrate:rfi-preview": "node scripts/migrate-rfi-preview-d1.mjs",
+    "db:migrations:list:rfi-preview": "wrangler d1 migrations list base-office-forms-rfi-preview --remote --env preview",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm test && npm run build && npm run functions:build && npm run security:dependencies && npm run security:secrets"
   },
   "devDependencies": {
