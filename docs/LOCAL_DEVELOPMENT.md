@@ -101,3 +101,29 @@ npm run deploy
 
 Do not use production credentials or production data in local, preview, or test
 environments.
+
+## UI-2 preview D1
+
+UI-2 uses its own preview-only D1 database, `base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). The root `DB` binding declares that
+ID as `preview_database_id`; production remains
+`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`). Do not
+run production migration commands to prepare a Pages preview.
+
+```bash
+# Apply and verify only the UI-2/current-main migration set (0001–0012).
+npm run db:migrate:preview
+npm run db:migrations:list:preview
+
+# Production inspection/migration remains explicit and separate.
+npm run db:migrations:list:remote
+npm run db:migrate:remote
+```
+
+`db:migrate:preview` intentionally pins the UI-2 migration list and applies it
+through D1's file importer before recording the migration ledger. Wrangler
+4.113's normal migration runner splits the historical trigger bodies in
+`0003_identity_and_organizations.sql` and returns `incomplete input`; the
+preview helper avoids that parser path. It never includes PR #36 migrations
+`0013` or `0014`. The database contains schema only; provision an approved
+non-production session/project fixture before an authenticated route smoke test.

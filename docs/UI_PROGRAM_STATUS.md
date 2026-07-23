@@ -77,14 +77,11 @@ does not perform the later legacy-Georgia typography migration.
 
 ### Current blockers
 
-1. Capture the authenticated preview Project Overview response: HTTP status,
-   API error code, request ID, and response body, then compare the same request
-   against current main. Direct requests from this environment stop at the
-   Cloudflare Access HTML sign-in page, so they cannot supply API evidence.
-2. Run the product-owner browser smoke suite against the merged preview,
-   including session, Dashboard, Projects, Project Overview, Records, a real
-   direct-route refresh, history navigation, mobile navigation, and controlled
-   document preview, plus Studio and Document Library.
+1. Deploy the explicit UI-2 preview binding and provision an approved
+   non-production session/project fixture in its schema-only database.
+2. Re-run the failed authenticated Dashboard and Project Overview checks and
+   verify that register captions and filter labels are visually hidden while
+   remaining available to assistive technology.
 
 UI-2 is technically ready for that product-owner smoke testing, but remains
 active until every blocker above is resolved. Its implementation work is not
@@ -95,11 +92,40 @@ permission to mark the phase complete early.
 After the nested Miniflare `sharp` override, `npm install` regenerated
 `package-lock.json` with `sharp` 0.35.3. `npm audit --audit-level=high` reports
 zero vulnerabilities. The 2026-07-23 `npm run check` gate passes Prettier,
-generated Cloudflare types, TypeScript, ESLint, 232 unit tests, 101 Worker
+generated Cloudflare types, TypeScript, ESLint, 233 unit tests, 101 Worker
 integration tests, the Vite application build, static asset verification, Pages
-Functions compilation, dependency audit, and the 243-file secret scan. No
+Functions compilation, dependency audit, and the 244-file secret scan. No
 browser screenshots or interactive smoke evidence can be produced here because
 no Access-authorized browser is available.
+
+### Product-owner smoke and preview root cause (2026-07-23)
+
+The authenticated smoke passed session/application shell, Projects, Records,
+direct navigation plus Back/Forward, Studio, Document Library, controlled
+document preview, and mobile navigation. It failed Dashboard and Project
+Overview with `Unable to load`; the reported overview request returned HTTP 500
+and Cloudflare Error 1101 at 2026-07-23 15:32:46 UTC (Ray ID
+`a1fbbd60bbfef3cb`).
+
+The direct Cloudflare D1 reproduction captured the exact underlying exception:
+`no such table: rfi_records: SQLITE_ERROR [code: 7500]`. Dashboard reaches that
+table in `src/infrastructure/db/d1/dashboard-read-repository.ts` and Project
+Overview reaches it in
+`src/infrastructure/db/d1/project-overview-read-repository.ts`. Those are the
+only failing read models; Projects and Records do not query `rfi_records`.
+Cloudflare Pages tailing is live-only and returned no historical entry for the
+given Ray ID, but the SQL exception and source query reproduce the reported
+Worker failure exactly.
+
+The prior Pages preview database, `base-office-forms-preview`
+(`b3b1b9d7-b4ce-4ebd-97c4-67c9f450f3d6`), recorded PR #36 migrations `0013` and
+`0014`. Migration `0014` drops `rfi_records`, which explains the failure. UI-2
+now binds the new `base-office-forms-ui2-preview`
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`) through `preview_database_id`. Its
+ledger contains only `0001`–`0012`; `rfi_records` has the expected
+`title`, `due_date`, `status`, and related legacy columns, and the Dashboard
+and Overview count queries both return successfully. Production's D1 binding
+and migration ledger were only read; no production migration was applied.
 
 ### Preview Project Overview investigation (2026-07-23)
 
@@ -141,28 +167,26 @@ UI-2 is complete only when all of these are true:
 
 ## 5. Phase status
 
-| Phase                        | Status                                            | Next gate                                         |
-| ---------------------------- | ------------------------------------------------- | ------------------------------------------------- |
-| Spike 0 — Tabulator          | Complete; rejected for RFI                        | Future high-volume proposal only                  |
-| UI-1 — Audit and decisions   | Complete                                          | Binding documents and ADRs recorded               |
-| UI-2 — CSS + React/Vite      | Active; technically ready for product-owner smoke | Authenticated preview diagnosis and browser smoke |
-| UI-3 — Components + UI Lab   | Not started                                       | UI-2 exit gate passes                             |
-| UI-4 — React shell           | Not started                                       | UI-3 shared patterns stable                       |
-| UI-5 — RFI register          | Not started                                       | Controlled-table parity; no Tabulator dependency  |
-| UI-6 — Projects + Records    | Not started                                       | Shared register contract                          |
-| UI-7 — Detail workspaces     | Not started                                       | Shared workspace contract                         |
-| UI-8 — Dashboard/forms/admin | Not started                                       | Shared shell/forms/registers stable               |
-| UI-9 — Library + Studio      | Not started                                       | Application foundation stable                     |
-| UI-10 — Enforcement/cleanup  | Not started                                       | Route parity and visual baselines                 |
+| Phase                        | Status                       | Next gate                                                      |
+| ---------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| Spike 0 — Tabulator          | Complete; rejected for RFI   | Future high-volume proposal only                               |
+| UI-1 — Audit and decisions   | Complete                     | Binding documents and ADRs recorded                            |
+| UI-2 — CSS + React/Vite      | Active; root cause corrected | Deploy preview binding, provision fixture, and targeted retest |
+| UI-3 — Components + UI Lab   | Not started                  | UI-2 exit gate passes                                          |
+| UI-4 — React shell           | Not started                  | UI-3 shared patterns stable                                    |
+| UI-5 — RFI register          | Not started                  | Controlled-table parity; no Tabulator dependency               |
+| UI-6 — Projects + Records    | Not started                  | Shared register contract                                       |
+| UI-7 — Detail workspaces     | Not started                  | Shared workspace contract                                      |
+| UI-8 — Dashboard/forms/admin | Not started                  | Shared shell/forms/registers stable                            |
+| UI-9 — Library + Studio      | Not started                  | Application foundation stable                                  |
+| UI-10 — Enforcement/cleanup  | Not started                  | Route parity and visual baselines                              |
 
 ## 6. Current constraints and risks
 
-- The configured remote D1 database has the overview tables and migrations and
-  its overview SQL succeeds for a live project. The PR and current-main
-  overview server source are identical. This makes a branch code or shared-D1
-  schema regression unlikely, but it is not a replacement for an authenticated
-  preview response; Cloudflare Access/browser availability currently blocks
-  that capture.
+- Preview D1 schema must remain isolated by branch-compatible migration set.
+  UI-2's preview is schema-only after the correction, so it needs an approved
+  non-production identity/project fixture before the product owner can repeat
+  authenticated route tests.
 - Official RFI issuance remains incomplete and must fail closed.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.

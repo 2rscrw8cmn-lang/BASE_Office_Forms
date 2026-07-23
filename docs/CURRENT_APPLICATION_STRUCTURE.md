@@ -66,6 +66,16 @@ Storage
 The D1 binding also contains immutable `issuances` and `issuance_files`
 snapshots plus `project_issuance_sequences` for project-wide issue numbering.
 
+For UI-2 Pages previews, `DB` is explicitly bound to the isolated
+`base-office-forms-ui2-preview` database
+(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It carries only the UI-2/current-main
+`0001`–`0012` migration ledger, including the legacy `rfi_records` table used
+by Dashboard and Project Overview. Production remains bound to
+`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and was
+inspected but not modified. PR #36's separate preview database is not a UI-2
+binding because its `0013`/`0014` RFI schema is incompatible with these read
+models.
+
 ## Frontend architecture and design inventory
 
 `public/index.html` is the single entry point for new application routes and

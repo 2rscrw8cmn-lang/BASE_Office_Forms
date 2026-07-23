@@ -11,6 +11,8 @@ const applicationHostSource = readFileSync(
   "src/ui/app/LegacyApplicationHost.tsx",
   "utf8",
 );
+const projectsViewSource = readFileSync("public/projects-view.js", "utf8");
+const recordsViewSource = readFileSync("public/records-view.js", "utf8");
 const engineSource = readFileSync("public/engine.js", "utf8");
 const baseCss = readFileSync("public/base.css", "utf8");
 
@@ -34,6 +36,27 @@ describe("UI-2 application boundary", () => {
     expect(applicationCss).toContain("color: var(--ink);");
     expect(applicationCss).toContain(".app-shell-body *::before");
     expect(applicationCss).toContain(".app-shell-body p {");
+  });
+
+  it("keeps register captions and filter labels accessible but visually hidden", () => {
+    expect(applicationCss).toContain(".app-shell-body .sr-only {");
+    expect(applicationCss).toContain("position: absolute;");
+    expect(applicationCss).toContain("clip: rect(0, 0, 0, 0);");
+    expect(projectsViewSource).toContain(
+      '<caption class="sr-only">Projects you can access</caption>',
+    );
+    expect(projectsViewSource).toContain(
+      '<label class="sr-only" for="projects-search">Search projects</label>',
+    );
+    expect(recordsViewSource).toContain(
+      '<caption class="sr-only">Documents you can access in this project</caption>',
+    );
+    expect(recordsViewSource).toContain(
+      '<label class="sr-only" for="records-search">Search records</label>',
+    );
+    expect(recordsViewSource).toContain(
+      '<label class="sr-only" for="records-sort">Sort records</label>',
+    );
   });
 
   it("uses application-owned startup classes", () => {
