@@ -210,6 +210,11 @@ has approved visual evidence to retire the legacy renderer import.
 
 ## ADR-028 — Reject Tabulator for the RFI register after Spike 0
 
+**Reconciliation note (2026-07-23):** PR #36 preserves the controlled semantic
+RFI table and approved expandable draft-editor model. No RFI route is pending
+Tabulator adoption; any future high-volume register reconsideration requires a
+new ADR and interaction/accessibility proof.
+
 **Decision:** Reject Tabulator for the production RFI register. Retain the
 existing controlled custom table and revisit Tabulator only for a future
 high-volume register, log, or export surface.

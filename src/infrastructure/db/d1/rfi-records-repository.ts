@@ -1,4 +1,8 @@
-import { RfiIllegalTransitionError } from "../../../domain/rfis/errors";
+import {
+  RfiConflictError,
+  RfiIllegalTransitionError,
+} from "../../../domain/rfis/errors";
+import { canUpdateDraft } from "../../../domain/rfis/lifecycle";
 import type {
   Rfi,
   RfiResponse,
@@ -6,7 +10,6 @@ import type {
   RfiWriteInput,
 } from "../../../domain/rfis/rfi";
 import type { NewActivityEvent } from "./activity-events-repository";
-import { D1RfiNumberSequencesRepository } from "./rfi-number-sequences-repository";
 import {
   D1RfiResponsesRepository,
   type RfiResponseWriteInput,
@@ -16,98 +19,171 @@ interface RfiRow {
   id: string;
   organization_id: string;
   project_id: string;
+  template_version_id: string | null;
   rfi_number: string | null;
+  issued_number_sequence: number | null;
+  legacy_reference: string | null;
   status: RfiStatus;
-  title: string;
+  subject: string;
   question: string;
-  suggested_resolution: string | null;
+  contractor_suggestion: string | null;
+  drawing_references: string | null;
+  specification_references: string | null;
+  responsible_party_id: string | null;
+  responsible_party: string | null;
+  responsible_party_legacy_text: string | null;
   submitted_by: string | null;
-  assigned_to: string | null;
-  due_date: string | null;
+  requested_response_date: string | null;
   cost_impact: string | null;
   schedule_impact: string | null;
   issued_at: string | null;
-  answered_at: string | null;
+  response_received_at: string | null;
   closed_at: string | null;
+  lock_version: number;
+  created_by: string;
   created_at: string;
   updated_at: string;
+  draft_revision_id: string;
+  issuance_reconciliation_state: "not_issued" | "legacy_incomplete";
 }
 
-const RFI_COLUMNS = `id, organization_id, project_id, rfi_number, status, title, question,
-  suggested_resolution, submitted_by, assigned_to, due_date, cost_impact, schedule_impact,
-  issued_at, answered_at, closed_at, created_at, updated_at`;
+const RFI_COLUMNS = `
+  record.id AS id,
+  record.organization_id AS organization_id,
+  record.project_id AS project_id,
+  record.template_version_id AS template_version_id,
+  record.record_number AS rfi_number,
+  record.sequence_no AS issued_number_sequence,
+  details.legacy_reference AS legacy_reference,
+  record.workflow_status AS status,
+  record.title AS subject,
+  details.question AS question,
+  details.contractor_suggestion AS contractor_suggestion,
+  details.drawing_references AS drawing_references,
+  details.specification_references AS specification_references,
+  record.current_responsible_contact_id AS responsible_party_id,
+  contact.contact_name AS responsible_party,
+  record.responsible_party_legacy_text AS responsible_party_legacy_text,
+  details.submitted_by_legacy_text AS submitted_by,
+  record.due_date AS requested_response_date,
+  details.cost_impact_legacy_text AS cost_impact,
+  details.schedule_impact_legacy_text AS schedule_impact,
+  record.issued_at AS issued_at,
+  details.response_received_at AS response_received_at,
+  record.closed_at AS closed_at,
+  record.lock_version AS lock_version,
+  record.created_by AS created_by,
+  record.created_at AS created_at,
+  record.updated_at AS updated_at,
+  record.current_revision_id AS draft_revision_id,
+  details.issuance_reconciliation_state AS issuance_reconciliation_state`;
+
+const RFI_FROM = `records record
+  JOIN rfi_details details
+    ON details.record_id = record.id
+   AND details.organization_id = record.organization_id
+   AND details.project_id = record.project_id
+  LEFT JOIN project_contacts contact
+    ON contact.id = record.current_responsible_contact_id
+   AND contact.organization_id = record.organization_id
+   AND contact.project_id = record.project_id
+   AND contact.archived_at IS NULL`;
+
+const STATE_JSON_OBJECT = `json_object(
+  'projectId', record.project_id,
+  'templateVersionId', record.template_version_id,
+  'rfiNumber', record.record_number,
+  'status', record.workflow_status,
+  'subject', record.title,
+  'question', details.question,
+  'contractorSuggestion', details.contractor_suggestion,
+  'drawingReferences', details.drawing_references,
+  'specificationReferences', details.specification_references,
+  'responsiblePartyId', record.current_responsible_contact_id,
+  'responsibleParty', COALESCE(contact.contact_name, record.responsible_party_legacy_text),
+  'requestedResponseDate', record.due_date,
+  'issuedAt', record.issued_at,
+  'responseReceivedAt', details.response_received_at,
+  'closedAt', record.closed_at,
+  'lockVersion', record.lock_version
+)`;
 
 function mapRfi(row: RfiRow): Rfi {
   return {
     id: row.id,
     organizationId: row.organization_id,
     projectId: row.project_id,
+    templateVersionId: row.template_version_id,
     rfiNumber: row.rfi_number,
+    legacyReference: row.legacy_reference,
     status: row.status,
-    title: row.title,
+    subject: row.subject,
     question: row.question,
-    suggestedResolution: row.suggested_resolution,
+    contractorSuggestion: row.contractor_suggestion,
+    drawingReferences: row.drawing_references,
+    specificationReferences: row.specification_references,
+    responsiblePartyId: row.responsible_party_id,
+    responsibleParty:
+      row.responsible_party ?? row.responsible_party_legacy_text,
+    responsiblePartyLegacyText: row.responsible_party_legacy_text,
     submittedBy: row.submitted_by,
-    assignedTo: row.assigned_to,
-    dueDate: row.due_date,
+    requestedResponseDate: row.requested_response_date,
     costImpact: row.cost_impact,
     scheduleImpact: row.schedule_impact,
+    issuedNumberSequence: row.issued_number_sequence,
+    draftRevisionId: row.draft_revision_id,
+    issuanceReconciliationState: row.issuance_reconciliation_state,
     issuedAt: row.issued_at,
-    answeredAt: row.answered_at,
+    responseReceivedAt: row.response_received_at,
     closedAt: row.closed_at,
+    lockVersion: row.lock_version,
+    createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function state(rfi: Rfi): Record<string, unknown> {
+function priorState(rfi: Rfi): Record<string, unknown> {
   return {
     projectId: rfi.projectId,
+    templateVersionId: rfi.templateVersionId,
     rfiNumber: rfi.rfiNumber,
     status: rfi.status,
-    title: rfi.title,
+    subject: rfi.subject,
     question: rfi.question,
-    suggestedResolution: rfi.suggestedResolution,
-    submittedBy: rfi.submittedBy,
-    assignedTo: rfi.assignedTo,
-    dueDate: rfi.dueDate,
+    contractorSuggestion: rfi.contractorSuggestion,
+    drawingReferences: rfi.drawingReferences,
+    specificationReferences: rfi.specificationReferences,
+    responsiblePartyId: rfi.responsiblePartyId,
+    requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
     scheduleImpact: rfi.scheduleImpact,
     issuedAt: rfi.issuedAt,
-    answeredAt: rfi.answeredAt,
+    responseReceivedAt: rfi.responseReceivedAt,
     closedAt: rfi.closedAt,
+    lockVersion: rfi.lockVersion,
   };
 }
+
+type ActivityInput = Omit<
+  NewActivityEvent,
+  "organizationId" | "objectId" | "priorState" | "newState"
+>;
 
 function eventStatement(
   database: D1Database,
   event: NewActivityEvent,
-  rfi: Rfi,
+  rfi: Pick<Rfi, "id" | "organizationId" | "projectId">,
 ): D1PreparedStatement {
   return database
     .prepare(
       `INSERT INTO activity_events
         (id, organization_id, actor_user_id, actor_type, object_type, object_id,
          action, prior_state_json, new_state_json, metadata_json, correlation_id, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, json_object(
-         'projectId', project_id,
-         'rfiNumber', rfi_number,
-         'status', status,
-         'title', title,
-         'question', question,
-         'suggestedResolution', suggested_resolution,
-         'submittedBy', submitted_by,
-         'assignedTo', assigned_to,
-         'dueDate', due_date,
-         'costImpact', cost_impact,
-         'scheduleImpact', schedule_impact,
-         'issuedAt', issued_at,
-         'answeredAt', answered_at,
-         'closedAt', closed_at
-       ), ?, ?, ?
-       FROM rfi_records
-       WHERE id = ? AND organization_id = ? AND project_id = ?
-         AND status = ? AND updated_at = ? AND changes() = 1`,
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ${STATE_JSON_OBJECT}, ?, ?, ?
+       FROM ${RFI_FROM}
+       WHERE record.id = ? AND record.organization_id = ? AND record.project_id = ?
+         AND changes() = 1`,
     )
     .bind(
       crypto.randomUUID(),
@@ -124,30 +200,28 @@ function eventStatement(
       rfi.id,
       rfi.organizationId,
       rfi.projectId,
-      rfi.status,
-      rfi.updatedAt,
     );
 }
 
-type ActivityInput = Omit<
-  NewActivityEvent,
-  "organizationId" | "objectId" | "priorState" | "newState"
->;
+export interface RfiCreateInput extends RfiWriteInput {
+  templateVersionId: string;
+  createdBy: string;
+}
 
 export class D1RfiRecordsRepository {
   constructor(
     private readonly database: D1Database,
-    private readonly sequences: D1RfiNumberSequencesRepository,
     private readonly responses: D1RfiResponsesRepository,
   ) {}
 
   async list(organizationId: string, projectId: string): Promise<Rfi[]> {
     const result = await this.database
       .prepare(
-        `SELECT ${RFI_COLUMNS} FROM rfi_records
-         WHERE organization_id = ? AND project_id = ?
-         ORDER BY CASE WHEN rfi_number IS NULL THEN 1 ELSE 0 END,
-           rfi_number ASC, created_at DESC, id ASC`,
+        `SELECT ${RFI_COLUMNS} FROM ${RFI_FROM}
+         WHERE record.organization_id = ? AND record.project_id = ?
+           AND record.record_type_key = 'rfi'
+         ORDER BY CASE WHEN record.record_number IS NULL THEN 1 ELSE 0 END,
+           record.record_number ASC, record.created_at DESC, record.id ASC`,
       )
       .bind(organizationId, projectId)
       .all<RfiRow>();
@@ -161,8 +235,9 @@ export class D1RfiRecordsRepository {
   ): Promise<Rfi | null> {
     const row = await this.database
       .prepare(
-        `SELECT ${RFI_COLUMNS} FROM rfi_records
-         WHERE organization_id = ? AND project_id = ? AND id = ?`,
+        `SELECT ${RFI_COLUMNS} FROM ${RFI_FROM}
+         WHERE record.organization_id = ? AND record.project_id = ?
+           AND record.id = ? AND record.record_type_key = 'rfi'`,
       )
       .bind(organizationId, projectId, rfiId)
       .first<RfiRow>();
@@ -172,124 +247,204 @@ export class D1RfiRecordsRepository {
   async createWithActivity(
     organizationId: string,
     projectId: string,
-    input: RfiWriteInput,
+    input: RfiCreateInput,
     event: Omit<NewActivityEvent, "organizationId" | "objectId" | "newState">,
   ): Promise<Rfi> {
+    const id = crypto.randomUUID();
+    const revisionId = `${id}:rfi-draft-v1`;
     const now = new Date().toISOString();
-    const rfi: Rfi = {
-      id: crypto.randomUUID(),
+    const shell: Pick<Rfi, "id" | "organizationId" | "projectId"> = {
+      id,
       organizationId,
       projectId,
-      rfiNumber: null,
-      status: "draft",
-      ...input,
-      issuedAt: null,
-      answeredAt: null,
-      closedAt: null,
-      createdAt: now,
-      updatedAt: now,
     };
-    await this.database.batch([
+    const results = await this.database.batch([
       this.database
         .prepare(
-          `INSERT INTO rfi_records (${RFI_COLUMNS})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO records (
+             id, organization_id, project_id, record_type, record_type_key,
+             record_number, title, description, status, workflow_status,
+             discipline, source, created_by, current_revision_id, archived_at,
+             template_version_id, sequence_no, current_responsible_contact_id,
+             responsible_party_legacy_text, due_date, issued_at, returned_at,
+             closed_at, lock_version, created_at, updated_at
+           ) VALUES (
+             ?, ?, ?, 'other', 'rfi', NULL, ?, NULL, 'active', 'draft',
+             NULL, 'rfi', ?, NULL, NULL, ?, NULL, ?, NULL, ?, NULL, NULL,
+             NULL, 1, ?, ?
+           )`,
         )
         .bind(
-          rfi.id,
-          rfi.organizationId,
-          rfi.projectId,
-          rfi.rfiNumber,
-          rfi.status,
-          rfi.title,
-          rfi.question,
-          rfi.suggestedResolution,
-          rfi.submittedBy,
-          rfi.assignedTo,
-          rfi.dueDate,
-          rfi.costImpact,
-          rfi.scheduleImpact,
-          rfi.issuedAt,
-          rfi.answeredAt,
-          rfi.closedAt,
-          rfi.createdAt,
-          rfi.updatedAt,
+          id,
+          organizationId,
+          projectId,
+          input.subject,
+          input.createdBy,
+          input.templateVersionId,
+          input.responsiblePartyId,
+          input.requestedResponseDate,
+          now,
+          now,
         ),
+      this.database
+        .prepare(
+          `INSERT INTO rfi_details (
+             record_id, organization_id, project_id, question,
+             contractor_suggestion, drawing_references,
+             specification_references, submitted_by_legacy_text,
+             response, response_by_user_id, response_by_contact_id,
+             response_received_at, cost_impact_legacy_text,
+             schedule_impact_legacy_text, closure_notes, legacy_reference,
+             legacy_workflow_status, issuance_reconciliation_state
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?,
+             NULL, NULL, NULL, 'not_issued')`,
+        )
+        .bind(
+          id,
+          organizationId,
+          projectId,
+          input.question,
+          input.contractorSuggestion,
+          input.drawingReferences,
+          input.specificationReferences,
+          input.submittedBy,
+          input.costImpact,
+          input.scheduleImpact,
+        ),
+      this.database
+        .prepare(
+          `INSERT INTO record_revisions (
+             id, organization_id, project_id, record_id, revision_number,
+             revision_label, title, description, discipline, source,
+             change_summary, status, created_by, created_at
+           ) VALUES (?, ?, ?, ?, 1, 'Draft', ?, ?, NULL, 'rfi',
+             'Initial RFI draft', 'draft', ?, ?)`,
+        )
+        .bind(
+          revisionId,
+          organizationId,
+          projectId,
+          id,
+          input.subject,
+          input.question,
+          input.createdBy,
+          now,
+        ),
+      this.database
+        .prepare(
+          `INSERT INTO record_revision_sequences (record_id, organization_id, last_number)
+           VALUES (?, ?, 1)`,
+        )
+        .bind(id, organizationId),
+      this.database
+        .prepare(
+          `UPDATE records SET current_revision_id = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND record_type_key = 'rfi'`,
+        )
+        .bind(revisionId, id, organizationId, projectId),
       eventStatement(
         this.database,
-        { ...event, organizationId, objectId: rfi.id, newState: null },
-        rfi,
+        { ...event, organizationId, objectId: id, newState: null },
+        shell,
       ),
     ]);
-    return rfi;
-  }
-
-  async updateDraftWithActivity(rfi: Rfi, input: RfiWriteInput): Promise<Rfi> {
-    const updated: Rfi = {
-      ...rfi,
-      ...input,
-      updatedAt: new Date().toISOString(),
-    };
-    const result = await this.database
-      .prepare(
-        `UPDATE rfi_records SET title = ?, question = ?, suggested_resolution = ?,
-          submitted_by = ?, assigned_to = ?, due_date = ?, cost_impact = ?,
-          schedule_impact = ?, updated_at = ?
-         WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'`,
-      )
-      .bind(
-        updated.title,
-        updated.question,
-        updated.suggestedResolution,
-        updated.submittedBy,
-        updated.assignedTo,
-        updated.dueDate,
-        updated.costImpact,
-        updated.scheduleImpact,
-        updated.updatedAt,
-        updated.id,
-        updated.organizationId,
-        updated.projectId,
-      )
-      .run();
-    if (result.meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(rfi.status, "be edited");
+    if (results.some((result) => result.meta.changes !== 1)) {
+      throw new Error("The RFI draft could not be created atomically.");
     }
-    return updated;
+    const created = await this.findById(organizationId, projectId, id);
+    if (!created) throw new Error("Created RFI could not be loaded.");
+    return created;
   }
 
-  async issueWithActivity(rfi: Rfi, event: ActivityInput): Promise<Rfi> {
+  async updateDraftWithActivity(
+    rfi: Rfi,
+    input: RfiWriteInput,
+    expectedLockVersion: number,
+    event: ActivityInput,
+  ): Promise<Rfi> {
     const now = new Date().toISOString();
+    const nextLock = expectedLockVersion + 1;
     const results = await this.database.batch([
-      this.sequences.ensureForIssueStatement(
-        rfi.organizationId,
-        rfi.projectId,
-        rfi.id,
-      ),
-      this.sequences.advanceForIssueStatement(
-        rfi.organizationId,
-        rfi.projectId,
-        rfi.id,
-      ),
       this.database
         .prepare(
-          `UPDATE rfi_records
-           SET status = 'issued',
-             rfi_number = 'RFI-' || printf('%03d', (
-               SELECT last_number FROM rfi_number_sequences
-               WHERE project_id = ? AND organization_id = ?
-             )),
-             issued_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'draft'`,
+          `UPDATE rfi_details SET question = ?, contractor_suggestion = ?,
+             drawing_references = ?, specification_references = ?,
+             submitted_by_legacy_text = ?, cost_impact_legacy_text = ?,
+             schedule_impact_legacy_text = ?
+           WHERE record_id = ? AND organization_id = ? AND project_id = ?
+             AND EXISTS (
+               SELECT 1 FROM records record
+               JOIN record_revisions revision
+                 ON revision.id = record.current_revision_id
+                AND revision.record_id = record.id
+               WHERE record.id = rfi_details.record_id
+                 AND record.organization_id = rfi_details.organization_id
+                 AND record.project_id = rfi_details.project_id
+                 AND record.record_type_key = 'rfi'
+                 AND record.workflow_status = 'draft'
+                 AND record.lock_version = ?
+                 AND revision.status = 'draft'
+             )`,
         )
         .bind(
-          rfi.projectId,
+          input.question,
+          input.contractorSuggestion,
+          input.drawingReferences,
+          input.specificationReferences,
+          input.submittedBy,
+          input.costImpact,
+          input.scheduleImpact,
+          rfi.id,
           rfi.organizationId,
-          now,
+          rfi.projectId,
+          expectedLockVersion,
+        ),
+      this.database
+        .prepare(
+          `UPDATE records SET title = ?, current_responsible_contact_id = ?,
+             responsible_party_legacy_text = NULL, due_date = ?,
+             lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND record_type_key = 'rfi' AND workflow_status = 'draft'
+             AND lock_version = ?
+             AND EXISTS (SELECT 1 FROM rfi_details WHERE record_id = records.id)
+             AND EXISTS (
+               SELECT 1 FROM record_revisions revision
+               WHERE revision.id = records.current_revision_id
+                 AND revision.record_id = records.id AND revision.status = 'draft'
+             )`,
+        )
+        .bind(
+          input.subject,
+          input.responsiblePartyId,
+          input.requestedResponseDate,
+          nextLock,
           now,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
+          expectedLockVersion,
+        ),
+      this.database
+        .prepare(
+          `UPDATE record_revisions SET title = ?, description = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND record_id = ? AND status = 'draft'
+             AND EXISTS (
+               SELECT 1 FROM records record
+               WHERE record.id = record_revisions.record_id
+                 AND record.lock_version = ? AND record.workflow_status = 'draft'
+             )`,
+        )
+        .bind(
+          input.subject,
+          input.question,
+          rfi.draftRevisionId,
+          rfi.organizationId,
+          rfi.projectId,
+          rfi.id,
+          nextLock,
         ),
       eventStatement(
         this.database,
@@ -297,22 +452,22 @@ export class D1RfiRecordsRepository {
           ...event,
           organizationId: rfi.organizationId,
           objectId: rfi.id,
-          priorState: state(rfi),
+          priorState: priorState(rfi),
           newState: null,
         },
-        { ...rfi, status: "issued", issuedAt: now, updatedAt: now },
+        rfi,
       ),
     ]);
-    if (results[2].meta.changes !== 1 || results[3].meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(rfi.status, "be issued");
+    if (results.some((result) => result.meta.changes !== 1)) {
+      await this.throwWriteFailure(rfi, "be edited", expectedLockVersion);
     }
-    const issued = await this.findById(
+    const updated = await this.findById(
       rfi.organizationId,
       rfi.projectId,
       rfi.id,
     );
-    if (!issued) throw new Error("Issued RFI could not be loaded.");
-    return issued;
+    if (!updated) throw new Error("Updated RFI could not be loaded.");
+    return updated;
   }
 
   async respondWithActivity(
@@ -322,106 +477,152 @@ export class D1RfiRecordsRepository {
   ): Promise<{ rfi: Rfi; response: RfiResponse }> {
     const response = this.responses.createResponse(
       rfi.organizationId,
+      rfi.projectId,
       rfi.id,
       input,
     );
     const now = new Date().toISOString();
-    const answered: Rfi = {
-      ...rfi,
-      status: "answered",
-      answeredAt: now,
-      updatedAt: now,
-    };
+    const nextLock = rfi.lockVersion + 1;
     const results = await this.database.batch([
-      this.responses.createForIssuedRfiStatement(response),
+      this.responses.createForIssuedRfiStatement(response, rfi.projectId),
       this.database
         .prepare(
-          `UPDATE rfi_records
-           SET status = 'answered', answered_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = 'issued'
-             AND EXISTS (SELECT 1 FROM rfi_responses WHERE id = ?)`,
+          `UPDATE rfi_details SET response = ?, response_by_user_id = ?,
+             response_received_at = ?
+           WHERE record_id = ? AND organization_id = ? AND project_id = ?
+             AND EXISTS (
+               SELECT 1 FROM records WHERE id = rfi_details.record_id
+                 AND workflow_status IN ('open', 'returned_for_clarification')
+                 AND lock_version = ?
+             )`,
         )
         .bind(
-          answered.answeredAt,
-          answered.updatedAt,
+          response.response,
+          response.respondedBy,
+          now,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
-          response.id,
+          rfi.lockVersion,
+        ),
+      this.database
+        .prepare(
+          `UPDATE records SET workflow_status = 'response_received',
+             returned_at = ?, lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND workflow_status IN ('open', 'returned_for_clarification')
+             AND lock_version = ?`,
+        )
+        .bind(
+          now,
+          nextLock,
+          now,
+          rfi.id,
+          rfi.organizationId,
+          rfi.projectId,
+          rfi.lockVersion,
         ),
       eventStatement(
         this.database,
         {
           ...event,
-          organizationId: answered.organizationId,
-          objectId: answered.id,
-          priorState: state(rfi),
+          organizationId: rfi.organizationId,
+          objectId: rfi.id,
+          priorState: priorState(rfi),
           newState: null,
           metadata: { ...event.metadata, responseId: response.id },
         },
-        answered,
+        rfi,
       ),
     ]);
-    if (
-      results[0].meta.changes !== 1 ||
-      results[1].meta.changes !== 1 ||
-      results[2].meta.changes !== 1
-    ) {
-      throw new RfiIllegalTransitionError(rfi.status, "be responded to");
+    if (results.some((result) => result.meta.changes !== 1)) {
+      await this.throwWriteFailure(rfi, "be responded to");
     }
-    return { rfi: answered, response };
+    const updated = await this.findById(
+      rfi.organizationId,
+      rfi.projectId,
+      rfi.id,
+    );
+    if (!updated) throw new Error("Responded RFI could not be loaded.");
+    return { rfi: updated, response };
   }
 
   async transitionWithActivity(
     rfi: Rfi,
-    status: Exclude<RfiStatus, "draft" | "issued"> | "answered",
+    toStatus: RfiStatus,
+    action: string,
     event: ActivityInput,
   ): Promise<Rfi> {
     const now = new Date().toISOString();
-    const answeredAt = status === "answered" ? now : rfi.answeredAt;
-    const closedAt = status === "closed" ? now : null;
-    const updated: Rfi = {
-      ...rfi,
-      status,
-      answeredAt,
-      closedAt,
-      updatedAt: now,
-    };
+    const nextLock = rfi.lockVersion + 1;
+    const closedAt =
+      toStatus === "closed" ? now : toStatus === "open" ? null : rfi.closedAt;
     const results = await this.database.batch([
       this.database
         .prepare(
-          `UPDATE rfi_records
-           SET status = ?, answered_at = ?, closed_at = ?, updated_at = ?
-           WHERE id = ? AND organization_id = ? AND project_id = ? AND status = ?`,
+          `UPDATE records SET workflow_status = ?, closed_at = ?,
+             lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND record_type_key = 'rfi' AND workflow_status = ?
+             AND lock_version = ?`,
         )
         .bind(
-          status,
-          answeredAt,
+          toStatus,
           closedAt,
+          nextLock,
           now,
           rfi.id,
           rfi.organizationId,
           rfi.projectId,
           rfi.status,
+          rfi.lockVersion,
         ),
       eventStatement(
         this.database,
         {
           ...event,
-          organizationId: updated.organizationId,
-          objectId: updated.id,
-          priorState: state(rfi),
+          action,
+          organizationId: rfi.organizationId,
+          objectId: rfi.id,
+          priorState: priorState(rfi),
           newState: null,
         },
-        updated,
+        rfi,
       ),
     ]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
-      throw new RfiIllegalTransitionError(
-        rfi.status,
-        `transition to ${status}`,
-      );
+    if (results.some((result) => result.meta.changes !== 1)) {
+      await this.throwWriteFailure(rfi, `transition to ${toStatus}`);
     }
+    const updated = await this.findById(
+      rfi.organizationId,
+      rfi.projectId,
+      rfi.id,
+    );
+    if (!updated) throw new Error("Transitioned RFI could not be loaded.");
     return updated;
+  }
+
+  private async throwWriteFailure(
+    rfi: Rfi,
+    action: string,
+    expectedLockVersion: number = rfi.lockVersion,
+  ): Promise<never> {
+    const current = await this.findById(
+      rfi.organizationId,
+      rfi.projectId,
+      rfi.id,
+    );
+    if (current && current.lockVersion !== expectedLockVersion) {
+      throw new RfiConflictError();
+    }
+    if (
+      current &&
+      action === "be edited" &&
+      canUpdateDraft(current.status) &&
+      current.lockVersion === expectedLockVersion
+    ) {
+      throw new RfiConflictError();
+    }
+    throw new RfiIllegalTransitionError(rfi.status, action);
   }
 }

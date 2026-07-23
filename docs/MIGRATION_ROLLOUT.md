@@ -301,3 +301,15 @@ Before cutover publish:
 - Reduced duplicate entry between Notion and PDF tool
 - PM can find current responsible party quickly
 - External recipient sees only intended record/artifact
+
+## 14. RFI Slice 1 schema reconciliation
+
+Migration 0014 is a forward reconciliation from the temporary `rfi_records`
+model to the Records → Revisions → Files spine. Its stable RFI ID becomes the
+Record ID and `rfi_0014_reconciliation` preserves the legacy-to-record/draft
+mapping. The detailed preview topology, rehearsal, human approval points,
+backup, maintenance gate, reconciliation, monitoring, forward-fix, and rollback
+limits are in `RFI_SLICE_1_ROLLOUT.md`. Migration 0013 is already applied to
+production; 0014 remains pending and is only applied there as part of the
+human-approved coordinated cutover after PR #36 merges — never as part of
+this PR's own checks.

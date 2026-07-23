@@ -102,13 +102,33 @@ npm run deploy
 Do not use production credentials or production data in local, preview, or test
 environments.
 
-## UI-2 preview D1
+## Preview D1 environments
 
-UI-2 uses its own preview-only D1 database, `base-office-forms-ui2-preview`
-(`c874725c-78d8-43d5-a1b8-5d4d26e52067`). The root `DB` binding declares that
-ID as `preview_database_id`; production remains
-`base-office-forms-library` (`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`). Do not
-run production migration commands to prepare a Pages preview.
+Production is `base-office-forms-library`
+(`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`). Root Pages preview binds only the
+combined RFI database `base-office-forms-rfi-preview`
+(`5169cd7c-60d8-4dbd-a66c-75155f745216`) through `preview_database_id` and
+`env.preview`; it never binds production. Do not run production migrations to
+prepare a preview.
+
+```powershell
+npm run db:migrate:rfi-preview
+npm run db:migrations:list:rfi-preview
+$env:RFI_PREVIEW_FIXTURE_EMAIL = '<Access email>'
+npm run db:fixture:rfi-preview
+npm run db:fixture:rfi-preview:verify
+npm run db:fixture:rfi-preview:cleanup
+npm run db:rehearse:rfi-0014
+npm run db:rehearse:rfi-0014:cleanup
+```
+
+These commands are guarded to their exact non-production identities. The
+combined fixture reads only the matching active production user identity and
+writes synthetic preview data; the rehearsal has no production access. See
+`RFI_SLICE_1_ROLLOUT.md` for database identities, cleanup, and the production
+approval plan. Migrations 0013/0014 are never production commands in this task.
+
+### Retained UI-2 schema-only tooling
 
 ```bash
 # Apply and verify only the UI-2/current-main migration set (0001–0012).
@@ -130,9 +150,9 @@ guarded fixture below before an authenticated route smoke test.
 
 ### UI-2 authenticated smoke fixture
 
-The UI-2 fixture command seeds only `base-office-forms-ui2-preview`
+The historical UI-2 fixture command seeds only `base-office-forms-ui2-preview`
 (`c874725c-78d8-43d5-a1b8-5d4d26e52067`). It has no database-name argument and
-refuses to run unless `wrangler.jsonc` still pins that exact name and ID. The
+refuses to run unless `wrangler.ui2.jsonc` still pins that exact name and ID. The
 seed command reads the production `users` row for the supplied Access email
 only to obtain the existing identity subject, email, and display name; it does
 not write to production or copy business data. Those values are accepted only

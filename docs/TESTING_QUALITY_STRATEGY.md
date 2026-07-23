@@ -254,6 +254,16 @@ Shared application components and migrated routes require:
 
 A UI migration is not accepted because it looks cleaner. Behavioral parity, accessibility, authoritative permissions, failure recovery, and documentation closeout are required.
 
+### 12B. RFI Slice 1 reconciliation evidence
+
+Before production approval, run the guarded remote rehearsal in
+`RFI_SLICE_1_ROLLOUT.md`. It must prove a populated pre-0014 migration through
+0014 with resolved and unresolved Party values, response/attachment metadata,
+stable IDs, zero orphans, retired legacy tables, and an exact 14-entry ledger.
+Pages preview additionally requires an Access-authorized synthetic fixture and
+manual Dashboard, Project Overview, register, workspace, response, Records,
+navigation, mobile, Studio, and Document Library checks.
+
 ## 13. Performance targets
 
 Internal pilot targets under normal load:

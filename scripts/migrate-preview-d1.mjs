@@ -18,13 +18,18 @@ const previewMigrations = [
   "0012_project_record_sequences.sql",
 ];
 const wranglerCli = resolve("node_modules", "wrangler", "bin", "wrangler.js");
+const wranglerConfig = resolve("wrangler.ui2.jsonc");
 
 function runWrangler(args, options = {}) {
-  return execFileSync(process.execPath, [wranglerCli, ...args], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    stdio: options.json ? ["ignore", "pipe", "inherit"] : "inherit",
-  });
+  return execFileSync(
+    process.execPath,
+    [wranglerCli, "--config", wranglerConfig, ...args],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: options.json ? ["ignore", "pipe", "inherit"] : "inherit",
+    },
+  );
 }
 
 const ledger = JSON.parse(
@@ -34,8 +39,6 @@ const ledger = JSON.parse(
       "execute",
       previewDatabase,
       "--remote",
-      "--env",
-      "preview",
       "--command",
       "SELECT name FROM d1_migrations ORDER BY id",
       "--json",
@@ -58,8 +61,6 @@ for (const migration of previewMigrations) {
     "execute",
     previewDatabase,
     "--remote",
-    "--env",
-    "preview",
     "--file",
     migrationPath,
     "--yes",
@@ -69,8 +70,6 @@ for (const migration of previewMigrations) {
     "execute",
     previewDatabase,
     "--remote",
-    "--env",
-    "preview",
     "--command",
     `INSERT INTO d1_migrations (name) VALUES ('${migration}')`,
     "--yes",

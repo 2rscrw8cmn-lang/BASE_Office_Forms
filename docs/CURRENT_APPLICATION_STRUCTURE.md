@@ -6,6 +6,15 @@ Dashboard, Projects, Project Overview, and project Records register surfaces
 
 ## Runtime shape
 
+### RFI Slice 1 preview reconciliation
+
+Pages preview now binds the isolated combined RFI D1 database
+`base-office-forms-rfi-preview` (`5169cd7c-60d8-4dbd-a66c-75155f745216`) through
+the root preview binding. Production remains `base-office-forms-library`
+(`1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab`) and is not changed by PR #36. Retained
+UI-2 scripts use `wrangler.ui2.jsonc`; the remote 0014 rehearsal uses the
+separate guarded `wrangler.rfi-rehearsal.jsonc`. See `RFI_SLICE_1_ROLLOUT.md`.
+
 The repository is a Cloudflare Pages application with static browser assets, a
 small React/Vite application entry, Pages Functions, one D1 database binding,
 and one private R2 bucket binding. The React entry is a compatibility host;
@@ -610,10 +619,13 @@ authorization live in the new `src/application/identity`, `src/domain/identity`,
 `src/infrastructure/db/d1` modules. PR 3 adds `src/domain/projects`,
 `src/application/projects`, D1 project repositories, and explicit role plus
 project-membership authorization. PR 4 adds `src/domain/rfis`,
-`src/application/rfis`, and D1 RFI record, response, and number-sequence
-repositories. RFI numbers are assigned only by the atomic draft-to-issued database
-transition, are scoped to a project, and are never changed. Project, contact, and
-RFI lifecycle mutations append durable activity events. PR 5 adds `src/domain/records`,
+`src/application/rfis`, and RFI-specific repositories over the shared
+Records → Revisions → Files spine. Each RFI uses a stable `records` identity, a
+one-to-one `rfi_details` extension, a current draft revision, and revision-scoped
+files. Issue remains fail-closed until the complete immutable-revision and
+official-artifact transaction is implemented; no Slice 1 request can consume a
+number or present a draft as Open. Project, contact, and RFI lifecycle mutations
+append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,
 metadata-update, and archive activity events. PR 6 adds `src/domain/revisions`,

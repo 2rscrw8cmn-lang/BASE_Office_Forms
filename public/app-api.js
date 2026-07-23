@@ -158,5 +158,37 @@ export function createApiClient(options = {}) {
         `/api/v2/projects/${encodeURIComponent(projectId)}/records/${encodeURIComponent(recordId)}/revisions/${encodeURIComponent(revisionId)}/publish`,
         { ...(opts || {}), method: "POST" },
       ),
+    getProjectRfis: (projectId, opts) =>
+      request(`/api/v2/projects/${encodeURIComponent(projectId)}/rfis`, opts),
+    createRfi: (projectId, input, opts) =>
+      request(`/api/v2/projects/${encodeURIComponent(projectId)}/rfis`, {
+        ...(opts || {}),
+        method: "POST",
+        body: input,
+      }),
+    getRfiWorkspace: (projectId, rfiId, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/workspace`,
+        opts,
+      ),
+    updateRfi: (projectId, rfiId, input, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`,
+        { ...(opts || {}), method: "PATCH", body: input },
+      ),
+    recordRfiResponse: (projectId, rfiId, input, opts) =>
+      request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/respond`,
+        { ...(opts || {}), method: "POST", body: input },
+      ),
+    uploadRfiAttachment: (projectId, rfiId, role, file, opts) => {
+      const form = new FormData();
+      form.append("role", role);
+      form.append("file", file);
+      return request(
+        `/api/v2/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments`,
+        { ...(opts || {}), method: "POST", rawBody: form },
+      );
+    },
   };
 }

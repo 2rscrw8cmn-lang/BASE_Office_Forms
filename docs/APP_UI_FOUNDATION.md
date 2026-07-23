@@ -423,6 +423,15 @@ Feature code may not introduce:
 
 ## 12. Definition of done for UI work
 
+### RFI Slice 1 reconciliation note
+
+Draft PR #36 keeps the approved PR #40 interaction model: semantic controlled
+table, one expandable draft editor, ordinary cursor/text selection, per-field
+Saving/Saved/Failed validation states, capability-gated workspace editing,
+Party terminology, Details/Preview switch, separate response editor, and a
+deliberate mobile layout. This is not UI-3 and must not establish a competing
+component library or reintroduce Tabulator.
+
 A UI change is complete only when:
 
 - it uses approved page patterns and components;

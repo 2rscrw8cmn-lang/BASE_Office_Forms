@@ -3,6 +3,13 @@
 **Updated:** 2026-07-23  
 **Scope:** UI-2 React/Vite compatibility foundation
 
+## PR #36 reconciliation tooling
+
+PR #36 adds no runtime or package dependency. Its guarded D1 fixture and
+rehearsal commands use the already-pinned local Wrangler CLI and Node standard
+library. The UI-2 Miniflare `sharp` override remains unchanged. See
+`RFI_SLICE_1_ROLLOUT.md` for target identities and safety constraints.
+
 | Package                      | Version | License    | Purpose                                                                      | Bundle/runtime impact                                                                                                           | Replacement strategy                                                                                      |
 | ---------------------------- | ------: | ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `react`                      |  19.2.8 | MIT        | Application composition and future route/component migration.                | Bundled into the current compatibility entry; approximately 192 kB minified before compression for the host plus React runtime. | Remove only after the application migration is complete or replace with the selected application runtime. |

@@ -5,9 +5,13 @@ import { ProjectService } from "../../application/projects/project-service";
 import { DashboardReadModelService } from "../../application/read-models/dashboard-service";
 import { ProjectOverviewReadModelService } from "../../application/read-models/project-overview-service";
 import { ProjectRecordsReadModelService } from "../../application/read-models/project-records-service";
+import { ProjectRfisReadModelService } from "../../application/read-models/project-rfis-service";
 import { RecordWorkspaceReadModelService } from "../../application/read-models/record-workspace-service";
 import { RevisionWorkspaceReadModelService } from "../../application/read-models/revision-workspace-service";
+import { RfiWorkspaceReadModelService } from "../../application/read-models/rfi-workspace-service";
 import { RfiService } from "../../application/rfis/rfi-service";
+import { RfiAttachmentService } from "../../application/rfis/rfi-attachment-service";
+import { RfiTemplateBindingService } from "../../application/rfis/rfi-template-binding-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
 import { FileService } from "../../application/files/file-service";
@@ -26,11 +30,13 @@ import { D1ProjectsRepository } from "../../infrastructure/db/d1/projects-reposi
 import { D1DashboardReadRepository } from "../../infrastructure/db/d1/dashboard-read-repository";
 import { D1ProjectOverviewReadRepository } from "../../infrastructure/db/d1/project-overview-read-repository";
 import { D1ProjectRecordsReadRepository } from "../../infrastructure/db/d1/project-records-read-repository";
+import { D1ProjectRfisReadRepository } from "../../infrastructure/db/d1/project-rfis-read-repository";
 import { D1ProjectRecordSequencesRepository } from "../../infrastructure/db/d1/project-record-sequences-repository";
 import { D1RecordWorkspaceReadRepository } from "../../infrastructure/db/d1/record-workspace-read-repository";
-import { D1RfiNumberSequencesRepository } from "../../infrastructure/db/d1/rfi-number-sequences-repository";
+import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
+import { D1RfiWorkspaceReadRepository } from "../../infrastructure/db/d1/rfi-workspace-read-repository";
 import { D1RecordsRepository } from "../../infrastructure/db/d1/records-repository";
 import { D1RecordRevisionsRepository } from "../../infrastructure/db/d1/record-revisions-repository";
 import { D1RecordRevisionSequencesRepository } from "../../infrastructure/db/d1/record-revision-sequences-repository";
@@ -54,6 +60,9 @@ export interface V2RouteDependencies {
   projects?: ProjectService;
   projectContacts?: ProjectContactService;
   rfis?: RfiService;
+  rfiAttachments?: RfiAttachmentService;
+  projectRfis?: ProjectRfisReadModelService;
+  rfiWorkspace?: RfiWorkspaceReadModelService;
   records?: RecordService;
   revisions?: RevisionService;
   files?: FileService;
@@ -75,8 +84,16 @@ export function createV2RouteDependencies(
     new D1ProjectsRepository(environment.DB),
     new D1ProjectMembershipsRepository(environment.DB),
   );
-  const rfiSequences = new D1RfiNumberSequencesRepository(environment.DB);
+  const projectContactsRepository = new D1ProjectContactsRepository(
+    environment.DB,
+  );
   const rfiResponses = new D1RfiResponsesRepository(environment.DB);
+  const rfiAttachmentsRepository = new D1RfiAttachmentsRepository(
+    environment.DB,
+  );
+  const rfiRecords = new D1RfiRecordsRepository(environment.DB, rfiResponses);
+  const templatesRepository = new D1TemplatesRepository(environment.DB);
+  const rfiTemplateBinding = new RfiTemplateBindingService(templatesRepository);
   const recordRevisionSequences = new D1RecordRevisionSequencesRepository(
     environment.DB,
   );
@@ -113,12 +130,33 @@ export function createV2RouteDependencies(
     projects,
     projectContacts: new ProjectContactService(
       projects,
-      new D1ProjectContactsRepository(environment.DB),
+      projectContactsRepository,
     ),
     rfis: new RfiService(
       projects,
-      new D1RfiRecordsRepository(environment.DB, rfiSequences, rfiResponses),
+      rfiRecords,
       rfiResponses,
+      rfiAttachmentsRepository,
+      rfiTemplateBinding,
+      projectContactsRepository,
+    ),
+    rfiAttachments: new RfiAttachmentService(
+      projects,
+      rfiRecords,
+      rfiAttachmentsRepository,
+      storage,
+    ),
+    projectRfis: new ProjectRfisReadModelService(
+      projects,
+      new D1ProjectRfisReadRepository(environment.DB),
+    ),
+    rfiWorkspace: new RfiWorkspaceReadModelService(
+      projects,
+      rfiRecords,
+      rfiAttachmentsRepository,
+      rfiResponses,
+      new D1RfiWorkspaceReadRepository(environment.DB),
+      rfiTemplateBinding,
     ),
     records: new RecordService(projects, records),
     revisions: new RevisionService(projects, records, revisions),
@@ -135,7 +173,7 @@ export function createV2RouteDependencies(
       users,
       storage,
     ),
-    templates: new TemplateService(new D1TemplatesRepository(environment.DB)),
+    templates: new TemplateService(templatesRepository),
     dashboard: new DashboardReadModelService(
       projects,
       new D1DashboardReadRepository(environment.DB),

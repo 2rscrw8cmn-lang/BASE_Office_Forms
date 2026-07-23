@@ -4,12 +4,17 @@
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./public",
+  // Production binds base-office-forms-library (1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab).
+  // Pages preview binds only base-office-forms-rfi-preview
+  // (5169cd7c-60d8-4dbd-a66c-75155f745216), never production. Retained UI-2
+  // tooling is deliberately isolated in wrangler.ui2.jsonc. During PR #36,
+  // migrations 0013/0014 are preview/rehearsal only: never run them on production.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "base-office-forms-library",
       "database_id": "1a6057f7-6e2b-44c0-8bfb-d9a6b992a1ab",
-      "preview_database_id": "c874725c-78d8-43d5-a1b8-5d4d26e52067",
+      "preview_database_id": "5169cd7c-60d8-4dbd-a66c-75155f745216",
       "migrations_dir": "./migrations",
     },
   ],
@@ -25,8 +30,8 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "base-office-forms-ui2-preview",
-          "database_id": "c874725c-78d8-43d5-a1b8-5d4d26e52067",
+          "database_name": "base-office-forms-rfi-preview",
+          "database_id": "5169cd7c-60d8-4dbd-a66c-75155f745216",
           "migrations_dir": "./migrations",
         },
       ],

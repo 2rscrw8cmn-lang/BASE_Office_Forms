@@ -343,30 +343,51 @@ async function seed(): Promise<void> {
     status: string,
     dueDate: string | null,
     createdAt: string,
-  ) =>
-    db
-      .prepare(
-        "INSERT INTO rfi_records (id, organization_id, project_id, rfi_number, status, title, question, created_at, updated_at, due_date, issued_at, answered_at) VALUES (?, ?, ?, ?, ?, ?, 'Q', ?, ?, ?, ?, ?)",
-      )
-      .bind(
-        id,
-        project === "proj-b" ? "org-b" : "org-a",
-        project,
-        status === "draft" ? null : `RFI-${id}`,
-        status,
-        `${id} title`,
-        createdAt,
-        createdAt,
-        dueDate,
-        status === "draft" ? null : createdAt,
-        status === "answered" ? createdAt : null,
-      );
+  ) => {
+    const organizationId = project === "proj-b" ? "org-b" : "org-a";
+    return [
+      db
+        .prepare(
+          "INSERT INTO records (id, organization_id, project_id, record_type, record_type_key, record_number, title, status, workflow_status, created_by, issued_at, returned_at, due_date, created_at, updated_at) VALUES (?, ?, ?, 'other', 'rfi', ?, ?, 'active', ?, 'user-admin', ?, ?, ?, ?, ?)",
+        )
+        .bind(
+          id,
+          organizationId,
+          project,
+          status === "draft" ? null : `RFI-${id}`,
+          `${id} title`,
+          status,
+          status === "draft" ? null : createdAt,
+          status === "response_received" ? createdAt : null,
+          dueDate,
+          createdAt,
+          createdAt,
+        ),
+      db
+        .prepare(
+          "INSERT INTO rfi_details (record_id, organization_id, project_id, question, issuance_reconciliation_state) VALUES (?, ?, ?, 'Q', 'not_issued')",
+        )
+        .bind(id, organizationId, project),
+    ];
+  };
   await db.batch([
-    rfi("rfi-issued", "proj-1", "issued", "2026-07-25", "2026-07-10T00:00:00Z"),
-    rfi("rfi-answered", "proj-1", "answered", null, "2026-07-09T00:00:00Z"),
-    rfi("rfi-draft", "proj-1", "draft", null, "2026-07-08T00:00:00Z"),
-    rfi("rfi-closed", "proj-1", "closed", null, "2026-07-07T00:00:00Z"),
-    rfi("rfi-2", "proj-2", "issued", null, "2026-07-06T00:00:00Z"),
+    ...rfi(
+      "rfi-issued",
+      "proj-1",
+      "open",
+      "2026-07-25",
+      "2026-07-10T00:00:00Z",
+    ),
+    ...rfi(
+      "rfi-answered",
+      "proj-1",
+      "response_received",
+      null,
+      "2026-07-09T00:00:00Z",
+    ),
+    ...rfi("rfi-draft", "proj-1", "draft", null, "2026-07-08T00:00:00Z"),
+    ...rfi("rfi-closed", "proj-1", "closed", null, "2026-07-07T00:00:00Z"),
+    ...rfi("rfi-2", "proj-2", "open", null, "2026-07-06T00:00:00Z"),
   ]);
 
   // Activity events: proj-1 (record + revision), proj-2, and cross-tenant proj-b.
@@ -505,7 +526,7 @@ describe("dashboard read model", () => {
 
     const rfis = data.activeRfis as Array<Record<string, string>>;
     const rfiStatuses = new Set(rfis.map((item) => item.status));
-    expect([...rfiStatuses].sort()).toEqual(["answered", "issued"]);
+    expect([...rfiStatuses].sort()).toEqual(["open", "response_received"]);
   });
 
   it("orders active RFIs by due date first and applies limits without pagination", async () => {
@@ -536,7 +557,7 @@ describe("project overview read model", () => {
     expect(response.status).toBe(200);
     const body: { data: Record<string, unknown> } = await response.json();
     const counts = body.data.counts as Record<string, number>;
-    expect(counts.records).toBe(3); // rec-1, rec-issued, rec-nofile (rec-arch excluded)
+    expect(counts.records).toBe(7); // 3 document records plus 4 active RFI records (rec-arch excluded)
     expect(counts.draftRevisions).toBe(1); // rev-draft (rev-arch excluded)
     expect(counts.publishedRevisions).toBe(3); // rev-ready, rev-issued, rev-nofile
     expect(counts.files).toBe(2);

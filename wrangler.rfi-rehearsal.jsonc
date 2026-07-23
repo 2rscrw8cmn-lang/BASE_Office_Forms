@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "base-office-forms-rfi-0014-rehearsal-tools",
+  "compatibility_date": "2026-07-17",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "base-office-forms-rfi-0014-rehearsal",
+      "database_id": "e88f15e9-b648-49d1-bded-bed1996bdbd9",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}

@@ -2780,8 +2780,12 @@
     display: none;
   }
   .project-cards,
-  .record-cards {
+  .record-cards,
+  .rfi-cards {
     display: grid;
+  }
+  .rfi-workspace-grid {
+    grid-template-columns: 1fr;
   }
   .records-view {
     padding-bottom: 34px;
@@ -2815,5 +2819,834 @@
   }
   .record-back-link {
     min-height: 38px;
+  }
+}
+
+/* ---- RFI register & workspace ---------------------------------------- */
+.rfi-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.rfi-number-draft {
+  color: var(--shell-muted);
+  font-weight: 500;
+  font-style: italic;
+}
+.rfi-legacy {
+  display: block;
+  font-size: 0.75em;
+  color: var(--shell-muted);
+  font-weight: 400;
+}
+.rfi-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.rfi-flag-overdue {
+  background: #fbe9e7;
+  color: var(--app-error);
+}
+.rfi-flag-soon {
+  background: #fff4e0;
+  color: #8a5a00;
+}
+.rfi-editable {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.rfi-edit-trigger {
+  border: none;
+  background: none;
+  color: var(--app-accent);
+  font-size: 0.75em;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.app-data-row:hover .rfi-edit-trigger,
+.rfi-edit-trigger:focus-visible {
+  opacity: 1;
+}
+.rfi-editable.is-saving {
+  opacity: 0.6;
+}
+.rfi-inline-form {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.rfi-inline-input {
+  min-width: 8ch;
+  height: 30px;
+  padding: 2px 6px;
+  border: 1px solid var(--app-accent);
+  border-radius: 3px;
+  font: inherit;
+}
+.rfi-inline-save,
+.rfi-inline-cancel {
+  height: 30px;
+  min-width: 30px;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-panel);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.rfi-inline-save {
+  border-color: var(--app-accent);
+  color: var(--app-accent);
+}
+.rfi-inline-error {
+  display: block;
+  color: var(--app-error);
+  font-size: 0.75em;
+}
+.rfi-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+}
+.rfi-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+}
+.rfi-card-main {
+  display: grid;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.rfi-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rfi-card-subject {
+  font-weight: 600;
+}
+.rfi-card-question {
+  color: var(--shell-muted);
+  font-size: 0.9em;
+}
+.rfi-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  font-size: 0.82em;
+}
+.rfi-card-facts dt {
+  color: var(--shell-muted);
+}
+.rfi-card-facts dd {
+  margin: 2px 0 0;
+}
+
+/* Workspace: main content + metadata rail (desktop two-column layout). --- */
+.rfi-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 16px;
+}
+.rfi-workspace-main {
+  min-width: 0;
+}
+.rfi-workspace-aside {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 16px 18px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+}
+.rfi-mode-switch {
+  display: inline-flex;
+  margin-bottom: 14px;
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.rfi-mode-button {
+  padding: 7px 16px;
+  color: var(--shell-muted);
+  background: var(--shell-panel);
+  border: none;
+  cursor: pointer;
+  font: 600 11px/1 var(--sans);
+}
+.rfi-mode-button + .rfi-mode-button {
+  border-left: 1px solid var(--shell-border);
+}
+.rfi-mode-button.is-active {
+  color: #fff;
+  background: var(--app-accent);
+}
+.rfi-mode-button:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: -2px;
+}
+.rfi-rail-facts {
+  display: grid;
+  gap: 12px;
+}
+.rfi-rail-facts dt {
+  font-size: 0.72rem;
+  color: var(--shell-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rfi-rail-facts dd {
+  margin: 3px 0 0;
+  font-weight: 600;
+}
+.rfi-rail-warning {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 0.85em;
+}
+.rfi-rail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.rfi-info-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 8px 0 0;
+}
+.rfi-info-form .app-field.is-wide,
+.rfi-info-form .app-field-row {
+  grid-column: 1 / -1;
+}
+.rfi-info-empty {
+  color: var(--shell-muted);
+  font-style: italic;
+}
+/* Density pass: smaller control heights and panel padding than the shared
+   document-workspace defaults, scoped to the RFI workspace only. */
+.rfi-workspace-view .document-work-panel {
+  margin-top: 0;
+  padding: 16px 18px 18px;
+}
+.rfi-workspace-view .rfi-authoritative-content {
+  padding-top: 0;
+  border-top: 0;
+}
+.rfi-workspace-view .document-section-heading {
+  margin-bottom: 4px;
+}
+.rfi-workspace-view .rfi-info-form input,
+.rfi-workspace-view .rfi-info-form select,
+.rfi-workspace-view .rfi-info-form textarea {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+.rfi-workspace-view .rfi-render-panel,
+.rfi-workspace-view .rfi-response-panel {
+  padding: 16px 18px;
+}
+.rfi-attachment-group {
+  margin-top: 12px;
+}
+.rfi-attachment-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.85em;
+}
+.rfi-attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rfi-attachment-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 4px;
+}
+.rfi-attachment-copy {
+  display: grid;
+}
+.rfi-attachment-copy span {
+  font-size: 0.8em;
+  color: var(--shell-muted);
+}
+.rfi-attachment-empty {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+  margin: 0;
+}
+.rfi-attachment-upload {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--shell-border-soft);
+}
+.rfi-document {
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 4px;
+  background: #fff;
+}
+.rfi-document-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+}
+.rfi-doc-line {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.rfi-doc-line.is-pre .rfi-doc-value {
+  white-space: pre-wrap;
+}
+.rfi-doc-label {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+}
+.rfi-doc-template {
+  font-size: 0.8em;
+  color: var(--shell-muted);
+}
+.rfi-activity-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.rfi-activity-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.rfi-activity-detail {
+  display: block;
+  font-size: 0.82em;
+  color: var(--shell-muted);
+}
+.rfi-activity-meta {
+  font-size: 0.78em;
+  color: var(--shell-muted);
+  white-space: nowrap;
+}
+.secondary-button.is-quiet {
+  padding-inline: 12px;
+}
+@media (max-width: 720px) {
+  .rfi-info-form {
+    grid-template-columns: 1fr;
+  }
+}
+/* Tablet/narrow desktop: collapse the main + rail columns to one, with the
+   rail's metadata grouped below the content, before the phone breakpoint
+   switches to mobile cards entirely. */
+@media (max-width: 960px) {
+  .rfi-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* RFI working register — five-column visual hierarchy (desktop). --------- */
+/* Compact heading: no permanent instructional paragraph, less top/bottom
+   padding than the shared register header (scoped to .rfi-heading so
+   Projects/Records keep their own spacing). */
+.rfi-heading {
+  min-height: 0;
+  padding-block: 14px;
+}
+/* Compact filter row: shorter fields, tighter gaps, and search gets most of
+   the width instead of five equal-width controls (scoped to .rfi-toolbar). */
+.rfi-toolbar {
+  padding-block: 9px;
+  gap: 8px;
+}
+.rfi-toolbar .app-register-controls {
+  gap: 8px;
+}
+.rfi-toolbar .app-register-search {
+  flex: 1 1 42%;
+}
+.rfi-toolbar .app-register-control input,
+.rfi-toolbar .app-register-control select {
+  min-height: 34px;
+  padding-block: 5px;
+}
+.rfi-toolbar #rfi-status,
+.rfi-toolbar #rfi-due {
+  min-width: 0;
+  max-width: 132px;
+}
+.rfi-toolbar #rfi-responsible {
+  min-width: 0;
+  max-width: 172px;
+}
+.rfi-table {
+  width: 100%;
+  table-layout: fixed;
+}
+.rfi-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.rfi-table thead th {
+  padding: 0;
+  font-weight: 600;
+}
+/* RFI · Subject · Responsible · Due · Updated. Subject is left unconstrained
+   so it absorbs whatever width the other four don't need. */
+.rfi-table th:nth-child(1) {
+  width: 128px;
+}
+.rfi-table th:nth-child(3) {
+  width: 168px;
+}
+.rfi-table th:nth-child(4) {
+  width: 118px;
+}
+.rfi-table th:nth-child(5) {
+  width: 90px;
+}
+.rfi-sort-header {
+  width: 100%;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #56535a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 600 10px/1.2 var(--sans);
+  letter-spacing: 0.2px;
+  text-align: left;
+  white-space: nowrap;
+}
+.rfi-sort-header:hover,
+.rfi-sort-header.is-active {
+  color: var(--app-accent);
+}
+.rfi-sort-header:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: -2px;
+}
+.rfi-sort-arrow {
+  font-size: 0.95em;
+}
+/* Register cells are plain read-only summaries — the base table padding
+   applies; identity/subject/updated keep their own top-aligned padding. */
+.rfi-table tbody td,
+.rfi-table tbody th {
+  vertical-align: top;
+}
+.rfi-cell-save-state {
+  display: inline-block;
+  color: var(--shell-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+.rfi-cell-save-state.is-saved {
+  color: #27613b;
+}
+.rfi-cell-save-state.is-failed {
+  color: var(--app-error);
+}
+
+/* Column 1 — RFI identity: number/draft label stacked over a plain status
+   line. No color-only status; text always accompanies it. */
+.rfi-table .rfi-cell-id {
+  padding: 11px 14px;
+  vertical-align: top;
+}
+.rfi-id-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.rfi-id-link:hover .rfi-id-number {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+.rfi-id-number {
+  display: block;
+  color: var(--ink);
+  font: 600 12.5px/1.3 var(--code);
+  font-variant-numeric: tabular-nums;
+}
+.rfi-id-number-draft {
+  color: var(--shell-muted);
+  font-variant-numeric: normal;
+  font-family: var(--sans);
+  font-weight: 500;
+}
+.rfi-id-status {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font: 500 10.5px/1.3 var(--sans);
+}
+.rfi-id-status.is-attention {
+  color: #8a5a00;
+}
+.rfi-id-legacy {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.72em;
+}
+
+/* Column 2 — Subject: the dominant column. Editable drafts render the
+   subject as a button that toggles the row's inline editor; locked rows
+   render it as a plain workspace link. Question preview and reference
+   metadata are quieter and smaller, and are omitted when nothing to show. */
+.rfi-table .rfi-cell-subject {
+  width: auto;
+  padding: 11px 14px;
+  vertical-align: top;
+}
+.rfi-subject-open,
+.rfi-subject-link {
+  display: -webkit-box;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  text-align: left;
+  font: 600 13px/1.35 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+.rfi-subject-open:hover,
+.rfi-subject-open[aria-expanded="true"],
+.rfi-subject-link:hover {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+.rfi-subject-open:focus-visible,
+.rfi-subject-link:focus-visible {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 2px;
+}
+.rfi-subject-secondary {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--shell-muted);
+  font: 400 11.5px/1.35 var(--sans);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+.rfi-subject-meta {
+  display: block;
+  margin-top: 3px;
+  color: #948f8c;
+  font: 500 10px/1.3 var(--code);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Column 3 — Responsible: readable, but secondary to Subject. */
+.rfi-table .rfi-cell-responsible {
+  width: 168px;
+}
+.rfi-cell-responsible .rfi-cell-text {
+  font-weight: 500;
+}
+.rfi-responsible-company {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.85em;
+}
+.rfi-responsible-legacy {
+  color: var(--shell-muted);
+  font-size: 0.85em;
+  font-style: italic;
+}
+.rfi-responsible-empty {
+  color: var(--shell-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Column 4 — Due: server-computed urgency text, never large badges. */
+.rfi-table .rfi-cell-due {
+  width: 118px;
+}
+.rfi-due-date {
+  font-variant-numeric: tabular-nums;
+}
+.rfi-due-urgency {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-muted);
+  font-size: 0.78em;
+}
+.rfi-due-urgency.is-overdue {
+  color: var(--app-error);
+  font-weight: 600;
+}
+.rfi-due-urgency.is-due-soon {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+/* Column 5 — Updated: compact relative time, exact date on hover/AT. */
+.rfi-table .rfi-cell-updated {
+  width: 90px;
+  padding: 11px 14px;
+  vertical-align: top;
+  color: var(--shell-muted);
+  font: 500 11px/1.35 var(--sans);
+  white-space: nowrap;
+}
+
+/* Inline editor panel — clicking a draft's subject expands this beneath the
+   row with every editable field as an ordinary form control. Hidden via
+   [hidden]; only one row's panel is open at a time. */
+.rfi-editor-row > td {
+  padding: 14px 16px 16px;
+  background: #faf8f6;
+  border-bottom: 1px solid var(--shell-border-soft);
+}
+.rfi-editor-panel {
+  display: grid;
+  gap: 12px;
+}
+.rfi-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.rfi-editor-field {
+  min-width: 0;
+  margin: 0;
+}
+.rfi-editor-field.is-wide {
+  grid-column: 1 / -1;
+}
+.rfi-editor-field > label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--shell-muted);
+  font: 600 10px/1.3 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rfi-editor-field input,
+.rfi-editor-field select,
+.rfi-editor-field textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--shell-ink);
+  font: inherit;
+}
+.rfi-editor-field textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+.rfi-editor-field input:focus,
+.rfi-editor-field select:focus,
+.rfi-editor-field textarea:focus {
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 0;
+  border-color: var(--app-accent);
+}
+.rfi-field-state {
+  display: block;
+  min-height: 14px;
+  margin-top: 3px;
+}
+.rfi-editor-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .rfi-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rfi-workspace-view {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 34px;
+}
+.rfi-document-identity {
+  align-items: end;
+}
+.rfi-metadata-strip strong .status-badge {
+  vertical-align: middle;
+}
+.document-read-only.is-warning {
+  border-color: #dfb45c;
+  background: #fff9ed;
+}
+.rfi-current-version {
+  display: grid;
+  gap: 14px;
+}
+.rfi-authoritative-content {
+  padding-top: 0;
+  border-top: 0;
+}
+.rfi-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 8px 0 0;
+  background: var(--shell-border-soft);
+  border: 1px solid var(--shell-border-soft);
+}
+.rfi-content-field {
+  min-height: 56px;
+  padding: 12px 14px;
+  background: var(--shell-panel);
+}
+.rfi-content-field.is-wide {
+  grid-column: 1 / -1;
+}
+.rfi-content-field dt,
+.rfi-response-facts dt {
+  margin-bottom: 7px;
+  color: var(--shell-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rfi-content-field dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.rfi-current-version .document-files {
+  display: grid;
+  gap: 10px;
+}
+.rfi-render-panel,
+.rfi-response-panel,
+.rfi-activity-panel {
+  padding: 22px;
+  border: 1px solid var(--shell-border);
+  border-radius: 5px;
+  background: var(--shell-panel);
+}
+.rfi-render-preview {
+  max-height: 760px;
+  margin-top: 14px;
+  overflow: auto;
+  background: #e9e7e3;
+  border: 1px solid var(--shell-border-soft);
+}
+.rfi-render-preview .sheet {
+  margin: 20px auto;
+  zoom: 0.72;
+  box-shadow: 0 8px 24px rgba(34, 31, 28, 0.14);
+}
+.rfi-response-text {
+  padding: 18px;
+  white-space: pre-wrap;
+  background: #faf9f8;
+  border-left: 3px solid var(--app-accent);
+}
+.rfi-response-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.rfi-response-facts dd {
+  margin: 0;
+}
+.rfi-activity-panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.rfi-activity-panel > summary span {
+  margin-left: 6px;
+  color: var(--shell-muted);
+}
+.rfi-activity-list li div {
+  display: grid;
+  gap: 3px;
+}
+.rfi-activity-list li small {
+  color: var(--shell-muted);
+  white-space: nowrap;
+}
+.rfi-legacy-note {
+  display: block;
+  margin-top: 6px;
+  color: #8a5a00;
+}
+
+@media (max-width: 760px) {
+  .rfi-table-wrap {
+    display: none;
+  }
+  .rfi-cards {
+    display: grid;
+  }
+  .rfi-content-grid,
+  .rfi-response-facts {
+    grid-template-columns: 1fr;
+  }
+  .rfi-content-field.is-wide {
+    grid-column: auto;
+  }
+  .rfi-render-preview .sheet {
+    zoom: 0.42;
+  }
+  .rfi-document-identity {
+    align-items: stretch;
   }
 }

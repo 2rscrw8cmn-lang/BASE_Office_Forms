@@ -10,7 +10,11 @@ import {
   RfiNotFoundError,
   RfiIllegalTransitionError,
   RfiAuthorizationError,
+  RfiConflictError,
+  RfiIssuanceUnavailableError,
+  RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
+import { RfiAttachmentRejectedError } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import {
   RevisionNotFoundError,
   RevisionIllegalTransitionError,
@@ -37,6 +41,8 @@ import {
 import { RendererDefinitionValidationError } from "../../rendering/renderer-definition";
 import type { Project, ProjectContact } from "../../domain/projects/project";
 import type { Rfi, RfiResponse } from "../../domain/rfis/rfi";
+import type { RfiListItem } from "../../application/read-models/project-rfis-service";
+import type { RfiAttachmentDownload } from "../../application/rfis/rfi-attachment-service";
 import type { Record } from "../../domain/records/record";
 import type { RecordListSummaryItem } from "../../application/read-models/project-records-service";
 import type { Revision } from "../../domain/revisions/revision";
@@ -71,6 +77,7 @@ import {
   RequestValidationError,
 } from "./project-schemas";
 import {
+  parseRfiAttachmentUpload,
   parseRfiCreate,
   parseRfiResponse,
   parseRfiUpdate,
@@ -218,8 +225,24 @@ export async function routeV2Request(
       fileRoute[5],
     );
   }
+  const rfiAttachmentRoute = pathname.match(
+    /^\/api\/v2\/projects\/([^/]+)\/rfis\/([^/]+)\/attachments(?:\/([^/]+)\/(content))?$/,
+  );
+  if (rfiAttachmentRoute && dependencies) {
+    return handleRfiAttachmentRoute(
+      request,
+      context,
+      dependencies,
+      decodeURIComponent(rfiAttachmentRoute[1]),
+      decodeURIComponent(rfiAttachmentRoute[2]),
+      rfiAttachmentRoute[3]
+        ? decodeURIComponent(rfiAttachmentRoute[3])
+        : undefined,
+      rfiAttachmentRoute[4],
+    );
+  }
   const rfiRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(issue|respond|close|reopen))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(workspace|issue|respond|close|reopen|ready|void|return))?)?$/,
   );
   if (rfiRoute && dependencies) {
     return handleRfiRoute(
@@ -598,6 +621,15 @@ async function handleFileRoute(
   }
 }
 
+const RFI_TRANSITION_ACTIONS = new Set([
+  "issue",
+  "close",
+  "reopen",
+  "ready",
+  "void",
+  "return",
+]);
+
 async function handleRfiRoute(
   request: Request,
   context: ApiRequestContext,
@@ -607,7 +639,9 @@ async function handleRfiRoute(
   action: string | undefined,
 ): Promise<Response> {
   const allowedMethods = action
-    ? ["POST"]
+    ? action === "workspace"
+      ? ["GET"]
+      : ["POST"]
     : rfiId
       ? ["GET", "PATCH"]
       : ["GET", "POST"];
@@ -618,15 +652,32 @@ async function handleRfiRoute(
     allowedMethods,
   );
   if (authenticated instanceof Response) return authenticated;
+  if (action === "workspace") {
+    const workspace = dependencies.rfiWorkspace;
+    if (!workspace) return unavailable(context);
+    try {
+      return apiSuccess(
+        context,
+        await workspace.load(authenticated.session, projectId, rfiId as string),
+      );
+    } catch (error) {
+      return projectError(context, error);
+    }
+  }
   const rfis = dependencies.rfis;
   if (!rfis) return unavailable(context);
   try {
     if (!rfiId) {
       if (request.method === "GET") {
-        return apiSuccess(
-          context,
-          (await rfis.list(authenticated.session, projectId)).map(serializeRfi),
-        );
+        const projectRfis = dependencies.projectRfis;
+        if (!projectRfis) return unavailable(context);
+        const model = await projectRfis.load(authenticated.session, projectId);
+        return apiSuccess(context, {
+          project: model.project,
+          rfis: model.rfis.map(serializeRfiListItem),
+          responsibleContacts: model.responsibleContacts,
+          capabilities: model.capabilities,
+        });
       }
       const rfi = await rfis.createDraft(authenticated.session, projectId, {
         ...parseRfiCreate(await parseJsonRequest(request)),
@@ -644,32 +695,18 @@ async function handleRfiRoute(
         );
       }
       const current = await rfis.get(authenticated.session, projectId, rfiId);
+      const { input, lockVersion } = parseRfiUpdate(
+        await parseJsonRequest(request),
+        toRfiWriteInput(current),
+      );
       const rfi = await rfis.updateDraft(
         authenticated.session,
         projectId,
         rfiId,
-        {
-          ...parseRfiUpdate(
-            await parseJsonRequest(request),
-            toRfiWriteInput(current),
-          ),
-          correlationId: context.requestId,
-        },
+        lockVersion,
+        { ...input, correlationId: context.requestId },
       );
       return apiSuccess(context, serializeRfi(rfi));
-    }
-    if (action === "issue") {
-      return apiSuccess(
-        context,
-        serializeRfi(
-          await rfis.issue(
-            authenticated.session,
-            projectId,
-            rfiId,
-            context.requestId,
-          ),
-        ),
-      );
     }
     if (action === "respond") {
       const result = await rfis.respond(
@@ -686,21 +723,94 @@ async function handleRfiRoute(
         response: serializeRfiResponse(result.response),
       });
     }
-    const rfi =
-      action === "close"
-        ? await rfis.close(
-            authenticated.session,
-            projectId,
-            rfiId,
-            context.requestId,
-          )
-        : await rfis.reopen(
-            authenticated.session,
-            projectId,
-            rfiId,
-            context.requestId,
-          );
-    return apiSuccess(context, serializeRfi(rfi));
+    if (action && RFI_TRANSITION_ACTIONS.has(action)) {
+      const session = authenticated.session;
+      const requestId = context.requestId;
+      const rfi =
+        action === "issue"
+          ? await rfis.issue(session, projectId, rfiId, requestId)
+          : action === "close"
+            ? await rfis.close(session, projectId, rfiId, requestId)
+            : action === "reopen"
+              ? await rfis.reopen(session, projectId, rfiId, requestId)
+              : action === "ready"
+                ? await rfis.markReady(session, projectId, rfiId, requestId)
+                : action === "void"
+                  ? await rfis.void(session, projectId, rfiId, requestId)
+                  : await rfis.returnForClarification(
+                      session,
+                      projectId,
+                      rfiId,
+                      requestId,
+                    );
+      return apiSuccess(context, serializeRfi(rfi));
+    }
+    return apiError(
+      context,
+      404,
+      "API_ROUTE_NOT_FOUND",
+      "The requested API route was not found.",
+    );
+  } catch (error) {
+    return projectError(context, error);
+  }
+}
+
+async function handleRfiAttachmentRoute(
+  request: Request,
+  context: ApiRequestContext,
+  dependencies: V2RouteDependencies,
+  projectId: string,
+  rfiId: string,
+  attachmentId: string | undefined,
+  action: string | undefined,
+): Promise<Response> {
+  const allowedMethods = attachmentId ? ["GET"] : ["GET", "POST"];
+  const authenticated = await authenticateRequest(
+    request,
+    context,
+    dependencies,
+    allowedMethods,
+  );
+  if (authenticated instanceof Response) return authenticated;
+  const attachments = dependencies.rfiAttachments;
+  if (!attachments) return unavailable(context);
+  try {
+    if (attachmentId && action === "content") {
+      return rfiAttachmentContentResponse(
+        context,
+        await attachments.download(
+          authenticated.session,
+          projectId,
+          rfiId,
+          attachmentId,
+        ),
+      );
+    }
+    if (!attachmentId) {
+      if (request.method === "GET") {
+        return apiSuccess(
+          context,
+          (await attachments.list(authenticated.session, projectId, rfiId)).map(
+            serializeRfiAttachment,
+          ),
+        );
+      }
+      const upload = await parseRfiAttachmentUpload(request);
+      const attachment = await attachments.upload(
+        authenticated.session,
+        projectId,
+        rfiId,
+        { ...upload, correlationId: context.requestId },
+      );
+      return apiSuccess(context, serializeRfiAttachment(attachment), 201);
+    }
+    return apiError(
+      context,
+      404,
+      "API_ROUTE_NOT_FOUND",
+      "The requested API route was not found.",
+    );
   } catch (error) {
     return projectError(context, error);
   }
@@ -1161,6 +1271,19 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RfiIllegalTransitionError)
     return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
+  if (error instanceof RfiConflictError)
+    return apiError(context, 409, "RFI_VERSION_CONFLICT", error.message);
+  if (error instanceof RfiIssuanceUnavailableError)
+    return apiError(context, 409, "RFI_ISSUANCE_NOT_AVAILABLE", error.message);
+  if (error instanceof RfiResponsibleContactError)
+    return apiError(
+      context,
+      400,
+      "RFI_RESPONSIBLE_CONTACT_INVALID",
+      error.message,
+    );
+  if (error instanceof RfiAttachmentRejectedError)
+    return apiError(context, 409, "RFI_ATTACHMENT_REJECTED", error.message);
   if (error instanceof RevisionNotFoundError)
     return apiError(
       context,
@@ -1283,6 +1406,20 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
       "RECORD_NUMBER_CONFLICT",
       "A record with this number already exists in this project.",
     );
+  // Schema drift diagnostic: a query referencing a column/table that does not
+  // exist means the bound D1 database is missing pending migrations (e.g. a
+  // preview deployment shipping new read models against an un-migrated database).
+  // Surface a clear, actionable 503 instead of an opaque failure.
+  if (
+    error instanceof Error &&
+    /no such (column|table)|has no column named/i.test(error.message)
+  )
+    return apiError(
+      context,
+      503,
+      "DATABASE_SCHEMA_OUTDATED",
+      "The database is missing pending migrations for this deployment. Apply D1 migrations (npm run db:migrate:remote) and retry.",
+    );
   throw error;
 }
 
@@ -1322,22 +1459,103 @@ function serializeRfi(rfi: Rfi) {
   return {
     id: rfi.id,
     projectId: rfi.projectId,
+    templateVersionId: rfi.templateVersionId,
     rfiNumber: rfi.rfiNumber,
+    legacyReference: rfi.legacyReference,
     status: rfi.status,
-    title: rfi.title,
+    subject: rfi.subject,
     question: rfi.question,
-    suggestedResolution: rfi.suggestedResolution,
+    contractorSuggestion: rfi.contractorSuggestion,
+    drawingReferences: rfi.drawingReferences,
+    specificationReferences: rfi.specificationReferences,
+    responsiblePartyId: rfi.responsiblePartyId,
+    responsibleParty: rfi.responsibleParty,
+    responsiblePartyLegacyText: rfi.responsiblePartyLegacyText,
     submittedBy: rfi.submittedBy,
-    assignedTo: rfi.assignedTo,
-    dueDate: rfi.dueDate,
+    requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
     scheduleImpact: rfi.scheduleImpact,
     issuedAt: rfi.issuedAt,
-    answeredAt: rfi.answeredAt,
+    responseReceivedAt: rfi.responseReceivedAt,
     closedAt: rfi.closedAt,
+    lockVersion: rfi.lockVersion,
+    draftRevisionId: rfi.draftRevisionId,
+    issuanceReconciliationState: rfi.issuanceReconciliationState,
     createdAt: rfi.createdAt,
     updatedAt: rfi.updatedAt,
   };
+}
+// Register row shape — the read-model item already carries server-computed
+// overdue/due-soon flags, per-row capabilities, and lockVersion for inline edit.
+function serializeRfiListItem(item: RfiListItem) {
+  return {
+    id: item.id,
+    rfiNumber: item.rfiNumber,
+    legacyReference: item.legacyReference,
+    status: item.status,
+    subject: item.subject,
+    question: item.question,
+    contractorSuggestion: item.contractorSuggestion,
+    drawingReferences: item.drawingReferences,
+    specificationReferences: item.specificationReferences,
+    responsiblePartyId: item.responsiblePartyId,
+    responsibleParty: item.responsibleParty,
+    responsiblePartyLegacyText: item.responsiblePartyLegacyText,
+    submittedBy: item.submittedBy,
+    requestedResponseDate: item.requestedResponseDate,
+    issuedAt: item.issuedAt,
+    responseReceivedAt: item.responseReceivedAt,
+    latestResponse: item.latestResponse,
+    attachmentCount: item.attachmentCount,
+    isOverdue: item.isOverdue,
+    dueSoon: item.dueSoon,
+    lockVersion: item.lockVersion,
+    draftRevisionId: item.draftRevisionId,
+    issuanceReconciliationState: item.issuanceReconciliationState,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    capabilities: { updateDraft: item.capabilities.updateDraft },
+  };
+}
+function serializeRfiAttachment(attachment: {
+  id: string;
+  rfiId: string;
+  revisionId: string;
+  role: string;
+  originalFilename: string;
+  mediaType: string;
+  byteSize: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}) {
+  return {
+    id: attachment.id,
+    rfiId: attachment.rfiId,
+    revisionId: attachment.revisionId,
+    role: attachment.role,
+    originalFilename: attachment.originalFilename,
+    mediaType: attachment.mediaType,
+    byteSize: attachment.byteSize,
+    uploadedBy: attachment.uploadedBy,
+    uploadedAt: attachment.uploadedAt,
+  };
+}
+function rfiAttachmentContentResponse(
+  context: ApiRequestContext,
+  download: RfiAttachmentDownload,
+): Response {
+  const headers = new Headers({
+    "Content-Type": download.attachment.mediaType,
+    "Content-Disposition": buildContentDisposition(
+      download.attachment.originalFilename,
+    ),
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Request-ID": context.requestId,
+  });
+  headers.set("Content-Length", String(download.size));
+  if (download.httpEtag) headers.set("ETag", download.httpEtag);
+  return new Response(download.body, { status: 200, headers });
 }
 function serializeRecord(record: Record) {
   return {
@@ -1514,10 +1732,26 @@ function serializeRfiResponse(response: RfiResponse) {
     createdAt: response.createdAt,
   };
 }
-function serializeRfiDetail(rfi: Rfi & { responses: RfiResponse[] }) {
+function serializeRfiDetail(
+  rfi: Rfi & {
+    responses: RfiResponse[];
+    attachments: {
+      id: string;
+      rfiId: string;
+      revisionId: string;
+      role: string;
+      originalFilename: string;
+      mediaType: string;
+      byteSize: number;
+      uploadedBy: string;
+      uploadedAt: string;
+    }[];
+  },
+) {
   return {
     ...serializeRfi(rfi),
     responses: rfi.responses.map(serializeRfiResponse),
+    attachments: rfi.attachments.map(serializeRfiAttachment),
   };
 }
 function toProjectWriteInput(project: Project) {
@@ -1545,12 +1779,14 @@ function toContactWriteInput(contact: ProjectContact) {
 }
 function toRfiWriteInput(rfi: Rfi) {
   return {
-    title: rfi.title,
+    subject: rfi.subject,
     question: rfi.question,
-    suggestedResolution: rfi.suggestedResolution,
+    contractorSuggestion: rfi.contractorSuggestion,
+    drawingReferences: rfi.drawingReferences,
+    specificationReferences: rfi.specificationReferences,
+    responsiblePartyId: rfi.responsiblePartyId,
     submittedBy: rfi.submittedBy,
-    assignedTo: rfi.assignedTo,
-    dueDate: rfi.dueDate,
+    requestedResponseDate: rfi.requestedResponseDate,
     costImpact: rfi.costImpact,
     scheduleImpact: rfi.scheduleImpact,
   };

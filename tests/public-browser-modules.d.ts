@@ -40,3 +40,19 @@ declare module "*app-format.js" {
   }): string;
   export function fileTypeLabel(mediaType?: string | null): string;
 }
+
+interface BrowserView {
+  mount(container: HTMLElement): void;
+  reload(): Promise<void>;
+  destroy(): void;
+}
+
+declare module "*rfis-view.js" {
+  export function createRfisView(options: Record<string, unknown>): BrowserView;
+}
+
+declare module "*rfi-workspace-view.js" {
+  export function createRfiWorkspaceView(
+    options: Record<string, unknown>,
+  ): BrowserView;
+}

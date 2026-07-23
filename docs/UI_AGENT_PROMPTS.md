@@ -124,6 +124,11 @@ Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, route docs, local
 
 ## Prompt UI-5 — RFI register with BaseDataGrid
 
+> **Current decision:** Spike 0 rejected Tabulator for the RFI register because
+> its keyboard behavior regressed. Until a future high-volume-register decision
+> explicitly changes this, retain the controlled custom table; do not treat
+> BaseDataGrid or Tabulator as an RFI prerequisite.
+
 ```text
 [INSERT REQUIRED PREAMBLE]
 

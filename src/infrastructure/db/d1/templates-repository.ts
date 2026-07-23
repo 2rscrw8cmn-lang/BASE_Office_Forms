@@ -107,6 +107,20 @@ export class D1TemplatesRepository {
     return { ...template, publishedVersion };
   }
 
+  async findVersionById(
+    organizationId: string,
+    versionId: string,
+  ): Promise<TemplateVersion | null> {
+    const row = await this.database
+      .prepare(
+        `SELECT ${VERSION_COLUMNS} FROM template_versions
+         WHERE organization_id = ? AND id = ?`,
+      )
+      .bind(organizationId, versionId)
+      .first<TemplateVersionRow>();
+    return row ? mapVersion(row) : null;
+  }
+
   private async findTemplateRow(
     organizationId: string,
     key: string,

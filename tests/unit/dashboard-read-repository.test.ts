@@ -26,7 +26,10 @@ function resultFor(sql: string): D1Result {
   if (normalized.includes("COUNT(*) AS n FROM record_revisions")) {
     return result([{ n: 3 }]); // draft revision count
   }
-  if (normalized.includes("COUNT(*) AS n FROM rfi_records")) {
+  if (
+    normalized.includes("COUNT(*) AS n FROM records") &&
+    normalized.includes("record_type_key = 'rfi'")
+  ) {
     return result([{ n: 4 }]); // active RFI count
   }
   if (normalized.includes("COUNT(f.id) AS file_count")) {
@@ -64,13 +67,16 @@ function resultFor(sql: string): D1Result {
       },
     ]);
   }
-  if (normalized.includes("FROM rfi_records r")) {
+  if (
+    normalized.includes("FROM records r") &&
+    normalized.includes("r.record_type_key = 'rfi'")
+  ) {
     return result([
       {
         rfi_id: "rfi-1",
         rfi_number: "RFI-1",
         title: "Question",
-        status: "issued",
+        status: "open",
         due_date: "2026-07-25",
         project_id: "proj-1",
         project_number: "P-001",
