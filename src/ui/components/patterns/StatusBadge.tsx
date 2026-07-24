@@ -1,6 +1,7 @@
 import type { RfiStatus } from "../../../domain/rfis/rfi";
 import type { RecordStatus } from "../../../domain/records/record";
 import type { RevisionStatus } from "../../../domain/revisions/revision";
+import type { ProjectStatus } from "../../../domain/projects/project";
 import { Badge, type BadgeTone } from "../primitives/Badge";
 
 /**
@@ -35,6 +36,17 @@ export const RFI_STATUS_VOCABULARY: Record<RfiStatus, StatusDescriptor> = {
     tone: "warning",
   },
   void: { label: "Void", tone: "danger" },
+};
+
+export const PROJECT_STATUS_VOCABULARY: Record<
+  ProjectStatus,
+  StatusDescriptor
+> = {
+  planning: { label: "Planning", tone: "neutral" },
+  active: { label: "Active", tone: "success" },
+  closeout: { label: "Closeout", tone: "info" },
+  suspended: { label: "Suspended", tone: "warning" },
+  archived: { label: "Archived", tone: "neutral" },
 };
 
 export const RECORD_STATUS_VOCABULARY: Record<RecordStatus, StatusDescriptor> =
@@ -72,6 +84,24 @@ export interface RfiStatusBadgeProps {
 /** Renders an RFI's authoritative workflow status (`src/domain/rfis/rfi.ts`). */
 export function RfiStatusBadge({ status, className }: RfiStatusBadgeProps) {
   const descriptor = RFI_STATUS_VOCABULARY[status];
+  return (
+    <Badge tone={descriptor.tone} className={className}>
+      {descriptor.label}
+    </Badge>
+  );
+}
+
+export interface ProjectStatusBadgeProps {
+  status: ProjectStatus;
+  className?: string;
+}
+
+/** Renders a Project's authoritative status (`src/domain/projects/project.ts`). */
+export function ProjectStatusBadge({
+  status,
+  className,
+}: ProjectStatusBadgeProps) {
+  const descriptor = PROJECT_STATUS_VOCABULARY[status];
   return (
     <Badge tone={descriptor.tone} className={className}>
       {descriptor.label}

@@ -99,6 +99,13 @@
   outline-offset: var(--app-focus-offset);
 }
 
+/* Shared in-app link focus treatment. Feature links use AppLink rather than
+   owning focus geometry in feature CSS. */
+.base-link:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
 .base-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;

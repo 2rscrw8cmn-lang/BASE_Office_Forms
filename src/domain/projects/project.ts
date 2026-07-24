@@ -1,5 +1,12 @@
-export type ProjectStatus =
-  "planning" | "active" | "closeout" | "suspended" | "archived";
+export const PROJECT_STATUSES = [
+  "planning",
+  "active",
+  "closeout",
+  "suspended",
+  "archived",
+] as const;
+
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export interface ProjectAddress {
   line1: string | null;

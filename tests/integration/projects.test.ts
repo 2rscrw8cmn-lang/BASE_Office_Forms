@@ -171,6 +171,7 @@ describe("project directory API", () => {
     expect(list.status).toBe(200);
     await expect(list.json()).resolves.toMatchObject({
       data: [{ id: created.id, projectNumber: "P-100" }],
+      meta: { capabilities: { createProject: true } },
     });
 
     const duplicate = await invokeV2Api(
@@ -195,6 +196,42 @@ describe("project directory API", () => {
     await expect(denied.json()).resolves.toMatchObject({
       error: { code: "AUTHORIZATION_DENIED" },
     });
+  });
+
+  it("returns the create-project capability from the server policy without changing the list data shape", async () => {
+    const adminList = await invokeV2Api(
+      "/api/v2/projects",
+      request("admin"),
+      dependencies(),
+    );
+    const documentControlList = await invokeV2Api(
+      "/api/v2/projects",
+      request("documentControl"),
+      dependencies(),
+    );
+    const managerList = await invokeV2Api(
+      "/api/v2/projects",
+      request("manager"),
+      dependencies(),
+    );
+    const contributorList = await invokeV2Api(
+      "/api/v2/projects",
+      request("contributor"),
+      dependencies(),
+    );
+
+    for (const [response, createProject] of [
+      [adminList, true],
+      [documentControlList, true],
+      [managerList, false],
+      [contributorList, false],
+    ] as const) {
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        data: [],
+        meta: { capabilities: { createProject } },
+      });
+    }
   });
 
   it("conceals projects outside the organization and unassigned project routes", async () => {

@@ -17,6 +17,7 @@ import type {
 } from "../../src/ui/app/types";
 import {
   installFetch,
+  READY_PROJECT,
   READY_SESSION,
   renderShellWithNavigation,
 } from "../helpers/react-shell-harness";
@@ -85,7 +86,10 @@ afterEach(() => {
 
 describe("Compatibility-module loading failure handling", () => {
   it("shows the shared error surface when the feature factory import rejects, and recovers on retry", async () => {
-    installFetch({ session: () => READY_SESSION() });
+    installFetch({
+      session: () => READY_SESSION(),
+      project: READY_PROJECT,
+    });
     const harness = makeFlakyRuntime();
     harness.setFactoryShouldFail(true);
 
@@ -104,11 +108,14 @@ describe("Compatibility-module loading failure handling", () => {
   });
 
   it("shows the shared error surface when the API client import rejects, and recovers on retry", async () => {
-    installFetch({ session: () => READY_SESSION() });
+    installFetch({
+      session: () => READY_SESSION(),
+      project: READY_PROJECT,
+    });
     const harness = makeFlakyRuntime();
     harness.setApiShouldFail(true);
 
-    renderShellWithNavigation("/projects", harness.runtime);
+    renderShellWithNavigation("/projects/p1/records", harness.runtime);
 
     await screen.findByRole("heading", {
       name: "This section could not be loaded",
@@ -118,12 +125,15 @@ describe("Compatibility-module loading failure handling", () => {
     harness.setApiShouldFail(false);
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    await screen.findByText("FEATURE:projects");
+    await screen.findByText("FEATURE:records");
     expect(harness.apiAttempts).toBeGreaterThan(attemptsBeforeRetry);
   });
 
   it("does not mount an abandoned feature when the user navigates away while it is loading", async () => {
-    installFetch({ session: () => READY_SESSION() });
+    installFetch({
+      session: () => READY_SESSION(),
+      project: READY_PROJECT,
+    });
     const pendingFactoryResolve: { current: (() => void) | null } = {
       current: null,
     };
@@ -173,18 +183,18 @@ describe("Compatibility-module loading failure handling", () => {
     const shell = renderShellWithNavigation("/dashboard", runtime);
     // The dashboard's factory promise is still pending; navigate away before
     // it resolves.
-    shell.goTo("/projects");
-    await screen.findByText("FEATURE:projects");
+    shell.goTo("/projects/p1/records");
+    await screen.findByText("FEATURE:records");
 
     // Now let the abandoned dashboard factory resolve.
     pendingFactoryResolve.current?.();
     await waitFor(() => {
       // Give any (incorrect) mount a chance to happen before asserting it did
       // not.
-      expect(mountedKinds).toContain("projects");
+      expect(mountedKinds).toContain("records");
     });
     expect(mountedKinds).not.toContain("dashboard");
-    expect(screen.getByText("FEATURE:projects")).toBeInTheDocument();
+    expect(screen.getByText("FEATURE:records")).toBeInTheDocument();
   });
 
   it("gives the load error and retry action accessible labels", async () => {

@@ -10,6 +10,7 @@ import { Field } from "../../src/ui/components/primitives/Field";
 import { Select } from "../../src/ui/components/primitives/Select";
 import { TextArea } from "../../src/ui/components/primitives/TextArea";
 import { TextInput } from "../../src/ui/components/primitives/TextInput";
+import { PageHeader } from "../../src/ui/components/patterns/PageHeader";
 
 describe("Button", () => {
   it("calls onClick and defaults to type=button", async () => {
@@ -72,6 +73,21 @@ describe("Field wiring", () => {
     // Both help and error ids are referenced.
     expect(describedBy?.split(" ").length).toBe(2);
     expect(screen.getByRole("alert")).toHaveTextContent("Required");
+  });
+});
+
+describe("PageHeader route-focus props", () => {
+  it("forwards explicit heading id and programmatic tab index to its shared h1", () => {
+    render(
+      <PageHeader
+        title="Projects"
+        headingId="page-title"
+        headingTabIndex={-1}
+      />,
+    );
+    const heading = screen.getByRole("heading", { name: "Projects" });
+    expect(heading).toHaveAttribute("id", "page-title");
+    expect(heading).toHaveAttribute("tabindex", "-1");
   });
 });
 

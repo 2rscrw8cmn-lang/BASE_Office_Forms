@@ -7,11 +7,13 @@
 
 import type { AnchorHTMLAttributes, MouseEvent } from "react";
 import { useShell } from "./ShellContext";
+import { cx } from "../components/util/cx";
 
 export function AppLink({
   href,
   onClick,
   children,
+  className,
   ...rest
 }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) {
   const { navigate } = useShell();
@@ -33,7 +35,12 @@ export function AppLink({
   };
 
   return (
-    <a href={href} onClick={handleClick} {...rest}>
+    <a
+      href={href}
+      onClick={handleClick}
+      className={cx("base-link", className)}
+      {...rest}
+    >
       {children}
     </a>
   );

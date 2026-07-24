@@ -44,6 +44,7 @@ function el(selector: string): HTMLElement {
 
 interface FetchConfig {
   session: () => Response;
+  projects?: () => Response;
   project?: (id: string) => Response;
 }
 
@@ -54,6 +55,9 @@ function installFetch(config: FetchConfig) {
     calls.push(url);
     if (url.includes("/api/v2/session"))
       return Promise.resolve(config.session());
+    if (/\/api\/v2\/projects(?:\?|$)/.test(url) && config.projects) {
+      return Promise.resolve(config.projects());
+    }
     const match = /\/api\/v2\/projects\/([^/?]+)$/.exec(url);
     if (match && config.project) {
       return Promise.resolve(config.project(decodeURIComponent(match[1])));
@@ -139,6 +143,15 @@ const READY_PROJECT = (id: string) =>
     },
   });
 
+const READY_PROJECTS = () =>
+  jsonResponse({
+    data: [],
+    meta: {
+      requestId: "req-projects",
+      capabilities: { createProject: false },
+    },
+  });
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -170,7 +183,10 @@ describe("React application shell", () => {
   describe("global navigation and administration", () => {
     it("marks the active global section and shows Administration for org_admin", async () => {
       const { runtime } = makeRuntime();
-      installFetch({ session: () => READY_SESSION("org_admin") });
+      installFetch({
+        session: () => READY_SESSION("org_admin"),
+        projects: READY_PROJECTS,
+      });
       renderShell("/dashboard", runtime);
       await screen.findByText("FEATURE:dashboard");
       const desktopNav = el(".app-navigation-desktop");
@@ -349,7 +365,10 @@ describe("React application shell", () => {
   describe("route focus and announcements", () => {
     it("moves focus to the heading and announces the route after navigation", async () => {
       const { runtime } = makeRuntime();
-      installFetch({ session: () => READY_SESSION("org_admin") });
+      installFetch({
+        session: () => READY_SESSION("org_admin"),
+        projects: READY_PROJECTS,
+      });
       renderShell("/dashboard", runtime);
       await screen.findByText("FEATURE:dashboard");
 
@@ -359,7 +378,7 @@ describe("React application shell", () => {
       );
       await userEvent.click(projectsLink);
 
-      await screen.findByText("FEATURE:projects");
+      await screen.findByRole("heading", { name: "Projects" });
       await waitFor(() => {
         expect(document.getElementById("page-title")).toHaveFocus();
       });
@@ -372,7 +391,10 @@ describe("React application shell", () => {
   describe("mobile navigation drawer", () => {
     it("opens with focus in the drawer, traps and restores focus, and closes on Escape", async () => {
       const { runtime } = makeRuntime();
-      installFetch({ session: () => READY_SESSION() });
+      installFetch({
+        session: () => READY_SESSION(),
+        projects: READY_PROJECTS,
+      });
       renderShell("/dashboard", runtime);
       await screen.findByText("FEATURE:dashboard");
 
@@ -404,7 +426,10 @@ describe("React application shell", () => {
 
     it("closes the drawer and navigates when a drawer link is chosen", async () => {
       const { runtime } = makeRuntime();
-      installFetch({ session: () => READY_SESSION() });
+      installFetch({
+        session: () => READY_SESSION(),
+        projects: READY_PROJECTS,
+      });
       renderShell("/dashboard", runtime);
       await screen.findByText("FEATURE:dashboard");
 
@@ -417,7 +442,7 @@ describe("React application shell", () => {
       });
       await userEvent.click(projectsLink);
 
-      await screen.findByText("FEATURE:projects");
+      await screen.findByRole("heading", { name: "Projects" });
       expect(drawer).toHaveAttribute("aria-hidden", "true");
       expect(screen.getByTestId("location")).toHaveTextContent("/projects");
     });

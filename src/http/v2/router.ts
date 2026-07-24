@@ -33,7 +33,10 @@ import {
   FileValidationError,
 } from "../../domain/files/validation";
 import { AuthorizationError } from "../../domain/identity/authorization";
-import { ProjectAuthorizationError } from "../../domain/projects/authorization";
+import {
+  canCreateProjects,
+  ProjectAuthorizationError,
+} from "../../domain/projects/authorization";
 import {
   TemplateAuthorizationError,
   TemplateNotFoundError,
@@ -876,6 +879,12 @@ async function handleProjects(
       return apiSuccess(
         context,
         (await projects.list(authenticated.session)).map(serializeProject),
+        200,
+        {
+          capabilities: {
+            createProject: canCreateProjects(authenticated.session),
+          },
+        },
       );
     const input = parseProjectCreate(await parseJsonRequest(request));
     const project = await projects.create(authenticated.session, {

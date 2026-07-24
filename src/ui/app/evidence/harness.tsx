@@ -30,6 +30,11 @@ const role = params.get("role") ?? "org_admin";
 const rfiFixture = params.get("rfiFixture") ?? "populated";
 const rfiPatchMode = params.get("rfiPatchMode") ?? "success";
 const rfiScenario = params.get("rfiScenario") ?? "none";
+// UI-6A evidence mounts the real native Projects register at `/projects`.
+// Its server-authorized fixture and interaction states are selected here so
+// screenshots remain deterministic without placing demo markup in production.
+const projectFixture = params.get("projectFixture") ?? "populated";
+const projectScenario = params.get("projectScenario") ?? "none";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -43,6 +48,54 @@ const RFI_CONTACT = {
   name: "Alex Architect",
   companyName: "Meridian Design Group",
 };
+
+function projectRow(overrides: Record<string, unknown>) {
+  return {
+    id: "project-x",
+    projectNumber: null,
+    name: "Untitled project",
+    status: "planning",
+    description: null,
+    address: { city: null, region: null },
+    updatedAt: "2026-07-24T12:00:00Z",
+    ...overrides,
+  };
+}
+
+const projectRows = [
+  projectRow({
+    id: "project-1",
+    projectNumber: "24-018",
+    name: "Riverside Medical Center",
+    status: "active",
+    address: { city: "Orlando", region: "FL" },
+    updatedAt: "2026-07-23T15:00:00Z",
+  }),
+  projectRow({
+    id: "project-2",
+    projectNumber: "24-031",
+    name: "North Annex Renovation",
+    status: "planning",
+    address: { city: "Tampa", region: "FL" },
+    updatedAt: "2026-07-20T09:30:00Z",
+  }),
+  projectRow({
+    id: "project-3",
+    projectNumber: "23-104",
+    name: "Central Library Modernization",
+    status: "closeout",
+    address: { city: "Jacksonville", region: "FL" },
+    updatedAt: "2026-07-16T18:15:00Z",
+  }),
+  projectRow({
+    id: "project-4",
+    projectNumber: null,
+    name: "Westside Operations Facility",
+    status: "suspended",
+    address: { city: null, region: null },
+    updatedAt: "2026-07-10T14:45:00Z",
+  }),
+];
 
 function rfiRow(overrides: Record<string, unknown>) {
   return {
@@ -176,6 +229,51 @@ globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
           membership: { role },
         },
       }),
+    );
+  }
+
+  if (/\/api\/v2\/projects(?:\?|$)/.test(url) && method === "GET") {
+    if (projectFixture === "error") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "PROJECTS_UNAVAILABLE",
+              message: "The projects service is temporarily unavailable.",
+              requestId: "req-ui6a-evidence",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response({
+        data: projectFixture === "empty" ? [] : projectRows,
+        meta: {
+          requestId: "req-ui6a-evidence",
+          capabilities: { createProject: true },
+        },
+      }),
+    );
+  }
+
+  if (/\/api\/v2\/projects(?:\?|$)/.test(url) && method === "POST") {
+    const body =
+      init?.body && typeof init.body === "string"
+        ? (JSON.parse(init.body) as Record<string, unknown>)
+        : {};
+    return Promise.resolve(
+      response(
+        {
+          data: projectRow({
+            id: "project-created",
+            ...body,
+            updatedAt: "2026-07-24T12:00:00Z",
+          }),
+        },
+        201,
+      ),
     );
   }
 
@@ -392,6 +490,7 @@ async function runRfiScenario() {
     )) as HTMLButtonElement;
     filters.click();
     await waitForSelector(".base-toolbar__filters--mobile-disclosure.is-open");
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     return;
   }
   if (rfiScenario === "new-draft") {
@@ -468,3 +567,25 @@ async function runRfiScenario() {
 }
 
 void runRfiScenario();
+
+async function runProjectScenario() {
+  if (projectScenario === "none") return;
+  if (projectScenario === "mobile-filters") {
+    const filters = (await waitForSelector(
+      'button[aria-label^="Show"][aria-controls]',
+    )) as HTMLButtonElement;
+    filters.click();
+    await waitForSelector(".base-toolbar__filters--mobile-disclosure.is-open");
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    return;
+  }
+  if (projectScenario === "create-dialog") {
+    const create = (await waitForSelector(
+      "[data-create-project]",
+    )) as HTMLButtonElement;
+    create.click();
+    await waitForSelector(".projects-create-dialog");
+  }
+}
+
+void runProjectScenario();

@@ -24,8 +24,9 @@ UI-1     Audit, design contract, and decisions                 [complete]
 UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
-UI-5     RFI register as a native React feature (controlled table, no Tabulator)
-UI-6     Projects and Records registers
+UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45]
+UI-6A    Projects register + Create Project workflow
+UI-6B    Document Register + Add Document workflow (after UI-6A review/merge)
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
@@ -405,23 +406,29 @@ through tests and desktop/mobile/tablet visual evidence. Acceptance is against
 the compact semantic-table, dedicated-card, and shared-Drawer contract in
 `docs/UX_RFI_SPEC.md` §13, never against a grid/spreadsheet prototype.
 
-## 9. UI-6 — Projects and Records registers
+## 9. UI-6A and UI-6B — register migrations
 
 ### Objective
 
-Standardize non-editable and lightly interactive registers using the same page and toolbar system.
+Migrate each remaining register in a vertically coherent, separately reviewed
+phase while reusing the same page, toolbar, state, and responsive system.
 
-### Projects guide
+### UI-6A — Projects register
 
 - compact project identity;
 - status, location, and updated information;
 - search and status filter;
-- capability-gated Create Project;
+- server-derived capability-gated native Create Project workflow;
 - no redundant Open action column;
-- desktop table and mobile card/detail behavior;
+- native semantic desktop table and dedicated mobile cards;
 - canonical project navigation.
+- no Tabulator or `BaseDataGrid`.
 
-### Records guide
+UI-6A does not change Records code. Its exit gate is a fully native
+`/projects` route, retained legacy rollback modules, complete state/history/
+capability/create coverage, and deterministic desktop/mobile evidence.
+
+### UI-6B — Document Register
 
 - stable record identity separated from revision and files;
 - filters for type, discipline, revision status, and archive visibility;
@@ -430,10 +437,18 @@ Standardize non-editable and lightly interactive registers using the same page a
 - file count and updated information;
 - capability-gated Add Document;
 - canonical record navigation.
+- native semantic desktop table and dedicated mobile cards;
+- no Tabulator or `BaseDataGrid`.
+
+UI-6B starts only after UI-6A is reviewed and merged. It migrates only the
+Document Register and Add Document workflow; it does not reopen Projects,
+begin detail workspaces, or broaden into later phases.
 
 ### Exit gate
 
-Projects, Records, and RFIs share the same page header, toolbar, chips, states, status components, density, and responsive logic.
+After both separately reviewed phases, Projects, Records, and RFIs share the
+same page header, toolbar, chips, states, status components, density, and
+responsive logic while keeping domain-specific tables, cards, and workflows.
 
 ## 10. UI-7 — RFI, Record, and Revision workspaces
 

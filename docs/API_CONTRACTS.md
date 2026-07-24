@@ -228,29 +228,58 @@ only safe public fields — never `prior_state_json`, `new_state_json`,
 
 ### `GET /projects`
 
-Filters:
-
-- `status`
-- `managerId`
-- `superintendentId`
-- `client`
-- `search`
-- `archived`
-- `cursor`
-
-### `POST /projects`
-
-Creates a project draft.
-
-Required:
+Returns the active-organization project list already scoped by the authenticated
+membership and project-access policy. The response `data` remains an array for
+backwards compatibility:
 
 ```json
 {
-  "shortName": "OH-CONWAY",
-  "name": "Orlando Health Conway Clinic Fit Out",
-  "internalProjectNumber": "261820046"
+  "data": [
+    {
+      "id": "project_uuid",
+      "projectNumber": "24-018",
+      "name": "Riverside Medical Center",
+      "status": "active",
+      "description": null,
+      "address": { "city": "Orlando", "region": "FL" },
+      "updatedAt": "2026-07-23T15:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "capabilities": { "createProject": true },
+    "requestId": "request_uuid"
+  }
 }
 ```
+
+`meta.capabilities.createProject` is derived on the server from
+`canCreateProjects`; clients must not reconstruct it from role strings.
+Adding this metadata does not change the existing array under `data`, so legacy
+consumers continue to deserialize the same list. The current endpoint is
+unpaginated and has no server-side list filters; UI filtering only narrows the
+authorized response.
+
+### `POST /projects`
+
+Creates a project when the same authoritative creation policy permits it.
+`projectNumber` and `name` are required; the currently supported optional
+inputs are `status`, `description`, and address city/region:
+
+```json
+{
+  "projectNumber": "24-018",
+  "name": "Riverside Medical Center",
+  "status": "planning",
+  "description": "Medical tower renovation",
+  "address": {
+    "city": "Orlando",
+    "region": "FL"
+  }
+}
+```
+
+The server returns the persisted project in `data` with HTTP 201. The client
+must not optimistically insert a project before this confirmation.
 
 ### `GET /projects/{projectId}`
 

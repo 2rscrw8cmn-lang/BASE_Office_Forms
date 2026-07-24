@@ -16,9 +16,13 @@ export function apiSuccess(
   context: ApiRequestContext,
   data: unknown,
   status = 200,
+  additionalMeta?: Record<string, unknown>,
 ): Response {
   return new Response(
-    JSON.stringify({ data, meta: { requestId: context.requestId } }),
+    JSON.stringify({
+      data,
+      meta: { ...additionalMeta, requestId: context.requestId },
+    }),
     {
       status,
       headers: { ...JSON_HEADERS, "X-Request-ID": context.requestId },
