@@ -1,5 +1,5 @@
 import { Dialog as RadixDialog } from "radix-ui";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { cx } from "../util/cx";
 import { IconButton } from "../primitives/IconButton";
 
@@ -14,6 +14,15 @@ export interface DrawerProps {
   side?: "left" | "right";
   /** Navigation stays compact; detail panels use the shared workspace width. */
   size?: "navigation" | "detail";
+  /**
+   * Element to focus when the panel opens. Without it Radix focuses the first
+   * tabbable node (the close button), which is right for navigation but wrong
+   * for a detail workflow whose first field or choice should receive focus.
+   * Matches the `FormDialog` contract.
+   */
+  initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Accessible name for the close control; defaults to the navigation wording. */
+  closeLabel?: string;
   className?: string;
 }
 
@@ -32,6 +41,8 @@ export function Drawer({
   children,
   side = "left",
   size = "navigation",
+  initialFocusRef,
+  closeLabel = "Close menu",
   className,
 }: DrawerProps) {
   return (
@@ -52,13 +63,21 @@ export function Drawer({
             `base-drawer--${size}`,
             className,
           )}
+          onOpenAutoFocus={
+            initialFocusRef
+              ? (event) => {
+                  event.preventDefault();
+                  initialFocusRef.current?.focus();
+                }
+              : undefined
+          }
         >
           <header className="base-drawer__header">
             <RadixDialog.Title className="base-drawer__title">
               {title}
             </RadixDialog.Title>
             <RadixDialog.Close asChild>
-              <IconButton icon="x" label="Close menu" />
+              <IconButton icon="x" label={closeLabel} />
             </RadixDialog.Close>
           </header>
           <div className="base-drawer__body">{children}</div>

@@ -105,6 +105,50 @@ describe("Drawer keyboard and focus", () => {
     });
   });
 
+  it("focuses an explicit initial target and names its close control", async () => {
+    function Harness() {
+      const initialFocusRef = useRef<HTMLInputElement>(null);
+      return (
+        <Drawer
+          trigger={<Button>Add document</Button>}
+          title="Add document"
+          side="right"
+          size="detail"
+          closeLabel="Close add document"
+          initialFocusRef={initialFocusRef}
+        >
+          <Field label="Title">
+            <TextInput ref={initialFocusRef} />
+          </Field>
+        </Drawer>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Add document" });
+    await userEvent.click(trigger);
+    await screen.findByRole("dialog", { name: "Add document" });
+
+    // The first field takes focus, not the close button.
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Close add document" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the navigation close label as the default", async () => {
+    render(
+      <Drawer trigger={<Button>Open menu</Button>} title="Navigation">
+        <a href="#dashboard">Dashboard</a>
+      </Drawer>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    await screen.findByRole("dialog");
+    expect(
+      screen.getByRole("button", { name: "Close menu" }),
+    ).toBeInTheDocument();
+  });
+
   it("exposes the reusable detail size without changing navigation Drawers", () => {
     render(
       <>

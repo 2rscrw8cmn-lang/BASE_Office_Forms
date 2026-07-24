@@ -1,22 +1,23 @@
 // @vitest-environment happy-dom
 /*
  * Same-route URL-history parity for compatibility-mounted legacy feature
- * controllers. Controllers such as records-view.js store filter/sort state
- * through window.history.pushState/replaceState issued directly (bypassing
- * the router) and reread that state from window.location.search inside
- * mount(). When pathname/search/hash changes through browser Back/Forward or
- * an actual React Router navigation while the feature descriptor stays the
- * same, LegacyFeatureMount must remount the EXISTING controller into the SAME
+ * controllers. Such controllers store view state through
+ * window.history.pushState/replaceState issued directly (bypassing the
+ * router) and reread that state from window.location.search inside mount().
+ * When pathname/search/hash changes through browser Back/Forward or an actual
+ * React Router navigation while the feature descriptor stays the same,
+ * LegacyFeatureMount must remount the EXISTING controller into the SAME
  * container (so it rereads the URL) without recreating it (no new factory
  * call) or reloading it (no new data fetch).
  *
- * The RFI register (`project-rfis` / kind "rfis") was migrated to a native
- * React feature in UI-5 and no longer mounts through this compatibility path
- * -- see `tests/unit/rfi-register-react.test.tsx` and
- * `tests/unit/rfi-register-route-integration.test.tsx` for its coverage.
- * `records` remains the representative compatibility-mounted controller that
- * reads filter/sort state from the URL, so these suites now exercise the
- * shell's remount mechanism entirely through it.
+ * Registers leave this compatibility path one phase at a time: the RFI
+ * register (`project-rfis`) in UI-5, `/projects` in UI-6A, and the Document
+ * Register (`project-records`) in UI-6B. Each has its own native coverage --
+ * see `tests/unit/records-register-react.test.tsx` and
+ * `tests/unit/records-register-route-integration.test.tsx` for UI-6B.
+ * `record-detail` (the Record workspace, compatibility-mounted until UI-7)
+ * is now the representative URL-reading controller, so these suites exercise
+ * the shell's remount mechanism through it.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
@@ -91,24 +92,24 @@ afterEach(() => {
 });
 
 describe("Same-route URL-history parity for compatibility-mounted controllers", () => {
-  it("remounts (not recreates) the Records controller across status=open -> status=draft -> Back", async () => {
+  it("remounts (not recreates) the Record detail controller across status=open -> status=draft -> Back", async () => {
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records?status=open",
+      "/projects/p1/records/r1?status=open",
       harness.runtime,
     );
 
     await screen.findByText(/status=open/);
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(1);
 
-    shell.goTo("/projects/p1/records?status=draft");
+    shell.goTo("/projects/p1/records/r1?status=draft");
     await waitFor(() => {
       expect(screen.getByText(/status=draft/)).toBeInTheDocument();
     });
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(2);
     expect(harness.destroyCallCount).toBe(0);
@@ -117,7 +118,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     await waitFor(() => {
       expect(screen.getByText(/status=open/)).toBeInTheDocument();
     });
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(3);
     expect(harness.destroyCallCount).toBe(0);
@@ -127,7 +128,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records?status=open&sort=updated",
+      "/projects/p1/records/r1?status=open&sort=updated",
       harness.runtime,
     );
 
@@ -135,7 +136,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       expect(harness.mountedParams).toContain("status=open hash=none");
     });
 
-    shell.goTo("/projects/p1/records?status=closed&sort=number");
+    shell.goTo("/projects/p1/records/r1?status=closed&sort=number");
     await waitFor(() => {
       expect(harness.mountedParams).toContain("status=closed hash=none");
     });
@@ -144,7 +145,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     await waitFor(() => {
       expect(harness.mountedParams.at(-1)).toBe("status=open hash=none");
     });
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
   });
 
@@ -152,7 +153,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records#a",
+      "/projects/p1/records/r1#a",
       harness.runtime,
     );
 
@@ -160,11 +161,11 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       expect(harness.mountedParams).toContain("status=none hash=#a");
     });
 
-    shell.goTo("/projects/p1/records#b");
+    shell.goTo("/projects/p1/records/r1#b");
     await waitFor(() => {
       expect(harness.mountedParams).toContain("status=none hash=#b");
     });
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.destroyCallCount).toBe(0);
   });
@@ -173,13 +174,13 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records?status=open",
+      "/projects/p1/records/r1?status=open",
       harness.runtime,
     );
     await screen.findByText(/status=open/);
 
     for (const query of ["draft", "closed", "void", "open"]) {
-      shell.goTo(`/projects/p1/records?status=${query}`);
+      shell.goTo(`/projects/p1/records/r1?status=${query}`);
       await waitFor(() => {
         expect(
           screen.getByText(new RegExp(`status=${query}`)),
@@ -187,7 +188,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       });
     }
 
-    expect(harness.factoryCalls).toEqual(["records"]);
+    expect(harness.factoryCalls).toEqual(["record-detail"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(5); // 1 initial + 4 query-only remounts
     expect(harness.destroyCallCount).toBe(0);
@@ -195,10 +196,10 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
 
   it("still destroys the old controller on a genuine path navigation", async () => {
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
-    const recordsRuntime = urlAwareRuntime();
+    const recordDetailRuntime = urlAwareRuntime();
     const overviewFactoryCalls: FeatureKind[] = [];
     const combinedRuntime: ShellRuntime = {
-      getApiClient: recordsRuntime.runtime.getApiClient,
+      getApiClient: recordDetailRuntime.runtime.getApiClient,
       loadFeatureFactory: (kind) => {
         if (kind === "overview") {
           overviewFactoryCalls.push(kind);
@@ -215,28 +216,28 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
             },
           }));
         }
-        return recordsRuntime.runtime.loadFeatureFactory(kind);
+        return recordDetailRuntime.runtime.loadFeatureFactory(kind);
       },
     };
 
     const shell = renderShellWithNavigation(
-      "/projects/p1/records?status=open",
+      "/projects/p1/records/r1?status=open",
       combinedRuntime,
     );
     await screen.findByText(/status=open/);
-    expect(recordsRuntime.factoryCalls).toEqual(["records"]);
+    expect(recordDetailRuntime.factoryCalls).toEqual(["record-detail"]);
 
     shell.goTo("/projects/p1/overview");
     await screen.findByText("FEATURE:overview");
 
-    expect(recordsRuntime.destroyCallCount).toBe(1);
+    expect(recordDetailRuntime.destroyCallCount).toBe(1);
     expect(overviewFactoryCalls).toEqual(["overview"]);
   });
 
   it("supports browser Back/Forward across two different feature routes", async () => {
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const overviewFactoryCalls: FeatureKind[] = [];
-    const recordsFactoryCalls: FeatureKind[] = [];
+    const recordDetailFactoryCalls: FeatureKind[] = [];
     const runtime: ShellRuntime = {
       getApiClient: () =>
         Promise.resolve({
@@ -245,7 +246,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
         } as LegacyApiClient),
       loadFeatureFactory: (kind) => {
         if (kind === "overview") overviewFactoryCalls.push(kind);
-        if (kind === "records") recordsFactoryCalls.push(kind);
+        if (kind === "record-detail") recordDetailFactoryCalls.push(kind);
         return Promise.resolve((deps: FeatureControllerDeps) => ({
           mount(container: HTMLElement) {
             container.innerHTML = `<h1 id="page-title" tabindex="-1">FEATURE:${kind}</h1>`;
@@ -264,16 +265,16 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     const shell = renderShellWithNavigation("/projects/p1/overview", runtime);
     await screen.findByText("FEATURE:overview");
 
-    shell.goTo("/projects/p1/records");
-    await screen.findByText("FEATURE:records");
+    shell.goTo("/projects/p1/records/r1");
+    await screen.findByText("FEATURE:record-detail");
 
     shell.back();
     await screen.findByText("FEATURE:overview");
 
     shell.forward();
-    await screen.findByText("FEATURE:records");
+    await screen.findByText("FEATURE:record-detail");
 
     expect(overviewFactoryCalls.length).toBeGreaterThanOrEqual(2);
-    expect(recordsFactoryCalls.length).toBeGreaterThanOrEqual(2);
+    expect(recordDetailFactoryCalls.length).toBeGreaterThanOrEqual(2);
   });
 });

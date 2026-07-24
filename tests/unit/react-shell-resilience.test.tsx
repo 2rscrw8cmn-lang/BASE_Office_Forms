@@ -115,7 +115,7 @@ describe("Compatibility-module loading failure handling", () => {
     const harness = makeFlakyRuntime();
     harness.setApiShouldFail(true);
 
-    renderShellWithNavigation("/projects/p1/records", harness.runtime);
+    renderShellWithNavigation("/projects/p1/overview", harness.runtime);
 
     await screen.findByRole("heading", {
       name: "This section could not be loaded",
@@ -125,7 +125,7 @@ describe("Compatibility-module loading failure handling", () => {
     harness.setApiShouldFail(false);
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    await screen.findByText("FEATURE:records");
+    await screen.findByText("FEATURE:overview");
     expect(harness.apiAttempts).toBeGreaterThan(attemptsBeforeRetry);
   });
 
@@ -183,18 +183,18 @@ describe("Compatibility-module loading failure handling", () => {
     const shell = renderShellWithNavigation("/dashboard", runtime);
     // The dashboard's factory promise is still pending; navigate away before
     // it resolves.
-    shell.goTo("/projects/p1/records");
-    await screen.findByText("FEATURE:records");
+    shell.goTo("/projects/p1/overview");
+    await screen.findByText("FEATURE:overview");
 
     // Now let the abandoned dashboard factory resolve.
     pendingFactoryResolve.current?.();
     await waitFor(() => {
       // Give any (incorrect) mount a chance to happen before asserting it did
       // not.
-      expect(mountedKinds).toContain("records");
+      expect(mountedKinds).toContain("overview");
     });
     expect(mountedKinds).not.toContain("dashboard");
-    expect(screen.getByText("FEATURE:records")).toBeInTheDocument();
+    expect(screen.getByText("FEATURE:overview")).toBeInTheDocument();
   });
 
   it("gives the load error and retry action accessible labels", async () => {
