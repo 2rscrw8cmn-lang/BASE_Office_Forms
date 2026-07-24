@@ -60,6 +60,19 @@ describe("Projects register authority and implementation boundaries", () => {
     );
     expect(css).toMatch(/\.projects-register-cards\s*\{\s*display:\s*flex;/);
   });
+
+  it("does not define feature-specific focus rings", () => {
+    expect(css).not.toMatch(/\.projects-[^{:]+:focus-visible/);
+    expect(css).not.toMatch(/\boutline(?:-offset|-color)?\s*:/);
+    expect(featureSource).toMatch(/AppLink/);
+    const appLink = readFileSync("src/ui/app/AppLink.tsx", "utf8");
+    const sharedCss = readFileSync(
+      "src/ui/components/base-components.css",
+      "utf8",
+    );
+    expect(appLink).toMatch(/base-link/);
+    expect(sharedCss).toMatch(/\.base-link:focus-visible/);
+  });
 });
 
 describe("Projects register token enforcement", () => {

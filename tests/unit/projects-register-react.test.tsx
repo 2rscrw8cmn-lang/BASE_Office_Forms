@@ -512,4 +512,62 @@ describe("native Create Project dialog", () => {
       );
     });
   });
+
+  it("refreshes the confirmed Projects query before returning from canonical navigation", async () => {
+    const existing = project();
+    const created = project({
+      id: "created-project",
+      projectNumber: "P-777",
+      name: "Confirmed after navigation",
+    });
+    const { calls } = installProjectsFetch({
+      listResponses: [
+        jsonResponse({
+          data: [existing],
+          meta: {
+            requestId: "req-initial",
+            capabilities: { createProject: true },
+          },
+        }),
+        jsonResponse({
+          data: [existing, created],
+          meta: {
+            requestId: "req-refreshed",
+            capabilities: { createProject: true },
+          },
+        }),
+      ],
+      onCreate: () => jsonResponse({ data: created }, { status: 201 }),
+    });
+    renderProjectsRegister();
+    await loadedTable();
+    await openCreateDialog();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Project number" }),
+      "P-777",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Project name" }),
+      "Confirmed after navigation",
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Create project",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(
+        "/projects/created-project/overview",
+      );
+      expect(calls.filter((call) => call.method === "GET")).toHaveLength(2);
+    });
+    window.history.back();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/projects");
+    });
+    expect(
+      screen.getAllByText("Confirmed after navigation").length,
+    ).toBeGreaterThan(0);
+  });
 });

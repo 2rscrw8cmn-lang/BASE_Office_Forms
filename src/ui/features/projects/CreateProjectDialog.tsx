@@ -2,7 +2,7 @@ import {
   PROJECT_STATUSES,
   type ProjectStatus,
 } from "../../../domain/projects/project";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import {
   Button,
@@ -16,6 +16,7 @@ import {
 import { useShell } from "../../app/ShellContext";
 import { createProject, ProjectsApiError } from "./api";
 import type { CreateProjectInput, ProjectListItem } from "./types";
+import { projectsQueryKey } from "./useProjects";
 
 type CreatableProjectStatus = Exclude<ProjectStatus, "archived">;
 
@@ -52,6 +53,7 @@ export function CreateProjectDialog({
   onCreated: (project: ProjectListItem) => void;
 }) {
   const shell = useShell();
+  const queryClient = useQueryClient();
   const projectNumberRef = useRef<HTMLInputElement>(null);
   const projectNameRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -60,7 +62,8 @@ export function CreateProjectDialog({
 
   const mutation = useMutation({
     mutationFn: createProject,
-    onSuccess: (project) => {
+    onSuccess: async (project) => {
+      await queryClient.invalidateQueries({ queryKey: projectsQueryKey });
       shell.announce("Project created.");
       setOpen(false);
       onCreated(project);

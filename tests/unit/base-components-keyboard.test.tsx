@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -9,6 +9,9 @@ import { Tabs } from "../../src/ui/components/interactive/Tabs";
 import { DropdownMenu } from "../../src/ui/components/interactive/DropdownMenu";
 import { CommandMenu } from "../../src/ui/components/interactive/CommandMenu";
 import { Button } from "../../src/ui/components/primitives/Button";
+import { Field } from "../../src/ui/components/primitives/Field";
+import { TextInput } from "../../src/ui/components/primitives/TextInput";
+import { FormDialog } from "../../src/ui/components/patterns/FormDialog";
 
 describe("Dialog keyboard and focus", () => {
   it("labels the dialog, traps focus, and closes on Escape", async () => {
@@ -37,6 +40,46 @@ describe("Dialog keyboard and focus", () => {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+});
+
+describe("FormDialog shared presentation and focus", () => {
+  it("uses the reusable sheet variant, focuses its explicit initial field, and restores trigger focus", async () => {
+    function Harness() {
+      const initialFocusRef = useRef<HTMLInputElement>(null);
+      return (
+        <FormDialog
+          trigger={<Button>Create project</Button>}
+          title="Create project"
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+          initialFocusRef={initialFocusRef}
+          variant="sheet"
+        >
+          <Field label="Project number">
+            <TextInput ref={initialFocusRef} />
+          </Field>
+        </FormDialog>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Create project" });
+    await userEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Create project",
+    });
+    expect(dialog).toHaveClass("base-dialog--sheet");
+    expect(
+      screen.getByRole("textbox", { name: "Project number" }),
+    ).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(trigger).toHaveFocus();
     });
   });
 });

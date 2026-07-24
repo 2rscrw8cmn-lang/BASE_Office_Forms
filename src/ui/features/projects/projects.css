@@ -79,11 +79,6 @@
   text-decoration: underline;
 }
 
-.projects-register-name:focus-visible {
-  outline: var(--app-focus-width) solid var(--app-focus-ring);
-  outline-offset: var(--app-focus-offset);
-}
-
 .projects-register-number {
   display: block;
   margin-top: 2px;
@@ -126,11 +121,6 @@
 .projects-register-card:hover {
   border-color: var(--app-border-strong);
   background: var(--app-surface-hover);
-}
-
-.projects-register-card:focus-visible {
-  outline: var(--app-focus-width) solid var(--app-focus-ring);
-  outline-offset: var(--app-focus-offset);
 }
 
 .projects-register-card__top {

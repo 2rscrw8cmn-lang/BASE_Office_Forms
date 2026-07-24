@@ -7,7 +7,7 @@
  * tests stay in lockstep.
  */
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   ActivityFeed,
   AlertDialog,
@@ -165,6 +165,30 @@ function FormDialogDemo() {
       </Field>
       <Field label="Question" help="Describe the information requested.">
         <TextArea placeholder="What do you need answered?" />
+      </Field>
+    </FormDialog>
+  );
+}
+
+function FormDialogSheetDemo() {
+  const initialFocusRef = useRef<HTMLInputElement>(null);
+  return (
+    <FormDialog
+      trigger={<Button variant="primary">Create project</Button>}
+      title="Create project"
+      description="A compact create workflow presented as a mobile sheet."
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
+      initialFocusRef={initialFocusRef}
+      variant="sheet"
+      submitLabel="Create project"
+    >
+      <Field label="Project number" required>
+        <TextInput ref={initialFocusRef} placeholder="24-018" />
+      </Field>
+      <Field label="Project name" required>
+        <TextInput placeholder="Riverside Medical Center" />
       </Field>
     </FormDialog>
   );
@@ -632,8 +656,12 @@ export const CATALOG: LabEntry[] = [
     id: "form-dialog",
     name: "FormDialog",
     group: "interactive",
-    description: "Create/edit form dialog with error summary and loading.",
-    examples: [{ state: "default", render: () => <FormDialogDemo /> }],
+    description:
+      "Create/edit form dialog with error summary, loading, explicit initial focus, and sheet presentation.",
+    examples: [
+      { state: "default", render: () => <FormDialogDemo /> },
+      { state: "focus", render: () => <FormDialogSheetDemo /> },
+    ],
   },
   {
     id: "dropdown-menu",

@@ -799,11 +799,13 @@ is retained for auditability; this refinement and the current contracts in
 **Continuation 2026-07-24:** this native RFI composition is the accepted
 reference-register pattern. Later registers must compose the shared
 `RegisterToolbar` and Drawer primitives through focused feature components;
-do not introduce a broad generic `BaseRegister` abstraction. PR #45 remains a
-draft and is not merged.
+do not introduce a broad generic `BaseRegister` abstraction. This was the
+pre-merge UI-5 handoff; PR #45 subsequently merged to `main` as
+`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`.
 
 Branch `claude/ui-5-rfi-register-react`, based on merged UI-4 (`6976f16`).
-Not merged.
+Historical branch record: PR #45 subsequently merged to `main` as
+`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`.
 
 ### Confirmed starting point
 
