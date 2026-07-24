@@ -122,25 +122,49 @@ Do not redesign individual feature workflows in this phase. Prove route parity t
 Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, route docs, local development docs, and the PR body. Return the exact UI-5 prompt with any current-main constraints filled in.
 ```
 
-## Prompt UI-5 — RFI register with BaseDataGrid
+## Prompt UI-5 — RFI register as a native React feature
 
 > **Current decision:** Spike 0 rejected Tabulator for the RFI register because
-> its keyboard behavior regressed. Until a future high-volume-register decision
-> explicitly changes this, retain the controlled custom table; do not treat
-> BaseDataGrid or Tabulator as an RFI prerequisite.
+> its keyboard behavior regressed. Do not treat BaseDataGrid or Tabulator as an
+> RFI prerequisite, now or in this phase — a future high-volume-register
+> decision would require its own separate acceptance.
 
 ```text
 [INSERT REQUIRED PREAMBLE]
 
-Implement UI-5 from docs/UI_IMPLEMENTATION_PLAYBOOK.md using the accepted Tabulator spike findings.
+Implement UI-5 from docs/UI_IMPLEMENTATION_PLAYBOOK.md: migrate
+/projects/:projectId/rfis from the compatibility-mounted public/rfis-view.js
+controller to a native React feature inside the UI-4 shell. This is a parity
+migration and shared-component adoption phase. Preserve the approved API,
+authorization, URL-state, changed-only commit, validation, and conflict
+contracts in docs/UX_RFI_SPEC.md §13. Render a compact semantic desktop table
+(no role="grid", cell selection, arrow-cell navigation, or Tab save-and-move),
+dedicated mobile cards, and one shared right-side Drawer that becomes
+full-screen on mobile. Do not render an inline editor row. Do not adopt
+Tabulator or make BaseDataGrid a prerequisite. The RFI workspace route stays
+on LegacyFeatureMount until UI-7.
 
-Create one reusable BaseDataGrid integration and migrate the RFI register to React + BaseDataGrid. Feature code may configure columns and actions but must not instantiate or theme Tabulator directly.
+Preserve exactly: columns RFI, Subject, Status, Assigned to, Due, Updated, and
+an accessible visually unlabeled Actions column; Draft badges instead of
+"Unnumbered"; row-primary-area open/navigation; editable-draft menus ordered
+Edit details/Open RFI and locked/issued Open RFI-only menus; and
+the shared Drawer fields Subject, Assigned to, Response due, Question,
+Contractor recommendation, plus collapsed Additional information for drawing
+and specification references. Use shared Drawer/Collapsible/Field/input/
+ValidationMessage/SaveIndicator/Button components. Its detail Drawer footer
+has secondary Open (`file-text`) and Close: Open waits for the normal
+changed-only commit and only navigates on unchanged/success. Keep changed-only commits
+(blur for text/date, selection for selects, Enter-blurs-non-textarea,
+Enter-inserts-newline-in-textarea), Escape-commits-then-closes-and-returns-
+focus, per-field Saving/Saved/Failed/Conflict states, contact-ID selection,
+capability-gated Add RFI opening the new draft Drawer focused on Subject,
+URL-backed q/status/responsible/due/sort/direction with the existing history
+behavior, column-header `aria-sort`, and all loading/empty/error/permission/
+conflict states.
 
-Preserve all current RFI behavior: authoritative project-contact IDs, click selection, Enter edit/save, Tab and Shift+Tab save-and-move, Escape cancel, arrows, changed-only blur, draft-only editability, per-cell validation, Saving/Saved/Failed/Conflict states, one-row conflict refresh, URL filters and browser history, explicit row navigation, inline Add RFI, loading/error/empty states, frozen desktop identity columns, and deliberate mobile behavior.
+Do not enable incomplete official issuance or infer permissions client-side. The API remains authoritative and its response shapes do not change without a verified blocking gap.
 
-Do not enable incomplete official issuance or infer permissions client-side. The API remains authoritative.
-
-Add parity, keyboard, accessibility, conflict, permission, responsive, and visual tests. Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, any RFI UX docs, and the PR body.
+Port the existing tests/unit/rfi-ui.test.ts register behaviors into React tests without weakening or deleting the legacy rollback tests, and add the full required coverage list from the UI-5 prompt handoff (parity, keyboard, accessibility, conflict, permission, responsive, and visual evidence). Reconcile IMPLEMENTATION_ROADMAP.md, UI_IMPLEMENTATION_PLAYBOOK.md, this prompt file, and UX_RFI_SPEC.md wherever they still describe a spreadsheet/grid register. Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, and the PR body.
 ```
 
 ## Prompt UI-6 — Projects and Records registers

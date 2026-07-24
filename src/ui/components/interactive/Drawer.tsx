@@ -12,6 +12,8 @@ export interface DrawerProps {
   children: ReactNode;
   /** Which edge the panel slides from. */
   side?: "left" | "right";
+  /** Navigation stays compact; detail panels use the shared workspace width. */
+  size?: "navigation" | "detail";
   className?: string;
 }
 
@@ -29,6 +31,7 @@ export function Drawer({
   title,
   children,
   side = "left",
+  size = "navigation",
   className,
 }: DrawerProps) {
   return (
@@ -43,7 +46,12 @@ export function Drawer({
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="base-overlay" />
         <RadixDialog.Content
-          className={cx("base-drawer", `base-drawer--${side}`, className)}
+          className={cx(
+            "base-drawer",
+            `base-drawer--${side}`,
+            `base-drawer--${size}`,
+            className,
+          )}
         >
           <header className="base-drawer__header">
             <RadixDialog.Title className="base-drawer__title">

@@ -24,7 +24,7 @@ UI-1     Audit, design contract, and decisions                 [complete]
 UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
-UI-5     RFI register using BaseDataGrid + Tabulator
+UI-5     RFI register as a native React feature (controlled table, no Tabulator)
 UI-6     Projects and Records registers
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
@@ -295,48 +295,115 @@ Move global application composition into the new foundation while keeping featur
 
 The shell is stable enough that feature migrations no longer need to modify global navigation or invent page containers.
 
-## 8. UI-5 — RFI register and BaseDataGrid decision
+## 8. UI-5 — RFI register as a native React feature
 
 ### Objective
 
-Migrate the RFI register with the controlled custom-table interaction model.
-Do not adopt Tabulator for this route: Spike 0 rejected it because its keyboard
-behavior regressed. The detailed `BaseDataGrid` contract below is retained for
-a future accepted high-volume register, not as an RFI delivery prerequisite.
+Migrate `/projects/:projectId/rfis` from the compatibility-mounted
+`public/rfis-view.js` controller to a native React feature inside the UI-4
+shell, using a native semantic `<table>` on desktop and a dedicated card
+pattern on mobile. Draft editing uses the shared responsive Drawer so desktop
+and mobile share one form contract without turning the register into a
+spreadsheet.
+
+Do not adopt Tabulator for this route: Spike 0 rejected it because its
+keyboard behavior regressed against the approved model. Do not make
+`BaseDataGrid` an RFI prerequisite; the detailed `BaseDataGrid` contract
+(§6.4 of `APP_UI_FOUNDATION.md`) is retained only for a future accepted
+high-volume register, log, or export, through a separate acceptance decision.
+
+The RFI workspace route (`/projects/:projectId/rfis/:rfiId`) stays
+compatibility-mounted through `LegacyFeatureMount` until UI-7.
+
+### Approved interaction model (binding)
+
+The register preserves the server, query-state, and changed-only commit
+contracts approved in `docs/UX_RFI_SPEC.md` §13 while applying the approved
+UI-5 visual refinement:
+
+- one shared right-side Drawer for Add RFI and draft editing; it becomes
+  full-screen on mobile and never renders as an inline table row;
+- ordinary cursor/text selection inside the editor's controls;
+- no cell/row selection state, no arrow-key cell navigation, no Tab
+  save-and-move, and no `role="grid"` semantics;
+- Escape commits any pending change through the same blur path already used
+  for that control, then closes the Drawer and returns focus to its opener —
+  never a silent rollback of an already-typed value;
+- per-field Saving/Saved/Failed/Conflict feedback, not a whole-row or
+  whole-grid save state;
+- capability-gated direct editing (`row.capabilities.updateDraft`), never a
+  role-string inference in the browser.
 
 ### Required behavior
 
-- all current RFI fields and authoritative IDs;
-- click-to-select;
-- Enter to edit/save;
-- Tab and Shift+Tab save-and-move;
-- Escape cancel;
-- arrow navigation;
-- changed-only blur commits;
-- capability-based draft-only editing;
-- Saving, Saved, Failed, and Conflict states;
-- row refresh with URL/filter preservation;
-- contact selection by project-contact ID;
-- search, filters, active chips, sort, and result count;
-- inline Add RFI focused on Subject;
-- explicit navigation into workspace;
-- desktop frozen identity columns;
-- deliberate mobile behavior;
-- loading, empty, filtered empty, missing, and retry states.
+- the compact desktop hierarchy: RFI, Subject, Status, Assigned to, Due,
+  Updated, and an accessible visually unlabeled Actions column;
+- draft identity is the shared `Draft` badge and never "Unnumbered"; issued
+  RFIs retain their authoritative number and canonical workspace link; the
+  database UUID is never shown;
+- the row primary area opens an editable draft in the Drawer or navigates an
+  issued/locked RFI to its canonical workspace; an editable draft's overflow
+  menu orders `Edit details` then `Open RFI`, while a locked/issued row exposes
+  only `Open RFI`;
+- the shared Drawer covers Subject, Assigned to, Response due, Question,
+  Contractor recommendation, and a shared `Collapsible` for Drawing and
+  Specification references, built from the UI-3 `Drawer`, `Collapsible`,
+  `Field`, inputs, `ValidationMessage`, `SaveIndicator`, and `Button`;
+- changed-only commits: text/date controls commit on blur, selects commit on
+  selection, Enter commits a non-textarea control by blurring it, Enter in a
+  textarea inserts a newline, unchanged values never call the API;
+- the Drawer footer has secondary `Open` (the `file-text` icon) and `Close`.
+  `Open` first blurs an active field, waits for the normal changed-only commit
+  without a timeout, and navigates only when it is unchanged or saves
+  successfully; validation, 403, failed save, and 409 feedback keep the
+  Drawer open for correction/retry;
+- `Drawer` owns a shared `navigation` (default) and `detail` size contract:
+  detail is `clamp(500px, 45vw, 660px)` above 760px and full viewport width at
+  or below 760px. `RegisterToolbar` keeps desktop filters inline but exposes a
+  shared 44px mobile filter disclosure with active-count and Clear access;
+- contact selection by project-contact ID, with the unresolved-legacy-text
+  handling preserved;
+- capability-gated Add RFI that creates one draft, clears incompatible
+  search/status filtering, opens the new draft's Drawer, and
+  focuses Subject;
+- URL-backed `q`, `status`, `responsible`, `due`, `sort`, `direction` query
+  parameters with the existing replace-on-search / push-on-filter-or-sort
+  history behavior, restored correctly by browser Back/Forward;
+- column-header sorting with correct `aria-sort` and an accessible name that
+  states the next direction;
+- loading, populated, first-use empty, filtered empty, retryable error,
+  missing/permission, creating, saving, saved, validation failure, permission
+  loss, and optimistic-concurrency conflict states;
+- a dedicated mobile card pattern (not a compressed desktop table) carrying
+  the same authorized data and canonical navigation.
 
 ### Architecture rules
 
-- feature code does not instantiate Tabulator; any future accepted use
-  configures `BaseDataGrid`;
-- API remains authoritative;
+- feature code does not instantiate Tabulator and does not build a second
+  grid abstraction;
+- this RFI composition is the accepted reference-register pattern. Follow its
+  focused feature components and shared primitives for later registers rather
+  than introducing a large generic `BaseRegister` abstraction;
+- the API remains authoritative; no new endpoints or response-shape changes
+  without a verified blocking gap;
 - role strings are not interpreted in the client;
-- official issuance remains outside grid editing;
-- filter URL state is owned by the feature/router rather than hidden in Tabulator internals.
+- official issuance, numbering, and other lifecycle actions remain out of
+  scope and outside register editing;
+- filter/sort URL state is owned by the feature through React Router, not a
+  hidden internal state store;
+- the feature composes the UI-3 component library (`RegisterPage` chrome
+  equivalents, `PageHeader`, `RegisterToolbar`, `FilterChip`, `Button`,
+  `Field` and form controls, `RfiStatusBadge`, `AttentionBadge`,
+  `SaveIndicator`, `EmptyState`, `ErrorState`, `PermissionState`,
+  `Skeleton`/`Spinner`) rather than recreating buttons, badges, save
+  indicators, or generic async states locally.
 
 ### Exit gate
 
-Behavioral parity is demonstrated through tests and visual evidence. Cleaner appearance alone is not acceptance. RFI acceptance is against the controlled
-custom-table keyboard contract, not the rejected Tabulator prototype.
+Behavioral parity and the refined responsive composition are demonstrated
+through tests and desktop/mobile/tablet visual evidence. Acceptance is against
+the compact semantic-table, dedicated-card, and shared-Drawer contract in
+`docs/UX_RFI_SPEC.md` §13, never against a grid/spreadsheet prototype.
 
 ## 9. UI-6 — Projects and Records registers
 

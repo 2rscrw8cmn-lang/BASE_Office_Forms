@@ -170,17 +170,35 @@ function FormDialogDemo() {
   );
 }
 
-function DrawerDemo() {
+function DrawerDemo({
+  side = "left",
+  size = "navigation",
+}: {
+  side?: "left" | "right";
+  size?: "navigation" | "detail";
+}) {
   return (
     <Drawer
-      trigger={<Button iconStart="menu">Open menu</Button>}
-      title="Navigation"
+      trigger={
+        <Button iconStart={side === "left" ? "menu" : "pencil"}>
+          {size === "detail" ? "Open detail Drawer" : "Open menu"}
+        </Button>
+      }
+      title={size === "detail" ? "Edit draft" : "Navigation"}
+      side={side}
+      size={size}
     >
-      <nav>
-        <p>Dashboard</p>
-        <p>Projects</p>
-        <p>Records</p>
-      </nav>
+      {size === "navigation" ? (
+        <nav>
+          <p>Dashboard</p>
+          <p>Projects</p>
+          <p>Records</p>
+        </nav>
+      ) : (
+        <Field label="Subject">
+          <TextInput value="Lobby ceiling conflict" readOnly />
+        </Field>
+      )}
     </Drawer>
   );
 }
@@ -735,7 +753,13 @@ export const CATALOG: LabEntry[] = [
     name: "Drawer",
     group: "interactive",
     description: "Slide-in panel (mobile navigation, side sheets).",
-    examples: [{ state: "default", render: () => <DrawerDemo /> }],
+    examples: [
+      { state: "default", render: () => <DrawerDemo /> },
+      {
+        state: "selected",
+        render: () => <DrawerDemo side="right" size="detail" />,
+      },
+    ],
   },
   {
     id: "toast",
@@ -839,6 +863,7 @@ export const CATALOG: LabEntry[] = [
                 <option>Open</option>
               </Select>
             }
+            mobileFilterDisclosure={{ activeCount: 1, label: "filters" }}
             chips={
               <FilterChip
                 label="Status"

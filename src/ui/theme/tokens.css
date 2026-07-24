@@ -107,9 +107,9 @@
 
   /* Layering */
   --app-z-header: 20;
-  --app-z-drawer: 40;
-  --app-z-overlay: 50;
-  --app-z-toast: 60;
+  --app-z-overlay: 240;
+  --app-z-drawer: 250;
+  --app-z-toast: 300;
 
   /* Motion (respects reduced-motion in components.css) */
   --app-motion-fast: 120ms;

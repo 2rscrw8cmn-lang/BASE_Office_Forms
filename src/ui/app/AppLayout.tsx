@@ -23,13 +23,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { AppLink } from "./AppLink";
 import { Navigation, AccountSummary } from "./Navigation";
 import { ProjectHeader, ProjectTabs } from "./ProjectChrome";
 import { ShellIcon } from "./ShellIcon";
 import { ShellProvider, type ShellBridge } from "./ShellContext";
 import { LegacyFeatureMount } from "./LegacyFeatureMount";
+import { RfiRegisterFeature } from "../features/rfis/RfiRegisterFeature";
 import {
   LoadingState,
   SessionErrorState,
@@ -324,6 +325,11 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
       let content: ReactNode;
       if (project.status !== "ready") {
         content = <LoadingState label="Loading project" />;
+      } else if (route.id === "project-rfis") {
+        // The RFI register is the first native React feature route (UI-5).
+        // The RFI workspace (route id "rfi-workspace") stays compatibility
+        // mounted below until UI-7.
+        content = <RfiRegisterFeature key={projectId} projectId={projectId} />;
       } else if (descriptor) {
         content = (
           <LegacyFeatureMount

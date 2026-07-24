@@ -3,8 +3,9 @@
 **Status:** Authenticated workspace inventory — the UI-4 React application shell
 (global composition, routing, session/project context, drawer, project tabs)
 plus the Dashboard, Projects, Project Overview, and project Records register
-surfaces, and the UI-3 BASE component library and UI Lab
-**Updated:** 2026-07-24
+surfaces, the UI-3 BASE component library and UI Lab, and (UI-5) the native
+React project RFI register
+**Updated:** 2026-07-24 (UI-5)
 
 ## Runtime shape
 
@@ -57,6 +58,18 @@ Browser
 ├── src/ui/app/evidence/                      dev-only shell screenshot harness (never shipped)
 ├── src/ui/app/LegacyApplicationHost.tsx      retained UI-2 host (rollback path; not mounted)
 ├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
+├── src/ui/features/rfis/                     (UI-5) native React RFI register feature
+│   ├── RfiRegisterFeature.tsx                top-level states, URL filters, mutations, wiring
+│   ├── RfiTable.tsx                          compact desktop table + row/action triggers
+│   ├── RfiEditorPanel.tsx                    shared responsive Drawer form content
+│   ├── RfiCards.tsx                          dedicated mobile cards + action triggers
+│   ├── useProjectRfis.ts                     TanStack Query read-model hook (403/404→missing)
+│   ├── api.ts                                 typed /api/v2 RFI fetch/mutate calls
+│   ├── urlState.ts                            filter/sort URL state + sort/filter logic
+│   ├── editableFields.ts                      editor field config + validation
+│   ├── format.ts                              date/status presentation helpers
+│   ├── types.ts                                read-model types
+│   └── rfis.css                                feature-local, token-based layout CSS
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
 ├── src/ui/components/index.ts                 BASE component library barrel + CSS import
@@ -80,6 +93,8 @@ Browser
 ├── public/add-document-form.js                Guided Add Document workflow
 ├── public/record-detail-view.js               Document-first Record workspace
 ├── public/revision-detail-view.js             Revision file/publish workspace
+├── public/rfis-view.js                        (rollback/reference only, UI-5) legacy RFI register
+├── public/rfi-workspace-view.js                RFI workspace feature module (still compat-mounted)
 ├── public/record-options.js                    Shared controlled discipline vocabulary
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
@@ -165,8 +180,8 @@ resolved, so a project the user cannot access never triggers a feature request.
 
 `LegacyFeatureMount` also takes a `locationKey`
 (`${route.pathname}${location.search}${location.hash}`, supplied by
-`AppLayout`) so a query/hash-only navigation to the *same* route — a genuine
-React Router navigation, or browser Back/Forward — remounts the *existing*
+`AppLayout`) so a query/hash-only navigation to the _same_ route — a genuine
+React Router navigation, or browser Back/Forward — remounts the _existing_
 controller (`controller.mount(container)` again, no new factory call, no new
 `reload()`) so a legacy controller that reads filter/sort state from
 `window.location.search` inside its own `mount()` (`records-view.js`,
@@ -600,6 +615,110 @@ request ID; success reloads. Publishing reloads into a read-only current state.
 Published, superseded, and archived revisions never render upload or publish
 controls. The underlying file and publish contracts are unchanged.
 
+## The project RFI register (UI-5, native React)
+
+`/projects/:projectId/rfis` is the first canonical route the shell renders
+natively instead of through `LegacyFeatureMount`: `AppLayout.tsx` special-cases
+`route.id === "project-rfis"` to render `<RfiRegisterFeature projectId={…}>`
+(`src/ui/features/rfis/`) once the project context is `ready`, exactly like
+every other project route. `/projects/:projectId/rfis/:rfiId` (the RFI
+workspace) is unchanged and still resolves through `LegacyFeatureMount` →
+`public/rfi-workspace-view.js`; it migrates in UI-7.
+
+The feature loads the same single read model as the legacy controller,
+`GET /api/v2/projects/:projectId/rfis` (`{ project, rfis, responsibleContacts,
+capabilities }`), through a TanStack Query hook (`useProjectRfis.ts`) that
+collapses a 403/404 into a `missing` state and any other failure into a
+retryable `error`, mirroring `useProject.ts`. No response shape changed.
+
+The compact desktop table renders RFI, Subject, Status, Assigned to, Due,
+Updated, and an accessible visually unlabeled Actions column. Drafts show the
+shared `Draft` badge, never "Unnumbered"; issued rows show their authoritative
+number and canonical workspace link. The row primary area opens an editable
+draft (`capabilities.updateDraft === true`) in the shared Drawer or navigates a
+locked/issued RFI. Editable-draft action menus order `Edit details` then
+`Open RFI`; locked/issued menus contain only `Open RFI`. Column-header sorting (`SORT_HEADERS`/`SORT_KEYS` in
+`urlState.ts`) and `aria-sort` retain the approved URL-backed behavior,
+including default number ascending and tie-break-by-id.
+
+Exactly one responsive Drawer is open at a time. `RfiRegisterFeature.tsx` owns
+its open id and return-focus target; `RfiEditorPanel.tsx` provides the shared
+form content using `Drawer`, `Collapsible`, `Field`, `TextInput`, `TextArea`,
+`Select`, `DateInput`, `ValidationMessage`, `SaveIndicator`, and `Button`.
+Fields are Subject, Assigned to (project-contact id), Response due, Question,
+Contractor recommendation, and Drawing/Specification references under
+Additional information. Each control keeps local uncommitted state; text and
+date controls commit on blur, Assigned to commits on selection, Enter commits
+a non-textarea control by blurring it, Enter inserts a newline in a textarea,
+and an unchanged value never calls the API. Escape blurs the active field
+through the same commit path, closes the Drawer, and returns focus to its row
+trigger; Close uses the same focus-return contract. The footer's secondary
+`Open` action blurs an active control, waits for the tracked changed-only
+commit, and navigates only on unchanged/success; validation, 403, failed-save,
+and 409 states keep the Drawer open with their field feedback.
+Per-field Saving/Saved/Failed/Conflict feedback comes from
+`RfiRegisterFeature.tsx`'s own commit logic (not a generic form library): a
+`403` shows "You no longer have permission to edit this draft." at the
+affected field; a `409 RFI_VERSION_CONFLICT` refetches the register, shows
+"Changed elsewhere. Latest values loaded; review and retry.", and resets the
+editor's displayed values from the fresh data through a `resetSignal` counter
+that re-renders in place rather than remounting the editor (so focus and any
+other field's in-progress edit are not disturbed) while the current URL
+filters and sort are untouched (they live in the URL, not component state).
+
+The capability-gated Add RFI action (`capabilities.createRfi`) creates one
+draft with placeholder Subject/Question through the existing
+create endpoint, appends it to the cached register data, clears incompatible
+search/status filtering (replacing, not pushing, the URL entry), opens its
+`New RFI` Drawer, and focuses Subject. No number is ever assigned in the
+browser.
+
+Search, Status, Party, and Due remain the only toolbar controls (`q`,
+`status`, `responsible`, `due`, `sort`, `direction` in the URL via
+`useSearchParams`); typing in Search replaces the current history entry while
+Status/Party/Due changes, header-sort clicks, and Clear All each push a new
+entry, so browser Back/Forward restores prior search/filter/sort state.
+Filtering and sorting run in the browser over the single already-authorized
+list, matching the legacy controller and the binding architecture rule that
+client-side filtering is never an authorization boundary.
+
+Mobile renders a dedicated two-line card list (`RfiCards.tsx`) — draft badge
+or official number, relative Updated time, Subject, question summary, status,
+Assigned to, Due, and the same action menu/Drawer triggers. It replaces the
+desktop table at `max-width: 760px`. The shared Drawer defaults to navigation
+sizing; the RFI editor uses `size="detail"`, which is full-screen at that
+breakpoint and `clamp(500px, 45vw, 660px)` above it. It stacks paired fields
+below 460px, uses an internal scroll region, and keeps a safe-area-aware sticky
+footer. `RegisterToolbar` keeps desktop filters inline and uses its shared 44px
+mobile filter disclosure, active count, and reachable Clear control below the
+same breakpoint.
+
+`rfis.css` is feature-local, token-based CSS (no raw colour literals; every
+colour is a registered `--app-*` token, enforced by
+`tests/unit/rfi-register-tokens.test.ts`) covering only layout the shared
+component library does not already provide — the table/Drawer/card structure
+and density. Buttons, badges, menus, icons, save indicators, toolbar chrome,
+and empty/error/
+permission states come from the UI-3 component library, never recreated
+locally.
+
+The shared z-index tokens now place shell chrome below overlays, Drawers above
+their overlays, and toasts above Drawers (`--app-z-header: 20`,
+`--app-z-overlay: 240`, `--app-z-drawer: 250`, `--app-z-toast: 300`). The UI
+Lab Drawer section includes both left- and right-side examples; the token suite
+guards the layer order so a full-screen mobile Drawer cannot fall beneath the
+shell header or its own scrim.
+
+The RFI composition is the accepted reference-register pattern: focused
+feature components compose shared `Drawer` and `RegisterToolbar` primitives;
+later registers must reuse that pattern rather than introduce a broad generic
+`BaseRegister`. Routing imports use `react-router` 8.3.0 (not the retired DOM
+package); `.node-version`, package engines, and CI require Node 22.22.0.
+
+`public/rfis-view.js` and its existing test coverage
+(`tests/unit/rfi-ui.test.ts`) are retained unchanged as rollback/reference
+coverage; removing them is a later cleanup-phase decision.
+
 Published Library templates remain reusable masters only. The repository has no
 project-form-instance entity, no persisted template-version reference on a
 Record or Revision, and no application path for saving a project-specific copy
@@ -791,6 +910,48 @@ edit, draft-create payload and navigation, and archived read-only rendering.
 canonical file downloads, empty draft upload, successful refresh, upload failure
 with retained file context and request ID, publication reload, and immutable
 published rendering.
+
+### UI-5 native RFI register tests
+
+`tests/unit/rfi-register-react.test.tsx` (33 tests, harness in
+`tests/helpers/rfi-register-harness.tsx` — a real `<BrowserRouter>` +
+`QueryClientProvider` + `ShellProvider` around `RfiRegisterFeature` with a
+fetch mock for the `/api/v2/projects/:id/rfis` read/write endpoints) covers:
+the compact seven-column hierarchy and accessible action menus; draft badges;
+row-primary-area editing vs. canonical issued navigation; one shared Drawer
+open at a time; focus entering at Subject and returning to the row or Add RFI
+trigger on Close/Escape; every editable field and the Additional information
+collapsible;
+changed-only commits with no per-keystroke PATCH; select-commits-on-change
+with the contact id; date-commits-on-blur; textarea Enter-inserts-newline vs.
+non-textarea Enter-commits; required-field validation blocking the save;
+Saving→Saved; 403 permission-loss; 409 conflict reload with the updated row
+and message; Add RFI creating a draft and opening New RFI focused at Subject;
+Escape committing an active field before Drawer close; column-header
+sort with `aria-sort` and direction toggle; the exact four toolbar controls
+with no sort dropdown; search-replaces/filter-pushes history-length deltas;
+an in-progress edit preserving URL filters; filtered-empty vs.
+first-use-empty with Clear All; browser Back restoring a prior filter;
+loading/permission-denied/retryable-error-with-retry states; and mobile cards
+rendered alongside the table.
+
+`tests/unit/rfi-register-route-integration.test.tsx` (2 tests) proves
+`project-rfis` mounts the native `.rfi-register-page` feature and never
+invokes the legacy `rfis` feature factory, while `rfi-workspace` still mounts
+through `LegacyFeatureMount`. `tests/unit/rfi-register-tokens.test.ts`
+(2 tests) proves `rfis.css` has no raw colour literals and references only
+registered `--app-*` tokens, mirroring the UI-3 enforcement pattern.
+`tests/unit/base-component-tokens.test.ts`'s existing single-source
+Lucide/Radix import check already walks all of `src/ui`, so it also covers
+the new `src/ui/features/rfis/*` files.
+
+`tests/unit/react-shell-history-parity.test.tsx` no longer uses "rfis" as an
+example compatibility-mounted controller (the RFI register does not mount
+through `LegacyFeatureMount` anymore); its same-route URL-history-parity
+proof now runs entirely through `records`, the other legacy controller that
+reads filter/sort state from `window.location.search`. `tests/unit/rfi-ui.test.ts`
+(the legacy `rfis-view.js`/`rfi-workspace-view.js` suite) is unchanged and
+retained as rollback coverage.
 
 ### UI-3 component library tests
 
@@ -1044,15 +1205,18 @@ src/infrastructure/storage/  R2 file storage adapter
 src/ui/theme/                application semantic tokens (single source)
 src/ui/components/            BASE component library (primitives/interactive/patterns)
 src/ui/app/                   UI-4 React application shell, routing, query hooks, feature mount
-src/ui/app/evidence/          dev-only shell screenshot harness (never in the production build)
+src/ui/app/evidence/          dev-only shell + UI-5 RFI-scenario screenshot harness (never shipped)
+src/ui/features/rfis/         (UI-5) native React RFI register feature
 src/ui/lab/                   development-only UI Lab (real components, dev-only build)
-tests/unit/                  schema, renderer, domain, UI-3 component, and UI-4 shell regressions
+tests/unit/                  schema, renderer, domain, UI-3 component, UI-4 shell, and UI-5 RFI regressions
 tests/integration/           Worker-runtime, D1, R2 (local/test binding), and API regressions
-tests/helpers/               reusable D1, route, and component-DOM test harnesses
+tests/helpers/               reusable D1, route, component-DOM, and RFI-register test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
-scripts/capture-ui4-evidence.mjs  dev-only Chromium screenshot capture for the UI-4 shell
+scripts/capture-ui4-evidence.mjs  dev-only Playwright/Chromium screenshot capture for the UI-4 shell
+scripts/capture-ui5-evidence.mjs  dev-only Chrome DevTools Protocol evidence capture with exact mobile CSS viewports
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
+docs/evidence/ui-5/          committed native RFI register desktop/mobile/tablet and Drawer-state captures
 .github/workflows/           pull-request validation
 ```
 

@@ -41,14 +41,18 @@ The primary operational RFI screen.
 - **Mobile**: dedicated RFI cards. The desktop table is never horizontally
   squeezed onto a phone.
 
-Suggested desktop columns: RFI Number, Subject, Status, Responsible Party,
-Submit/Issued Date, Response Due Date, Question (summary), Response (summary),
-Updated.
+Approved desktop columns (binding, per §13): RFI, Subject, Status, Assigned
+to, Due, Updated, and an accessible visually unlabeled Actions column. Draft
+identity uses the shared `Draft` badge; issued rows use the authoritative
+official number. Subject carries a restrained question summary. Editable drafts
+expose an overflow menu ordered `Edit details`, then `Open RFI`; locked/issued
+rows expose only `Open RFI`.
+No standalone sort dropdown or RFI-number filter is added.
 
 Rules:
 
-- The official RFI number is blank / shown as **"Unnumbered Draft"** before
-  issue. Numbers are never generated in the browser.
+- The official RFI number remains blank before issue and the register shows a
+  **Draft** badge instead. Numbers are never generated in the browser.
 - The database UUID is never displayed as an ID number.
 - An optional imported legacy source ID may be displayed only when it already
   exists (migration/reconciliation). It is visibly secondary and never competes
@@ -63,42 +67,55 @@ The whole authorized list loads in **one** server read model
 (`GET /projects/:id/rfis`); search/filter/sort run in the browser over that
 already-authorized data and are never an authorization boundary.
 
-## 4. Inline editing boundaries
+## 4. Register editing boundaries
 
-Convenient inline editing is offered **only** for short fields that are mutable
-in the RFI's current lifecycle state:
-
-- Subject
-- Responsible Party
-- Requested Response Date
+Convenient draft editing is offered through one shared responsive Drawer (see
+§13), never a spreadsheet cell editor or inline table row. It opens from Add
+RFI, a draft row's primary area, or `Edit draft`; it is a right-side panel on
+desktop/tablet and full-screen on mobile. It covers every currently mutable
+structured field: Subject, Assigned to, Response due, Question, Contractor
+recommendation, Drawing references, and Specification references. The two
+reference fields live in a shared `Collapsible` labeled Additional
+information.
 
 Boundaries:
 
 - Edit eligibility comes from the server (`row.capabilities.updateDraft`), never
   inferred from role names in the browser.
-- Status is never a free-form editable cell. Status changes use explicit domain
+- Status is never a free-form editable field. Status changes use explicit domain
   actions.
 - Submit/Issued Date and RFI Number are never typed manually.
-- Long-form fields (Question, Suggestion, Response) may appear as summaries in
-  the table but are edited in the workspace.
+- Only one draft Drawer is open at a time; closing returns focus to the
+  originating row action or Add RFI control.
+- Its footer provides secondary `Open` (with the shared `file-text` icon) and
+  `Close`. `Open` blurs the focused field, reuses its changed-only commit, and
+  waits for pending work; it navigates to the workspace only after no change or
+  a successful save. Validation, 403, failed-save, and 409 conflict feedback
+  retain the Drawer for correction or retry.
 
-A successful cell update persists through the authoritative RFI update service,
+A successful field update persists through the authoritative RFI update service,
 updates the row without losing table context, writes the required activity
 event, shows saved/error feedback, and uses optimistic concurrency via
-`lockVersion` (a stale write returns `409 RFI_VERSION_CONFLICT` and the browser
-reloads).
+`lockVersion` (a stale write returns `409 RFI_VERSION_CONFLICT`, the browser
+reloads the latest authorized values while preserving URL filters/sort, and the
+editor shows a clear conflict/review-and-retry message).
 
 ## 5. Create draft RFI
 
-A capability-gated **"New RFI"** action creates one structured RFI record from
-the default approved RFI template binding.
+A capability-gated **"Add RFI"** action (`capabilities.createRfi`) creates one
+unnumbered structured RFI record from the default approved RFI template
+binding directly from the register.
 
-- Required initial fields: Subject, Question.
-- Optional initial fields: Contractor Suggestion, Drawing/Specification
-  References, Responsible Party, Requested Response Date. Supporting attachments
-  are added in the workspace immediately after creation.
+- The draft is created with placeholder Subject/Question text ready to edit;
+  no separate creation form is shown.
 - No official RFI number is assigned during creation.
-- After creation the linked RFI workspace opens.
+- After creation, the new row is added to the register, incompatible
+  search/status filtering is cleared, the new draft Drawer (§13) opens
+  automatically, focus moves to the Subject field, and the change is
+  announced.
+- Supporting attachments and long-form fields remain fully editable from the
+  register editor or, for full context, the RFI workspace (§6); creation does
+  not navigate to the workspace.
 
 ## 6. RFI workspace — `/projects/:projectId/rfis/:rfiId`
 
@@ -209,21 +226,25 @@ always conveyed with text (never color alone).
 
 ## 13. Approved Slice 1 interaction model
 
-PR #40 approved the semantic table implementation used by draft PR #36: a
-single expandable draft editor, normal cursor and text selection, per-field
-save/validation states, capability-gated direct workspace editing, Party
-terminology, a Details/Preview switch, a separate response editor, and a
-deliberate mobile layout. It is not a spreadsheet/grid prototype and does not
-adopt Tabulator. The register and workspace retain server-derived capabilities
-and lifecycle authority.
+PR #40 approved the controlled semantic-table foundation used by draft PR #36
+(`public/rfis-view.js`): ordinary cursor/text selection, per-field
+save/validation states, capability-gated direct editing, and deliberate mobile
+behavior. It is not a spreadsheet/grid prototype and does not adopt Tabulator.
+UI-5 ports those behavioral contracts — register only, not workspace — to
+`src/ui/features/rfis/` and applies the approved mockup refinement: compact
+desktop table, dedicated mobile cards, and one shared responsive Drawer for Add
+and draft editing. `public/rfis-view.js` remains rollback/reference coverage
+until a later cleanup phase. The register and workspace retain server-derived
+capabilities and lifecycle authority.
 
 1. An authorized user can open a project RFI register.
 2. The register shows factual RFI rows from one server read model.
 3. An authorized user can create an unnumbered RFI draft.
 4. The new draft is associated with the approved/default RFI template binding.
 5. The register and full workspace display the same authoritative data.
-6. All permitted structured draft fields can be edited directly from the
-   keyboard-accessible spreadsheet register.
+6. All permitted structured draft fields can be edited from the register's
+   shared responsive Drawer (§13), never a spreadsheet/grid cell editor or
+   inline table row.
 7. The RFI workspace presents the same authoritative content using the Documents
    hierarchy and a read-only renderer preview.
 8. Project information populates from the project record and is not duplicated.

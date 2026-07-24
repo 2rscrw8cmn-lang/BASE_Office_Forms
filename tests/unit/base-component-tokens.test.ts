@@ -87,6 +87,23 @@ describe("token enforcement — every referenced token is registered", () => {
   });
 });
 
+describe("token enforcement - overlay layering", () => {
+  function numericToken(name: string): number {
+    const match = new RegExp(`${name}:\\s*(\\d+)`).exec(tokensCss);
+    return Number(match?.[1]);
+  }
+
+  it("layers shared drawers above overlays and application shell chrome", () => {
+    expect(numericToken("--app-z-overlay")).toBeGreaterThan(200);
+    expect(numericToken("--app-z-drawer")).toBeGreaterThan(
+      numericToken("--app-z-overlay"),
+    );
+    expect(numericToken("--app-z-toast")).toBeGreaterThan(
+      numericToken("--app-z-drawer"),
+    );
+  });
+});
+
 describe("token enforcement — single-source icon and behavior imports", () => {
   const uiFiles = walk("src/ui").filter(
     (file) => file.endsWith(".ts") || file.endsWith(".tsx"),
