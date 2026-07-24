@@ -188,7 +188,7 @@ Dashboard
 Projects
 └── Project
     ├── Overview
-    ├── Records
+    ├── Records  (user-facing: "Document Register"; project tab: "Documents")
     │   └── Record detail
     │       ├── Current published revision
     │       │   ├── Files
@@ -203,6 +203,24 @@ Projects
 Studio
 Document Library
 ```
+
+### 4.5 Document Register naming (UI-6B)
+
+The register at `/projects/:projectId/records` is titled **Document Register**
+and its project tab is **Documents**. That is user-facing product language
+only. The backend domain terminology is unchanged and authoritative: **Record**
+(document identity), **Revision** (a version of that document), **File**
+(uploaded content attached to a revision), and **Issuance** (a distribution
+event). No API route, database entity, domain type, service, or repository was
+renamed to match the display label.
+
+The register must keep those four concepts visibly distinct and must never
+present a draft revision as the current one. Only the server's authoritative
+current-revision relationship may be shown as current; a draft is surfaced
+separately as "Draft in progress". A revision is always identified by its
+number ("Original", "Rev 1", …) even when a human revision label is also
+shown, with its status as a separate treatment. A record with no
+server-generated number says so rather than displaying a database id.
 
 ## 5. Existing visual system inventory and extension rules
 

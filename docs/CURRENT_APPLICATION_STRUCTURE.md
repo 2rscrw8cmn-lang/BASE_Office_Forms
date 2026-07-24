@@ -80,6 +80,17 @@ Browser
 │   ├── format.ts                                location/date presentation helpers
 │   ├── types.ts                                 project read-model and create-input types
 │   └── projects.css                             composition-only, token-based layout CSS
+├── src/ui/features/records/                  (UI-6B) native React Document Register
+│   ├── RecordsRegisterFeature.tsx              top-level states, URL filters, capability wiring
+│   ├── RecordsTable.tsx                        six-column semantic desktop table
+│   ├── RecordsCards.tsx                        dedicated mobile document cards
+│   ├── AddDocumentDrawer.tsx                   staged Add Document workflow in Drawer size="detail"
+│   ├── useProjectRecords.ts                    TanStack Query hook, key ["project-records", projectId]
+│   ├── api.ts                                   typed list/create-record/create-revision/upload calls
+│   ├── urlState.ts                              q/type/discipline/revisionStatus/archived/sort/direction
+│   ├── format.ts                                controlled type/discipline labels, revision naming, dates
+│   ├── types.ts                                 Records read-model and create-input types
+│   └── records.css                              composition-only, token-based layout CSS
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
 ├── src/ui/components/index.ts                 BASE component library barrel + CSS import
@@ -99,8 +110,8 @@ Browser
 ├── public/projects-view.js                    (rollback/reference only, UI-6A) legacy Projects register
 ├── public/project-form.js                     (rollback/reference only, UI-6A) legacy Create dialog
 ├── public/project-overview-view.js            Project Overview feature module
-├── public/records-view.js                     Project Records register feature module
-├── public/add-document-form.js                Guided Add Document workflow
+├── public/records-view.js                     (rollback/reference only, UI-6B) legacy Records register
+├── public/add-document-form.js                (rollback/reference only, UI-6B) legacy Add Document dialog
 ├── public/record-detail-view.js               Document-first Record workspace
 ├── public/revision-detail-view.js             Revision file/publish workspace
 ├── public/rfis-view.js                        (rollback/reference only, UI-5) legacy RFI register
@@ -455,7 +466,9 @@ mobile, with the selected link scrolled into view after route changes.
 `/dashboard`, `/projects`, `/projects/:projectId`,
 `/projects/:projectId/overview`, `/projects/:projectId/records`, and
 `/projects/:projectId/records/:recordId` are now
-real, authenticated, data-backed screens instead of placeholders. The
+real, authenticated, data-backed screens instead of placeholders. `/projects`
+is native React as of UI-6A and `/projects/:projectId/records` as of UI-6B (see
+their sections below); the rest still mount their legacy controllers. The
 `/projects/:projectId` → `.../overview` normalization is unchanged, and record
 revision, issuance, RFI, Team, and Administration destinations remain
 intentional placeholders reached through the same canonical routes.
@@ -620,6 +633,102 @@ server-derived capabilities. Upload failures retain the selected file name and
 request ID; success reloads. Publishing reloads into a read-only current state.
 Published, superseded, and archived revisions never render upload or publish
 controls. The underlying file and publish contracts are unchanged.
+
+## The project Document Register (UI-6B, native React)
+
+`/projects/:projectId/records` is native React as of UI-6B. `AppLayout.tsx`
+special-cases `route.id === "project-records"` to render
+`<RecordsRegisterFeature projectId={…}>` (`src/ui/features/records/`) once the
+project context is `ready`, so an inaccessible project never triggers a
+Records request. The project header and Documents tab stay shell-owned, and the
+register's `PageHeader` uses `asHeading={false}` so the shell keeps the only
+`<h1>`.
+
+`/projects/:projectId/records/:recordId`,
+`.../revisions/:revisionId`, revision publishing, and issuance routes are
+**unchanged** and still resolve through `LegacyFeatureMount` →
+`public/record-detail-view.js` / `public/revision-detail-view.js`. They migrate
+in UI-7. `public/records-view.js` and `public/add-document-form.js` remain in
+the repository as rollback/reference modules and are no longer mounted on the
+register route.
+
+### Read model and authorization
+
+The feature loads the same single read model as the legacy controller,
+`GET /api/v2/projects/:projectId/records?includeArchived=true`, which returns
+`{ records, capabilities: { createRecord } }`. No endpoint, response shape, or
+read model changed for UI-6B. `useProjectRecords.ts` wraps it in TanStack Query
+under the key `["project-records", projectId]` — so navigating between projects
+cannot show another project's documents — and collapses a 403/404 into the
+generic `missing` state and any other failure into a retryable `error` with the
+request ID, mirroring `useProject.ts` and `useProjectRfis.ts`.
+
+Tenant and project authorization stay entirely server-side. The whole
+authorized set (archived included) is fetched once, and the browser only
+searches, filters, and sorts within it; that is presentation, never an
+authorization boundary. The Add document action appears only when the
+server-derived `capabilities.createRecord` is true — no role name is
+interpreted in the browser.
+
+### Record, Revision, and File identity
+
+The register keeps the domain's concepts distinct and never collapses them:
+
+- the **Record** is the document identity — title (the canonical workspace
+  link) plus record number; a legacy record with no server-generated number
+  reads "No record number" rather than borrowing a database id;
+- the **Revision** column shows only the server's authoritative
+  `currentRevision`, resolved through the record's `current_revision_id`. It is
+  never inferred from newest date, highest revision number, or draft status.
+  The revision number is always represented (`Original`, `Rev 1`, …) even when
+  a human revision label is appended, with the revision status as a separate
+  badge. Absent, it reads "No revision";
+- `hasDraftRevision` drives a separate "Draft in progress" indication. A draft
+  never occupies the current-revision value;
+- **Files** is the `fileCount` across every revision of the record, shown
+  exactly as returned.
+
+### Desktop, mobile, and URL state
+
+Desktop uses a native semantic table with exactly Document, Type, Discipline,
+Revision, Files, and Updated columns — no Actions/Open column, Tabulator,
+`BaseDataGrid`, `role="grid"`, pinned columns, or cell editing. The title link
+and safe noninteractive row area navigate to
+`/projects/:projectId/records/:recordId` without interfering with modifier
+clicks, middle-click, keyboard link behaviour, text selection, or controls.
+Mobile uses dedicated cards at the shared 760px breakpoint, each a single
+canonical link containing no nested interactive controls.
+
+`q`, `type`, `discipline`, `revisionStatus`, `archived`, `sort`, and
+`direction` are React Router URL state with the legacy controller's exact
+names, defaults, and semantics. Search replaces history; filters, sort, chip
+removal, and Clear push it. Refresh, copied URLs, query-only navigation, and
+Back/Forward reproduce the same view; unrelated query parameters and the hash
+are preserved; invalid values normalize away without ever offering an option
+the authorized response does not contain. Clear resets search and filters while
+keeping the selected sort and direction. Archived visibility keeps Active only
+(default), Include archived, and Archived only, and archived records stay
+clearly marked.
+
+### Add Document
+
+Add Document is a native React workflow in the shared `Drawer size="detail"`
+(500–660px on larger screens, full-screen at the shared mobile breakpoint). It
+keeps the two real entry choices — upload a document, or reserve a document
+identity — and offers no template/library choice, because no persisted
+project-document template relationship exists in the domain. Focus trap,
+Escape, scroll lock, and focus restoration come from the shared Drawer (Radix
+Dialog); there is no feature-owned modal or focus trap.
+
+It preserves the staged server workflow: create Record → create initial draft
+Revision → upload the file (upload mode) → navigate. Nothing is inserted into
+the register before the server confirms, and the browser never supplies a
+Record number. Completed stages are tracked, so a retry resumes at the failed
+stage and never creates a duplicate Record or Revision; a partial failure shows
+the server message, the request ID, what does already exist, and a link to open
+it. On success the workflow invalidates the Records query so it refetches
+confirmed server data, then navigates to
+`/projects/:projectId/records/:recordId/revisions/:revisionId`.
 
 ## The project RFI register (UI-5, native React)
 
@@ -1211,17 +1320,19 @@ src/infrastructure/storage/  R2 file storage adapter
 src/ui/theme/                application semantic tokens (single source)
 src/ui/components/            BASE component library (primitives/interactive/patterns)
 src/ui/app/                   UI-4 React application shell, routing, query hooks, feature mount
-src/ui/app/evidence/          dev-only shell + UI-5/UI-6A scenario screenshot harness (never shipped)
+src/ui/app/evidence/          dev-only shell + UI-5/UI-6A/UI-6B scenario screenshot harness (never shipped)
 src/ui/features/rfis/         (UI-5) native React RFI register feature
 src/ui/features/projects/     (UI-6A) native React Projects register + Create workflow
+src/ui/features/records/      (UI-6B) native React Document Register + Add Document workflow
 src/ui/lab/                   development-only UI Lab (real components, dev-only build)
-tests/unit/                  schema, renderer, domain, shared component, shell, RFI, and Projects regressions
+tests/unit/                  schema, renderer, domain, shared component, shell, RFI, Projects, and Records regressions
 tests/integration/           Worker-runtime, D1, R2 (local/test binding), and API regressions
-tests/helpers/               reusable D1, route, component-DOM, RFI, and Projects test harnesses
+tests/helpers/               reusable D1, route, component-DOM, RFI, Projects, and Records test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
 scripts/capture-ui4-evidence.mjs  dev-only Playwright/Chromium screenshot capture for the UI-4 shell
 scripts/capture-ui5-evidence.mjs  dev-only Chrome DevTools Protocol evidence capture with exact mobile CSS viewports
 scripts/capture-ui6a-evidence.mjs deterministic native Projects evidence capture at exact viewports
+scripts/capture-ui6b-evidence.mjs deterministic Document Register evidence capture; waits on state selectors
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
 docs/evidence/ui-5/          committed native RFI register desktop/mobile/tablet and Drawer-state captures

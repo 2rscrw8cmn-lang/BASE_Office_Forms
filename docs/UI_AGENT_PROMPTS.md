@@ -199,6 +199,10 @@ UI_PROGRAM_STATUS.md, API/security/UX/testing docs, and the PR body.
 
 ## Prompt UI-6B — Document Register
 
+**Status: implemented** on `claude/ui-6b-document-register-evonty`, stacked on
+the still-open UI-6A branch (PR #46). See `docs/UI_PROGRAM_STATUS.md` §5F. The
+prompt below is retained as the phase's specification of record.
+
 ```text
 [INSERT REQUIRED PREAMBLE]
 
@@ -223,6 +227,20 @@ UX/testing docs, and the PR body.
 ```
 
 ## Prompt UI-7 — Detail workspaces
+
+**This is the exact next phase**, once UI-6A (PR #46) and UI-6B are reviewed
+and merged. Start it from a `main` that contains both: confirm the native RFI
+register (UI-5), the native Projects register and Create Project workflow
+(UI-6A), and the native Document Register and Add Document workflow (UI-6B),
+along with the shared `Drawer size="detail"` (`initialFocusRef`/`closeLabel`),
+the shared mobile filter disclosure, and the retained legacy rollback modules.
+
+`public/record-detail-view.js`, `public/revision-detail-view.js`, and
+`public/rfi-workspace-view.js` are still compatibility-mounted and are what
+UI-7 migrates. When a UI-7 workspace performs staged server work (upload,
+publish, issue), follow the UI-6B Add Document pattern: track which stages the
+server has confirmed and retry only the failed remainder, never restarting a
+sequence that would duplicate server state.
 
 ```text
 [INSERT REQUIRED PREAMBLE]

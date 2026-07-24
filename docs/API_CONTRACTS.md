@@ -388,7 +388,8 @@ Field meanings:
   record's or project's files.
 - `updatedAt` is the record row's own last-modified time (record metadata), not
   a cross-entity latest-activity timestamp; `createdAt` is the record's creation
-  time. The UI labels its date column "Created".
+  time. The Document Register shows `updatedAt` in its "Updated" column and
+  sorts on either through its `sort` query parameter.
 - Response-level `capabilities.createRecord` and per-record `capabilities`
   (`update`, `archive`) are derived server-side from the record policy
   (organization-wide record admins or the assigned project manager). Per-record
@@ -397,6 +398,25 @@ Field meanings:
 
 The response never exposes storage keys, R2 metadata, raw authorization
 internals, raw SQL fields, or activity JSON blobs.
+
+**Consumer note (UI-6B).** The native Document Register
+(`src/ui/features/records/`) replaced `public/records-view.js` on
+`/projects/:projectId/records` without changing this contract: no endpoint,
+response shape, field, or capability was added or altered for UI-6B. The
+register issues exactly one `includeArchived=true` request per project and
+applies search, filtering, sorting, and archived visibility in the browser over
+that already-authorized response. It presents `currentRevision` as the only
+current revision — never inferring one from `hasDraftRevision`,
+`draftRevisionId`, revision number, or dates — and gates its Add document
+action solely on `capabilities.createRecord`.
+
+The Add Document workflow composes three existing endpoints in order:
+`POST /projects/{projectId}/records`, then
+`POST /projects/{projectId}/records/{recordId}/revisions`, then (upload mode
+only) `POST /projects/{projectId}/records/{recordId}/revisions/{revisionId}/files`.
+It never sends a client-supplied `recordNumber`, and on a partial failure it
+retries only the uncompleted stage, so an ordinary retry cannot create a
+duplicate Record or Revision.
 
 ## 8. RFIs
 

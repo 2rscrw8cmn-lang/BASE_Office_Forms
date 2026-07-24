@@ -1,8 +1,8 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-6A (native React Projects register) is implemented on `agent/ui-6a-projects-register-react`, starting from merged UI-5 (`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`, PR #45).
-**Active branch/PR:** `agent/ui-6a-projects-register-react`; draft PR #46 against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`.
+**Current phase:** UI-6B (native React Document Register) is implemented on `claude/ui-6b-document-register-evonty`, stacked on the still-unmerged UI-6A branch.
+**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`. **UI-6A (PR #46) is open, not merged**, so UI-6B branches from `agent/ui-6a-projects-register-react` rather than from `main`; see §5F "Branch stacking" for why and what that means for review order.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -1157,9 +1157,243 @@ filters, first-use empty, filtered empty, and error states is committed under
 
 ### Next recommended action
 
-Review and merge UI-6A before starting UI-6B. UI-6B migrates only the Document
-Register and Add Document workflow; it must not begin on this branch. Do not
-merge this PR without explicit approval.
+Review and merge UI-6A before UI-6B merges. UI-6B is now implemented on its own
+branch (§5F), stacked on this one; it did not modify Projects. Do not merge this
+PR without explicit approval.
+
+## 5F. UI-6B complete — native React Document Register
+
+### Branch stacking (read this first)
+
+UI-6B was specified to start from a `main` containing UI-6A. When this phase
+began, `main` was at `86b11e1` (UI-5) and **UI-6A's PR #46 was open, not
+merged**. UI-6B therefore branches from `agent/ui-6a-projects-register-react`,
+not from `main`.
+
+Why: UI-6A modifies ten files UI-6B must also modify — `AppLayout.tsx`,
+`src/ui/app/evidence/harness.tsx`, `src/http/api-response.ts`,
+`src/ui/components/index.ts`, `icons/Icon.tsx`,
+`tests/helpers/react-shell-harness.tsx`, and four tracker/structure documents.
+Branching from `main` would have produced guaranteed conflicts with PR #46 and
+forced UI-6B to re-derive UI-6A work that is explicitly out of its scope.
+
+Consequences for review: until PR #46 merges, this PR's diff against `main`
+contains UI-6A's commits as well as UI-6B's. Review and merge UI-6A first, then
+UI-6B. UI-6B changes no Projects code.
+
+### Confirmed starting point
+
+`main` contains the native UI-5 RFI register, the shared mobile
+`RegisterToolbar` filter disclosure, and the shared `Drawer size="detail"`
+contract. The native UI-6A Projects register, the native Create Project
+workflow, the server-derived Projects create capability, and UI-6A's review
+fixes are present on the branch UI-6B builds on, not yet on `main`.
+
+### Scope delivered
+
+Only `/projects/:projectId/records` and the Add Document workflow launched from
+it move to native React. `/projects/:projectId/records/:recordId`,
+`.../revisions/:revisionId`, revision publishing and issuance routes, and every
+detail workspace stay compatibility-mounted until UI-7.
+
+- **Route ownership.** `AppLayout` renders `RecordsRegisterFeature` for route id
+  `project-records`, after the shell has confirmed project access. The project
+  header and Documents tab remain shell-owned, and the register adds no second
+  `<h1>` (`PageHeader asHeading={false}`, the UI-5 hierarchy).
+- **Terminology.** The route heading is **Document Register** and the project
+  tab stays **Documents**. Backend domain terminology is unchanged: no API
+  route, database entity, domain type, service, or repository was renamed. The
+  UI keeps Record (document identity), Revision (version), File (uploaded
+  content), and Issuance (distribution) visibly distinct.
+- **Desktop table.** A native semantic `<table>` with exactly six columns —
+  Document, Type, Discipline, Revision, Files, Updated. No Tabulator,
+  `BaseDataGrid`, `role="grid"`, spreadsheet selection or keyboard model,
+  pinned columns, cell editing, or redundant Actions/Open column.
+- **Identity correctness.** Only the server's authoritative `currentRevision`
+  is presented as current; `hasDraftRevision` drives a separate "Draft in
+  progress" indication and a draft never occupies the Revision value. The
+  revision number is always represented (`Original`, `Rev 1`, …) even when a
+  human revision label exists. Absent current revision reads "No revision".
+  `fileCount` is shown exactly as returned. A legacy Record with no
+  server-generated number reads "No record number" rather than borrowing an id.
+  Database UUIDs are never user-facing identity.
+- **Mobile.** Dedicated cards (not a compressed table) at the shared 760px
+  breakpoint, each a single canonical Record-workspace link containing no
+  nested interactive controls. Search stays visible; the remaining controls sit
+  behind the shared filter-icon disclosure, whose count reflects active filters
+  only, never the search query.
+- **URL state.** `q`, `type`, `discipline`, `revisionStatus`, `archived`,
+  `sort`, `direction` are preserved with their existing names, defaults, and
+  semantics: search replaces history, filters and sort push, Back/Forward and
+  copied URLs restore the same view, unrelated query state and the hash
+  survive, and invalid values normalize without inventing an option.
+- **Filters and sort.** Type, discipline, and revision-status options are
+  derived only from values present in the authorized response, plus the factual
+  "No revision" condition. Archived visibility keeps Active only (default),
+  Include archived, and Archived only. Sort keeps Newest, Recently updated,
+  Title A–Z, Record number, and Type with their existing default directions and
+  the deterministic id tie-break. Clear resets search and filters, keeps the
+  selected sort/direction, pushes history, and announces.
+- **States.** Initial loading, background refreshing, populated, first-use
+  empty, filtered empty, no-active-Records-while-archived-exist (offered as a
+  distinct path to include archived, never as first use), missing/permission,
+  retryable error with request ID, and create-capability-absent.
+- **Add Document.** Native React in the shared `Drawer size="detail"`, keeping
+  the two real entry choices (upload a document, reserve a document identity).
+  No template/library choice is offered, because no persisted project-document
+  template relationship exists in the current domain.
+
+### Add Document staged creation and recovery
+
+The existing staged server workflow is preserved exactly:
+
+1. `POST .../records` — create the Record;
+2. `POST .../records/:recordId/revisions` — create the initial draft Revision;
+3. `POST .../revisions/:revisionId/files` — upload the file (upload mode only);
+4. navigate only after every required stage is confirmed.
+
+Nothing is inserted into the register optimistically, and the browser never
+supplies a Record number — the server generates it.
+
+Completed stages are held in the workflow's `progress` state, so a retry
+resumes at the failed stage and never creates a duplicate Record or Revision:
+
+- **Record create fails** — the server message and request ID are shown; the
+  workflow does not claim partial success and nothing was created.
+- **Draft Revision fails after the Record succeeded** — the message states the
+  document identity exists (naming it when the server returned a number), shows
+  the request ID, and offers a link to open the usable Record. The primary
+  action becomes *Retry draft revision* and re-attempts only that stage.
+- **Upload fails after Record and Revision succeeded** — the message states
+  both exist, preserves the selected file name, shows the request ID, and links
+  to the draft Revision workspace. The primary action becomes *Retry upload*.
+
+On success the workflow announces creation, invalidates the Records query so it
+refetches confirmed server data (browser Back cannot then omit the new
+document), closes the Drawer, and navigates to
+`/projects/:projectId/records/:recordId/revisions/:revisionId`.
+
+### API and capability decisions
+
+`GET /api/v2/projects/:projectId/records` is **unchanged**. It already returns
+`{ records, capabilities: { createRecord } }` inside `data`, with per-record
+capabilities and the authoritative `currentRevision` relationship, so UI-6B
+needed no endpoint, response-shape, or read-model change. The register requests
+the whole authorized set once with `includeArchived=true` — exactly as
+`public/records-view.js` did — and the browser only searches, filters, and
+sorts within that already-authorized response. Tenant and project authorization
+remain entirely server-side; the Add document action is gated solely on the
+server-derived `createRecord` capability, never on a role name.
+
+### Data and query architecture
+
+`src/ui/features/records/` holds `RecordsRegisterFeature.tsx`,
+`RecordsTable.tsx`, `RecordsCards.tsx`, `AddDocumentDrawer.tsx`, `api.ts`,
+`types.ts`, `urlState.ts`, `format.ts`, `useProjectRecords.ts`, and
+`records.css`. Server state uses TanStack Query with the key
+`["project-records", projectId]`, so a route change never shows another
+project's documents. The feature-local typed request pattern matches UI-5 and
+UI-6A; no third API architecture was introduced, and no configurable
+`BaseRegister` abstraction was added.
+
+### Shared component changes
+
+- `Drawer` gained `initialFocusRef` and `closeLabel`. Both are additive with
+  unchanged defaults, so navigation Drawers and the UI-5 RFI Drawer behave
+  exactly as before. They exist because a staged workflow must focus its first
+  choice/field rather than the close button, and must name its close control.
+  Demonstrated in the UI Lab and covered by shared component tests.
+- The shared mobile filter disclosure now wraps when a register has more filter
+  controls than fit one phone row. UI-5 (three filters) and UI-6A (one) already
+  fit and are visually unchanged.
+
+Feature CSS owns composition and layout only. It defines no focus rings, no
+button/input/badge appearance, no Drawer or dialog geometry, no global table
+styles, and no raw colour literals; every custom property it references is in
+the registered application token set.
+
+### Legacy rollback modules
+
+`public/records-view.js` and `public/add-document-form.js` remain in the
+repository with their tests intact. They are no longer mounted on the migrated
+register route. Record and Revision detail routes continue to use the
+compatibility bridge, so `LegacyFeatureMount` is still live.
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **569 unit tests**, **120 Worker integration tests**, the Vite
+production build, static asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities, `--force` not used), and the
+secret scan (461 tracked files). `npm run lab:build` passes.
+
+UI-6B adds 72 unit tests across three suites — 51 `records-register-react`,
+4 `records-register-route-integration`, and 17 `records-register-contract` —
+plus 2 shared `Drawer` tests. UI-5 RFI and UI-6A Projects suites continue to
+pass unchanged after the shared component edits.
+
+Three UI-4 shell suites previously used `/projects/p1/records` as their example
+compatibility-mounted route. Because that route is now native, they were
+repointed at routes that are still compatibility-mounted — `record-detail` for
+URL-history parity and project revalidation, `overview` for module-load
+resilience. This is the same adjustment UI-6A made when `/projects` went
+native; no assertion was weakened.
+
+### Evidence
+
+Sixteen deterministic captures are committed under `docs/evidence/ui-6b/`,
+produced by `npm run evidence:ui6b` through the shared evidence harness using
+production components and an authorized fixture — no static mock markup.
+Desktop populated, multi-filter, archived included, Add Document choice, Add
+Document upload mode, and partial-success recovery; first-use empty,
+no-active-but-archived, filtered empty, and error; tablet 834px; mobile 390px
+cards, search with filters collapsed, filter panel expanded with active
+filters, full-screen Add Document, and 360px cards. Every capture asserts its
+CSS viewport and fails if the page overflows horizontally.
+
+Each capture waits for a selector that only exists once the documented state
+has rendered, rather than sleeping for a fixed budget, so a slow machine
+produces the same screenshot instead of a loading skeleton.
+
+### Bundle impact
+
+`public/app/app.js` grows from ~460 kB (~141 kB gzip) to ~485 kB (~147 kB
+gzip) and `app.css` from ~45 kB (~7.0 kB gzip) to ~52 kB (~7.6 kB gzip),
+measured against the UI-6A branch this one is stacked on. Expected cost for a
+new native feature; a bundle budget remains UI-10 scope.
+
+### Known limitations
+
+- Record and Revision detail routes are **not** native. They remain
+  compatibility-mounted until UI-7, and this PR must not be read as migrating
+  them.
+- UI-6A is not merged, so this branch is stacked (see above).
+- Evidence is captured against a mocked session/project fixture; this session
+  had no authenticated Cloudflare Access session, so no authenticated smoke
+  test was performed here.
+- Sorting is chosen through the toolbar control, matching the legacy Records
+  register. Column-header sorting (as UI-5 uses) was deliberately not
+  introduced, since the existing Records URL state has no header-sort contract.
+- An unknown legacy discipline or record type stored before the controlled
+  vocabularies still renders verbatim, by the existing compatibility contract.
+
+### Rollback procedure
+
+1. Revert this PR's merge commit. The compatibility bridge, the legacy Records
+   route mount, `public/records-view.js`, `public/add-document-form.js`, and
+   their tests are all still present, so `/projects/:projectId/records` returns
+   to the legacy controller with no data migration and no API change.
+2. If only the native register must be disabled without a full revert, remove
+   the `route.id === "project-records"` branch in `src/ui/app/AppLayout.tsx`;
+   the route then falls through to `featureDescriptor` and mounts the legacy
+   `records` controller exactly as before UI-6B.
+3. No database, storage, `/api/v2` contract, renderer, or controlled-document
+   definition change is involved in either path.
+
+### Next recommended action
+
+Review and merge UI-6A (PR #46), then review and merge UI-6B. Begin **UI-7
+Detail Workspaces** only after UI-6B is merged.
 
 ## 6. Phase status
 
@@ -1172,9 +1406,9 @@ merge this PR without explicit approval.
 | UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
 | UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
-| UI-6A — Projects register           | **Implemented; draft PR #46** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B       |
-| UI-6B — Document Register           | Not started                                                    | UI-6A reviewed and merged           |
-| UI-7 — Detail workspaces            | Not started                                                    | Shared workspace contract           |
+| UI-6A — Projects register           | **Implemented; draft PR #46 open, NOT merged** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B merges |
+| UI-6B — Document Register           | **Implemented; draft PR** (`claude/ui-6b-document-register-evonty`, stacked on UI-6A) | Merge UI-6A, then review and merge UI-6B |
+| UI-7 — Detail workspaces            | Not started — **the exact next phase**                         | Review and merge UI-6B first        |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
 | UI-10 — Enforcement/cleanup         | Not started                                                    | Route parity and visual baselines   |
@@ -1195,8 +1429,13 @@ merge this PR without explicit approval.
 ## 8. Next action
 
 UI-5 is complete and merged to `main` as `86b11e1` (PR #45). UI-6A is
-implemented on `agent/ui-6a-projects-register-react`; review its draft PR and
-merge it only with explicit approval. After UI-6A is reviewed and merged,
-start UI-6B as a separate branch/PR that migrates only the Document Register and
-Add Document workflow. RFI Slice 2A backend architecture may proceed
-independently once `main` is pulled and stable.
+implemented on `agent/ui-6a-projects-register-react` (PR #46) and is **still
+open**. UI-6B is implemented on `claude/ui-6b-document-register-evonty`,
+stacked on the UI-6A branch because UI-6A had not merged when UI-6B began.
+
+Merge order is therefore: review and merge UI-6A (PR #46), then review and
+merge UI-6B. Only after UI-6B is reviewed and merged should **UI-7 Detail
+Workspaces** begin — the Record, Revision, and RFI detail routes are the exact
+next phase, and they remain compatibility-mounted until then. RFI Slice 2A
+backend architecture may proceed independently once `main` is pulled and
+stable.
