@@ -1,9 +1,10 @@
 # Current Application Structure
 
-**Status:** Authenticated workspace inventory — application shell plus the
-Dashboard, Projects, Project Overview, and project Records register surfaces,
-and the UI-3 BASE component library and UI Lab
-**Updated:** 2026-07-23
+**Status:** Authenticated workspace inventory — the UI-4 React application shell
+(global composition, routing, session/project context, drawer, project tabs)
+plus the Dashboard, Projects, Project Overview, and project Records register
+surfaces, and the UI-3 BASE component library and UI Lab
+**Updated:** 2026-07-24
 
 ## Runtime shape
 
@@ -23,9 +24,14 @@ through the root preview binding; retained UI-2 scripts use
 `wrangler.rfi-rehearsal.jsonc`.
 
 The repository is a Cloudflare Pages application with static browser assets, a
-small React/Vite application entry, Pages Functions, one D1 database binding,
-and one private R2 bucket binding. The React entry is a compatibility host;
-feature routes remain in the existing browser modules until later UI phases.
+React/Vite application entry, Pages Functions, one D1 database binding, and one
+private R2 bucket binding. As of UI-4 the React entry is the application shell:
+it owns global composition, routing, session/organization and project context,
+navigation, the mobile drawer, project tabs, page containers, focus, and route
+announcements. Feature screens that have not yet been migrated to React are
+mounted, unchanged, through a compatibility bridge that loads their existing
+browser controllers (`public/*-view.js`). `public/app-shell.js` and its self-boot
+are retained only as a rollback path (see the UI-4 shell section below).
 
 ```text
 Browser
@@ -33,7 +39,18 @@ Browser
 ├── public/brand-tokens.css                   neutral brand token bridge
 ├── public/app/app.js and public/app/app.css  generated React/Vite entry assets
 ├── src/ui/app/main.tsx                       React entry and root mount
-├── src/ui/app/LegacyApplicationHost.tsx      legacy shell compatibility host
+├── src/ui/app/App.tsx                        providers (query, toast) + router + shell routes
+├── src/ui/app/AppLayout.tsx                  the application shell (nav, drawer, chrome, focus)
+├── src/ui/app/routing.ts                     typed route map (parity-tested vs app-routing.js)
+├── src/ui/app/useSession.ts                  session context (TanStack Query)
+├── src/ui/app/useProject.ts                  project context (TanStack Query; 403/404→missing)
+├── src/ui/app/LegacyFeatureMount.tsx         compatibility mount for public/*-view.js controllers
+├── src/ui/app/featureRuntime.ts              default runtime that loads the served feature modules
+├── src/ui/app/ErrorBoundary.tsx              application error boundary
+├── src/ui/app/ShellContext.tsx               bridge context (navigate, announce, getSession)
+├── src/ui/app/Navigation.tsx, ProjectChrome.tsx, RouteStates.tsx, AppLink.tsx, ShellIcon.tsx
+├── src/ui/app/evidence/                      dev-only shell screenshot harness (never shipped)
+├── src/ui/app/LegacyApplicationHost.tsx      retained UI-2 host (rollback path; not mounted)
 ├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
@@ -118,13 +135,34 @@ the fixture's deterministic synthetic IDs.
 
 ## Frontend architecture and design inventory
 
-`public/index.html` is the single entry point for new application routes and
-mounts the generated React/Vite entry. `main.tsx` renders
-`LegacyApplicationHost`, which dynamically loads the existing `app-shell.js`
-compatibility module. The legacy shell still owns route matching, composition,
-history navigation, session/project requests, focus management, mobile drawer
-behavior, and the lifecycle of per-route feature modules. This is an
-incremental build boundary, not a feature-screen migration.
+`public/index.html` is the single entry point and mounts the generated
+React/Vite entry. As of UI-4, `main.tsx` renders `App`, which composes the
+TanStack Query provider, the toast provider (`ToastProvider` from the UI-3
+library), a React Router browser router, and the application error boundary
+around `AppLayout` — the React application shell. A single catch-all route hands
+every location to the shell, which resolves it through the typed route map in
+`src/ui/app/routing.ts` (a faithful port of `public/app-routing.js`, kept in
+lockstep by `tests/unit/react-shell-routing.test.ts`). The shell owns global
+composition: global navigation, the mobile drawer, session/organization and
+project context, project tabs, page containers, route loading/not-found states,
+focus management, and route announcements.
+
+Feature screens that have not yet been migrated to React are mounted, unchanged,
+through `LegacyFeatureMount`, which loads the existing browser controller
+(`public/*-view.js`) via the injectable shell runtime (`featureRuntime.ts`,
+default: `import("/…-view.js")`) and drives it with the same contract the legacy
+shell used — `create → reload → mount` into a React-owned container, with
+`requestRender` re-mounting and a bridged `navigate`/`announce`/`getSession`. The
+component is keyed by a stable per-descriptor key, so a change of route or of
+project/record/revision/rfi identity fully tears the old controller down and
+creates a new one. A feature controller mounts only after the project context has
+resolved, so a project the user cannot access never triggers a feature request.
+
+`public/app-shell.js` (the UI-2 vanilla shell) and `LegacyApplicationHost.tsx`
+(the UI-2 compatibility host) remain in the tree but are no longer mounted; they
+are the documented rollback path (revert `main.tsx` to render
+`LegacyApplicationHost`). `app-shell.js` keeps its `__BASE_REACT_APP_HOST__`
+self-boot guard, and `main.tsx` still sets that flag, so nothing double-boots.
 
 The shell delegates the data-backed routes to focused feature modules rather
 than rendering their data, forms, and state itself:
@@ -268,11 +306,31 @@ happens in the migration phases.
 
 ## Application shell and routes
 
+As of UI-4 the shell is `AppLayout` (React) rather than `public/app-shell.js`.
+It reproduces the legacy shell's DOM structure and class names — `.app-sidebar`,
+`.app-navigation`, `.app-main`, `.project-context-header`, `.project-tabs`,
+`.mobile-nav-*`, `.route-state`, `.route-placeholder`, and the `#route-announcer`
+live region — so the established `public/app-shell.css` styling, the 950/620 px
+responsive thresholds, and the heading-focus contract are preserved exactly while
+the composition, routing, and data flow now run through React, React Router, and
+TanStack Query. UI-4 intentionally keeps this sidebar chrome rather than adopting
+the UI-3 `AppShell`/`ProjectTabs` visual primitives (which imply a top-navigation
+paradigm), because the feature screens are not yet migrated and that swap would
+be a redesign rather than a parity migration; the shared components are composed
+where they are additive (`ToastProvider`, the error boundary). Full adoption of
+those visual primitives happens as feature screens migrate (UI-6+).
+
 The shell provides one semantic main content region, a skip link, active global
 navigation, shared loading/error/not-found surfaces, and page-change focus plus
-announcement behavior. Browser history uses `pushState`, `replaceState`, and
-`popstate`; query strings and hashes are preserved when the root or project-root
-routes are normalized.
+announcement behavior. React Router owns browser history and back/forward; query
+strings and hashes are preserved when the root (`/`) or project-root
+(`/projects/:id`) routes are normalized/redirected (the redirect carries the
+current `search` and `hash`). Focus moves to the page heading on navigation and
+popstate, but not on initial load or during a redirect; for a route whose heading
+is rendered asynchronously by a feature mount, the mount re-requests heading focus
+once its heading exists. Route matching, redirects, admin gating, project-tab
+selection, and the not-found surface are the typed `routing.ts` port of the
+legacy route table, enforced identical by `react-shell-routing.test.ts`.
 
 New route handling covers:
 
@@ -591,10 +649,28 @@ URL). Document records are not merged with project Records.
 
 ## Frontend test structure
 
-`tests/unit/app-routing.test.ts` covers route resolution, nested-tab selection,
-Administration role policy, unknown paths (including the retired tools hub
-routes), and API/static bypass. `tests/unit/app-shell.test.ts` mounts the real
-browser modules in Happy DOM and covers navigation content/active state
+`tests/unit/react-shell-routing.test.ts` proves the React route map
+(`src/ui/app/routing.ts`) resolves every canonical URL identically to the legacy
+`public/app-routing.js` table (redirects, normalization, admin gating,
+descendant project-tab selection, non-application API/asset paths, and the
+feature-mount descriptor map), so the two cannot drift.
+`tests/unit/react-shell.test.tsx` mounts the real React shell in Happy DOM with a
+stub runtime and mocked session/project fetches and covers: the `/`→`/dashboard`
+and `/projects/:id`→overview redirects preserving query and hash; active global
+section and role-gated Administration visibility; a generic not-found for
+unauthorized `/admin` and for 403/404 projects; real project identity with the
+parent tab selected for descendant routes; a retryable project error with request
+id; session-first loading (no feature or project request before the session
+resolves) and session-error recovery on retry; the unknown-route not-found
+surface; heading focus and the route announcement after navigation; and the
+mobile drawer (open with focus in the drawer, Escape close with focus
+restoration, body scroll lock, and close-and-navigate on a drawer link).
+
+The UI-2 vanilla shell modules retain their own coverage as the rollback path:
+`tests/unit/app-routing.test.ts` covers legacy route resolution, nested-tab
+selection, Administration role policy, unknown paths (including the retired tools
+hub routes), and API/static bypass. `tests/unit/app-shell.test.ts` mounts the
+real browser modules in Happy DOM and covers navigation content/active state
 (including the top-level Studio and Document Library links), authenticated
 project tabs, role-aware Administration visibility, the mobile drawer and
 Escape behavior, close-on-route selection, not found, and direct nested
@@ -899,12 +975,16 @@ src/rendering/               schema validator
 src/infrastructure/storage/  R2 file storage adapter
 src/ui/theme/                application semantic tokens (single source)
 src/ui/components/            BASE component library (primitives/interactive/patterns)
+src/ui/app/                   UI-4 React application shell, routing, query hooks, feature mount
+src/ui/app/evidence/          dev-only shell screenshot harness (never in the production build)
 src/ui/lab/                   development-only UI Lab (real components, dev-only build)
-tests/unit/                  schema, renderer, domain, and UI-3 component regressions
+tests/unit/                  schema, renderer, domain, UI-3 component, and UI-4 shell regressions
 tests/integration/           Worker-runtime, D1, R2 (local/test binding), and API regressions
 tests/helpers/               reusable D1, route, and component-DOM test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
+scripts/capture-ui4-evidence.mjs  dev-only Chromium screenshot capture for the UI-4 shell
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
+docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
 .github/workflows/           pull-request validation
 ```
 

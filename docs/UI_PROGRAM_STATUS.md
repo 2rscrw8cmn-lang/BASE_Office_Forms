@@ -1,9 +1,31 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-3 (BASE component library + UI Lab) implemented on branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft), ready for final product-owner review after a foundation review pass. RFI Slice 1, UI-1, and UI-2 are complete.
-**Active PR:** PR #43 on `claude/base-components-ui-lab-5l05ux` (draft, not merged). PR #36 and PR #41 are merged.
+**Current phase:** UI-4 (React application shell and route parity) implemented on branch `claude/ui-4-react-foundation-ywnpm2`, ready for product-owner review. RFI Slice 1, UI-1, UI-2, and UI-3 are complete and merged (UI-3 PR #43 merged as `cb9f191`).
+**Active branch:** `claude/ui-4-react-foundation-ywnpm2` (not merged). PR #36, PR #41, and PR #43 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+
+> **2026-07-24 UI-4 implementation:**
+> The React application shell now owns global composition — navigation, the
+> mobile drawer, session/organization and project context, React Router, the
+> TanStack Query provider, the toast provider, an error boundary, route
+> loading/not-found states, project tabs, page containers, focus management, and
+> route announcements. Feature screens not yet migrated (Dashboard, Projects,
+> Overview, Records, Record/Revision detail, RFIs, RFI workspace) mount unchanged
+> through a compatibility bridge that loads their existing `public/*-view.js`
+> controllers. Every canonical URL, the `/`→`/dashboard` and
+> `/projects/:id`→overview redirects (query/hash preserved), browser
+> back/forward, safe 403/404 handling, descendant project-tab selection, the
+> drawer focus trap/restoration, session-first loading, and server-derived
+> authorization are preserved and proven by tests. Route parity is enforced by a
+> test that resolves every canonical URL through both the new typed route map and
+> the legacy table. Full `npm run check` passes (Prettier, Cloudflare types,
+> TypeScript, ESLint, **379 unit tests**, **119 Worker integration tests**, the
+> production build, Pages Functions build, `npm audit --audit-level=high` clean,
+> and the secret scan). The UI-4 suites add 43 tests (28 routing-parity + 15
+> shell). Desktop, mobile, and mobile-drawer shell captures are
+> committed under `docs/evidence/ui-4/`. No merge occurred. See §"UI-4 complete"
+> below.
 
 > **2026-07-24 UI-3 foundation-review fixes (PR #43):**
 > A foundation review of PR #43 found five issues, all addressed on the same
@@ -399,12 +421,104 @@ calculated attention conditions rendering with distinct tones.
 
 ### Next recommended action
 
-UI-3 is ready for final product-owner review on PR #43 (draft, not merged).
-Once approved and merged, UI-4 (React application shell and route parity) is
-next: compose `AppShell`, `ProjectTabs`, navigation, TanStack Query, toast, and
-error-boundary providers around the shared components, preserving canonical
-URLs and `/api/v2`. RFI Slice 2 issuance UI is now unblocked for its component
-needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
+UI-3 is complete and merged (PR #43 → `cb9f191`). UI-4 is implemented (see
+below); UI-5 is next.
+
+## 5B. UI-4 complete — React application shell and route parity
+
+Branch `claude/ui-4-react-foundation-ywnpm2`. Not merged.
+
+### Scope delivered
+
+- **React composition root.** `src/ui/app/App.tsx` composes the TanStack Query
+  provider, the UI-3 `ToastProvider`, a React Router `BrowserRouter`, and the
+  application `ErrorBoundary` around `AppLayout`. A single catch-all route hands
+  every location to the shell.
+- **Typed route map.** `src/ui/app/routing.ts` is a faithful port of
+  `public/app-routing.js` (route table, `resolveRoute`, `normalizePathname`,
+  `isApplicationPath`, `canViewAdministration`, `PROJECT_TABS`, `projectTabHref`,
+  and a `featureDescriptor` map). `tests/unit/react-shell-routing.test.ts`
+  resolves every canonical URL through both modules and asserts identical
+  results, so the React map cannot drift from the legacy source of truth.
+- **The shell (`AppLayout`).** Global sidebar navigation, the mobile off-canvas
+  drawer (focus trap, background `inert`, body scroll lock, Escape/backdrop/close
+  dismissal, focus restoration, close-on-viewport-change and close-on-navigate),
+  the project context header and tabs (descendant routes keep their parent tab
+  selected), route loading/session-error/generic-error/not-found/placeholder
+  surfaces, page-heading focus management, and the `#route-announcer` live
+  region. It reproduces the legacy DOM structure and class names so
+  `public/app-shell.css` styles it unchanged.
+- **Session and project context on TanStack Query.** `useSession` and
+  `useProject` re-check the server per request and never cache an authorization
+  decision. A 403 or 404 project collapses to the same generic **Project not
+  found** surface; other failures are retryable and carry the API request id.
+  Session-first is preserved: no feature or project request is issued before the
+  session resolves, and a feature controller mounts only after the project
+  context is `ready`.
+- **Compatibility mount.** `LegacyFeatureMount` + `featureRuntime.ts` load and
+  drive the existing `public/*-view.js` controllers unchanged (create → reload →
+  mount into a React-owned container, with `requestRender`, `navigate`,
+  `announce`, and `getSession` bridged). No feature workflow is redesigned.
+- **Rollback path retained.** `public/app-shell.js` and
+  `LegacyApplicationHost.tsx` remain in the tree but are not mounted; reverting
+  `main.tsx` to render `LegacyApplicationHost` restores the UI-2 vanilla shell.
+
+### Scope decision (documented)
+
+UI-4 keeps the established sidebar chrome via `app-shell.css` rather than
+adopting the UI-3 `AppShell`/`ProjectTabs` *visual* primitives, which imply a
+top-navigation paradigm shift. Because the feature screens are not yet migrated,
+that swap would be a redesign that risks the not-yet-migrated feature layout,
+not a parity migration. The shared components are composed where additive
+(`ToastProvider`, error boundary). The visual primitives are adopted as feature
+screens migrate (UI-6+). This is a deliberate deviation from the earlier
+"compose `AppShell`/`ProjectTabs`" phrasing, made in service of the binding
+route/visual-parity requirement.
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **379 unit tests**, **119 Worker integration tests**, the Vite
+production build, static-asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan. New
+suites: `react-shell-routing` (28 parity/normalization/admin/tab/descriptor
+cases) and `react-shell` (15 cases: redirects preserving query/hash, active
+nav + admin gating, unauthorized `/admin` and 403/404 project not-found, real
+project identity + descendant tab, retryable project error, session-first
+loading + session-error recovery, unknown-route not-found, heading focus +
+announcement, and the mobile drawer focus trap/restoration/close-and-navigate).
+The UI-2 legacy-shell suites (`app-routing`, `app-shell`, `records-ui`, etc.)
+remain green as rollback coverage.
+
+### Evidence
+
+Committed captures under `docs/evidence/ui-4/`, generated from the real shell
+(mocked runtime) with the pre-installed Chromium via
+`scripts/capture-ui4-evidence.mjs`: `shell-desktop.png` (sidebar nav, account
+summary, project header, Documents tab active, compatibility mount),
+`shell-mobile.png`, `shell-mobile-drawer.png` (open drawer with focus on the
+close button and dimmed backdrop), and `shell-dashboard-desktop.png`.
+
+### Known limitations
+
+- Feature screens still run through their existing `public/*-view.js`
+  controllers (the compatibility path). Migrating them to React is UI-5+.
+- The shipped `public/app/app.js` grows to ~338 kB (~106 kB gzip) and
+  `app.css` to ~30 kB (~5 kB gzip) because UI-4 mounts the React shell, router,
+  query client, and the UI-3 component stylesheet that UI-3 built but did not
+  ship. Expected one-time foundation cost; a bundle/perf budget is UI-10 scope.
+- Screenshots are captured against a mocked session/project (no authenticated
+  Cloudflare Access session is available in this environment). The chrome is
+  real React output; the feature content area shows a representative placeholder.
+- No pixel-baseline visual-regression harness yet — that remains UI-10.
+- `AppShell`/`ProjectTabs` visual primitives are intentionally not yet adopted
+  (see the scope decision above).
+
+### Next recommended action
+
+UI-5 (RFI register on the controlled custom table — no Tabulator) is next. The
+exact UI-5 prompt is in the final handoff. Do not merge UI-4 without explicit
+approval.
 
 ## 6. Phase status
 
@@ -414,9 +528,9 @@ needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
 | UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
-| UI-3 — Components + UI Lab   | **Implemented; ready for final product-owner review** (PR #43, draft, `claude/base-components-ui-lab-5l05ux`) | Review and merge |
-| UI-4 — React shell           | **Now unblocked**          | Compose shared components into the shell         |
-| UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
+| UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43) | none                                   |
+| UI-4 — React shell           | **Implemented; ready for product-owner review** (`claude/ui-4-react-foundation-ywnpm2`, not merged) | Review and merge |
+| UI-5 — RFI register          | **Now unblocked**          | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
 | UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
 | UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
@@ -438,13 +552,17 @@ needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
 
 ## 8. Next action
 
-UI-3 (Components + UI Lab) is implemented on
-`claude/base-components-ui-lab-5l05ux` (PR #43, draft) and, after the
-2026-07-24 foundation-review fixes (§5A), is ready for final product-owner
-review and merge; the exit gate — a feature team can build a standard register
-or detail workspace without new global visual CSS — is met by the shared
-component set, the single tokenized stylesheet, and the token-enforcement
-test. UI-4 and RFI Slice 2 do not begin before PR #43 merges. Once merged,
-UI-4 (React shell and route parity) is the next active phase and composes
-these components; RFI Slice 2A backend architecture may proceed independently
-once `main` is pulled and stable.
+UI-4 (React application shell and route parity) is implemented on
+`claude/ui-4-react-foundation-ywnpm2` and is ready for product-owner review
+(not merged). Its exit gate — the shell is stable enough that feature migrations
+no longer need to modify global navigation or invent page containers — is met:
+the React shell owns navigation, the drawer, project context/tabs, page
+containers, routing, focus, and announcements, and mounts the not-yet-migrated
+feature screens unchanged through the compatibility bridge, with route parity
+proven by the routing-parity test and desktop/mobile evidence.
+
+UI-5 (RFI register on the controlled custom table — no Tabulator, per Spike 0)
+is the next active phase; its exact prompt is in the handoff. Do not begin UI-5
+before UI-4 is reviewed/merged, and do not merge UI-4 without explicit approval.
+RFI Slice 2A backend architecture may proceed independently once `main` is
+pulled and stable.

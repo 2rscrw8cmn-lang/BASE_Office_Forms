@@ -19,8 +19,8 @@
     "types": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit",
     "lint": "eslint functions src tests vitest.config.ts vitest.worker.config.mts",
-    "format": "prettier --write src functions/api/v2 tests scripts eslint.config.mjs vite.config.ts vite.lab.config.ts vitest.config.ts vitest.worker.config.mts package.json tsconfig.json wrangler.jsonc .github schemas",
-    "format:check": "prettier --check src functions/api/v2 tests scripts eslint.config.mjs vite.config.ts vite.lab.config.ts vitest.config.ts vitest.worker.config.mts package.json tsconfig.json wrangler.jsonc .github schemas",
+    "format": "prettier --write src functions/api/v2 tests scripts eslint.config.mjs vite.config.ts vite.lab.config.ts vite.evidence.config.ts vitest.config.ts vitest.worker.config.mts package.json tsconfig.json wrangler.jsonc .github schemas",
+    "format:check": "prettier --check src functions/api/v2 tests scripts eslint.config.mjs vite.config.ts vite.lab.config.ts vite.evidence.config.ts vitest.config.ts vitest.worker.config.mts package.json tsconfig.json wrangler.jsonc .github schemas",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.worker.config.mts",
@@ -65,13 +65,15 @@
     "wrangler": "latest"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
     "ajv": "^8.20.0",
     "jose": "^6.1.3",
     "lucide-react": "^1.26.0",
     "pdf-lib": "^1.17.1",
     "radix-ui": "^1.6.5",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.1"
   },
   "overrides": {
     "miniflare": {
