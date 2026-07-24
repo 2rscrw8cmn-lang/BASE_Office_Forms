@@ -23,7 +23,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { AppLink } from "./AppLink";
 import { Navigation, AccountSummary } from "./Navigation";
 import { ProjectHeader, ProjectTabs } from "./ProjectChrome";

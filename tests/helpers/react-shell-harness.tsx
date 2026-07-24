@@ -13,7 +13,7 @@ import {
   BrowserRouter,
   useNavigate,
   type NavigateFunction,
-} from "react-router-dom";
+} from "react-router";
 import {
   AppProviders,
   ShellRoutes,

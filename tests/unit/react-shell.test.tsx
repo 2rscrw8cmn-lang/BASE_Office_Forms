@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useLocation, MemoryRouter } from "react-router-dom";
+import { useLocation, MemoryRouter } from "react-router";
 import {
   AppProviders,
   ShellRoutes,

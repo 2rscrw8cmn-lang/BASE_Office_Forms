@@ -17,7 +17,7 @@ import {
   BrowserRouter,
   useNavigate,
   type NavigateFunction,
-} from "react-router-dom";
+} from "react-router";
 import { RfiRegisterFeature } from "../../src/ui/features/rfis/RfiRegisterFeature";
 import { ShellProvider, type ShellBridge } from "../../src/ui/app/ShellContext";
 import type { ProjectRfisReadModel } from "../../src/ui/features/rfis/types";
@@ -89,7 +89,10 @@ export interface RfiRegisterFetchConfig {
   responsibleContacts?: (typeof CONTACT)[];
   capabilities?: { createRfi: boolean };
   /** Called for PATCH /rfis/:id -- return a Response. */
-  onUpdate?: (rfiId: string, body: Record<string, unknown>) => Response;
+  onUpdate?: (
+    rfiId: string,
+    body: Record<string, unknown>,
+  ) => Response | Promise<Response>;
   /** Called for POST /rfis -- return a Response. */
   onCreate?: (body: Record<string, unknown>) => Response;
   /** Rows returned by a *second and later* GET (e.g. after a conflict refetch). */

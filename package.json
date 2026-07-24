@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "BASE forms and documents kit hosted on Cloudflare Pages",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.22.0"
   },
   "scripts": {
     "build": "npm run build:ui && npm run build:assets",
@@ -73,7 +73,7 @@
     "radix-ui": "^1.6.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.1"
+    "react-router": "8.3.0"
   },
   "overrides": {
     "miniflare": {
