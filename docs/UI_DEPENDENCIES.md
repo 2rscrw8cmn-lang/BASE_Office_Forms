@@ -1,7 +1,40 @@
-# UI-2 Dependency and License Record
+# UI Dependency and License Record
 
 **Updated:** 2026-07-23  
-**Scope:** UI-2 React/Vite compatibility foundation
+**Scope:** UI-2 React/Vite compatibility foundation and UI-3 component library
+
+## UI-3 component library and UI Lab
+
+UI-3 adds the BASE application component library. It introduces two runtime
+dependencies (Radix behaviour primitives and Lucide icons) and development-only
+testing/tooling. All are MIT-licensed, actively maintained, and used only in the
+application workspace; none moves domain logic, permissions, or official workflow
+authority into the browser.
+
+| Package                        |  Version | License | Purpose                                                                        | Bundle/runtime impact                                                                                                                                          | Replacement strategy                                                                                    |
+| ------------------------------ | -------: | ------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `radix-ui`                     |    1.6.5 | MIT     | Accessible behaviour for Dialog, AlertDialog, DropdownMenu, Popover, Tabs, Toast, Tooltip, Checkbox, RadioGroup, Collapsible, Separator. | Tree-shaken per component; imported **only** inside `src/ui/components/` (enforced by test). Not yet in the shipped `public/app/app.js` bundle — added when a feature adopts a component in UI-4+. | Radix owns behaviour only; BASE owns styling/contract, so a primitive can be re-implemented per component without a feature rewrite. |
+| `lucide-react`                 |   1.26.0 | ISC     | Application icon set behind the single `Icon` component.                        | Only imported icons are bundled; `lucide-react` is imported **only** by `src/ui/components/icons/Icon.tsx` (enforced by test).                                  | Swap the icon set behind the one `Icon` component; no feature imports Lucide directly.                  |
+| `@testing-library/react`       |   16.3.2 | MIT     | Component behaviour/keyboard/accessibility tests.                               | Dev/test only.                                                                                                                                                | Remove with the component test strategy or replace with the chosen renderer's test utilities.           |
+| `@testing-library/user-event`  |   14.6.1 | MIT     | Realistic keyboard/pointer interaction in tests.                               | Dev/test only.                                                                                                                                                | Remove with the component test strategy.                                                                |
+| `@testing-library/dom`         |  10.4.1  | MIT     | DOM query engine used by the React testing library.                            | Dev/test only.                                                                                                                                                | Remove with the component test strategy.                                                                |
+| `@testing-library/jest-dom`    |    7.0.0 | MIT     | DOM assertion matchers (`toHaveAccessibleName`, `toBeInTheDocument`, …).        | Dev/test only.                                                                                                                                                | Remove with the component test strategy.                                                                |
+| `happy-dom`                    |  20.11.1 | MIT     | DOM environment for the component and lab tests (already present for UI-2).     | Dev/test only.                                                                                                                                                | Replace with jsdom if a component needs an API Happy DOM lacks.                                          |
+
+Notes:
+
+- `radix-ui` is the single unified Radix package rather than many
+  `@radix-ui/react-*` packages, so the dependency surface and lockfile stay
+  small and one version governs all primitives.
+- The UI Lab build (`vite.lab.config.ts`, `npm run lab`/`lab:build`) reuses the
+  already-pinned Vite/React toolchain; it adds no dependency and emits only to
+  the gitignored `dist/ui-lab/`.
+- `npm audit --audit-level=high` reports zero vulnerabilities after adding these
+  packages; the existing Miniflare `sharp` override is unchanged.
+- Requested ranges are in `package.json`; exact resolved versions are locked in
+  `package-lock.json`. Update them through an intentional dependency change.
+
+## UI-2 React/Vite compatibility foundation
 
 ## PR #36 reconciliation tooling
 

@@ -1,0 +1,118 @@
+/*
+ * BASE application semantic tokens.
+ *
+ * This is the single source of truth for application colour, geometry,
+ * typography, spacing, elevation, and motion. Every BASE component styles
+ * itself with `var(--app-*)` values declared here; component stylesheets never
+ * use raw colour literals (enforced by the token test in
+ * tests/unit/base-component-tokens.test.ts).
+ *
+ * Raw brand values are read from public/brand-tokens.css when the application
+ * shell loads it. Fallbacks are inlined so the components still render with the
+ * correct palette in the UI Lab and in isolated test/build contexts where only
+ * this file is present. This file styles the application workspace only; it must
+ * never leak into public/base.css or reinterpret controlled-document geometry.
+ *
+ * Tokens are declared on :root so Radix-portalled surfaces (dialogs, menus,
+ * popovers, toasts) — which render at document.body, outside the .base-app
+ * subtree — still resolve them. The --app-* prefix keeps them namespaced; they
+ * exist only where this file is loaded (the application bundle), never in the
+ * renderer.
+ */
+
+:root {
+  /* Surfaces */
+  --app-workspace: var(--page-bg, #e7e7ea);
+  --app-surface: var(--paper, #ffffff);
+  --app-surface-sunken: #f4f4f6;
+  --app-surface-hover: #f0f0f3;
+  --app-surface-selected: var(--hover, #faf3f3);
+
+  /* Borders */
+  --app-border-subtle: var(--divider, #cdced2);
+  --app-border-strong: var(--field, #bdbdc2);
+
+  /* Text */
+  --app-text-primary: var(--ink, #232327);
+  --app-text-muted: var(--mono, #6f6f74);
+  --app-text-inverse: #ffffff;
+  --app-text-disabled: #9a9aa0;
+
+  /* Accent — BASE maroon: primary action, focus, selection, active nav */
+  --app-accent: var(--accent, #7a1e22);
+  --app-accent-strong: var(--accent-dk, #5a1418);
+  --app-accent-soft: var(--hover, #faf3f3);
+  --app-accent-contrast: #ffffff;
+
+  /* Focus ring uses maroon; it is intentionally distinct from danger red */
+  --app-focus-ring: var(--accent, #7a1e22);
+  --app-focus-width: 2px;
+  --app-focus-offset: 2px;
+
+  /* Status — textual + semantic; never colour-only. Distinct from maroon. */
+  --app-success: #1f7a3d;
+  --app-success-soft: #e7f2eb;
+  --app-warning: #8a5a00;
+  --app-warning-soft: #f6efe0;
+  --app-danger: #b3261e;
+  --app-danger-soft: #f9e7e6;
+  --app-info: #2f5b8f;
+  --app-info-soft: #e8eef6;
+  --app-neutral: #55555b;
+  --app-neutral-soft: #ececed;
+
+  /* Typography */
+  --app-font-sans: var(--sans, "Archivo", system-ui, sans-serif);
+  --app-font-mono: var(--code, "JetBrains Mono", ui-monospace, monospace);
+  --app-text-2xs: 11px;
+  --app-text-xs: 12px;
+  --app-text-sm: 13px;
+  --app-text-md: 14px;
+  --app-text-lg: 16px;
+  --app-text-xl: 20px;
+  --app-text-2xl: 25px;
+  --app-line-tight: 1.25;
+  --app-line-normal: 1.5;
+  --app-weight-regular: 400;
+  --app-weight-medium: 500;
+  --app-weight-semibold: 600;
+  --app-weight-bold: 700;
+
+  /* Geometry and density */
+  --app-control-height: 40px;
+  --app-control-height-compact: 32px;
+  --app-touch-target: 44px;
+  --app-radius-sm: 4px;
+  --app-radius-md: 6px;
+  --app-radius-lg: 8px;
+  --app-radius-pill: 999px;
+  --app-border-width: 1px;
+
+  /* Spacing scale */
+  --app-space-0: 0;
+  --app-space-1: 4px;
+  --app-space-2: 8px;
+  --app-space-3: 12px;
+  --app-space-4: 16px;
+  --app-space-5: 20px;
+  --app-space-6: 24px;
+  --app-space-8: 32px;
+  --app-space-10: 40px;
+  --app-gutter: clamp(16px, 4vw, 32px);
+
+  /* Elevation — borders carry structure; shadows stay minimal */
+  --app-scrim: rgba(20, 20, 24, 0.4);
+  --app-shadow-panel: 0 1px 2px rgba(20, 20, 24, 0.06);
+  --app-shadow-overlay: 0 8px 24px rgba(20, 20, 24, 0.16);
+
+  /* Layering */
+  --app-z-header: 20;
+  --app-z-drawer: 40;
+  --app-z-overlay: 50;
+  --app-z-toast: 60;
+
+  /* Motion (respects reduced-motion in components.css) */
+  --app-motion-fast: 120ms;
+  --app-motion-normal: 200ms;
+  --app-ease: cubic-bezier(0.2, 0, 0, 1);
+}
