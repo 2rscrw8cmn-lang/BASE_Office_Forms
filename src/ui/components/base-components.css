@@ -161,6 +161,9 @@
   display: inline-flex;
 }
 
+.base-btn__label {
+  text-transform: capitalize;
+}
 /* --------------------------------------------------------------- icon button */
 
 .base-icon-btn {
@@ -231,7 +234,7 @@
 
 .base-input:focus-visible {
   outline: var(--app-focus-width) solid var(--app-focus-ring);
-  outline-offset: 1px;
+  outline-offset: 0px;
   border-color: var(--app-accent);
 }
 
@@ -476,6 +479,9 @@
   color: var(--app-info);
 }
 
+.base-badge {
+  text-transform: capitalize;
+}
 /* ------------------------------------------------------------------ divider */
 
 .base-divider {
@@ -1076,6 +1082,8 @@
   font-size: var(--app-text-2xl);
   font-weight: var(--app-weight-bold);
   line-height: var(--app-line-tight);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .base-page-header__supporting {
