@@ -1769,6 +1769,10 @@
   .base-toolbar--mobile-filter-disclosure
     .base-toolbar__filters--mobile-disclosure.is-open {
     display: flex;
+    /* A register with more filters than fit one phone row wraps instead of
+       squeezing every control below a usable width. Toolbars whose controls
+       already fit (one or three filters) are unchanged. */
+    flex-wrap: wrap;
   }
 }
 

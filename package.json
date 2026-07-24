@@ -15,6 +15,7 @@
     "lab": "vite --config vite.lab.config.ts",
     "lab:build": "vite build --config vite.lab.config.ts",
     "evidence:ui6a": "vite build --config vite.evidence.config.ts && node scripts/capture-ui6a-evidence.mjs",
+    "evidence:ui6b": "vite build --config vite.evidence.config.ts && node scripts/capture-ui6b-evidence.mjs",
     "deploy": "wrangler pages deploy public --project-name base-office-forms",
     "deploy:dry-run": "npm run build && npm run functions:build",
     "types": "wrangler types",

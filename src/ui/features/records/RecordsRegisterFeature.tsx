@@ -372,29 +372,30 @@ export function RecordsRegisterFeature({ projectId }: { projectId: string }) {
                 ))}
               </Select>
             </Field>
+            {/* Sort lives in the same disclosure group as the filters so
+                mobile keeps only Search visible, per the shared toolbar
+                contract. It is not counted as an active filter. */}
+            <Field label="Sort documents" hideLabel controlId="records-sort">
+              <Select
+                size="compact"
+                value={filters.sort}
+                onChange={(event) => {
+                  const sort = event.target.value as SortKey;
+                  // Choosing a sort also restores its natural direction.
+                  updateFilters(
+                    { sort, direction: SORT_KEYS[sort].defaultDir },
+                    true,
+                  );
+                }}
+              >
+                {Object.entries(SORT_KEYS).map(([value, { label }]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </>
-        }
-        sort={
-          <Field label="Sort documents" hideLabel controlId="records-sort">
-            <Select
-              size="compact"
-              value={filters.sort}
-              onChange={(event) => {
-                const sort = event.target.value as SortKey;
-                // Choosing a sort also restores that sort's natural direction.
-                updateFilters(
-                  { sort, direction: SORT_KEYS[sort].defaultDir },
-                  true,
-                );
-              }}
-            >
-              {Object.entries(SORT_KEYS).map(([value, { label }]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
         }
         chips={chips}
         resultCount={

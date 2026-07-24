@@ -23,6 +23,9 @@
   width: 100%;
   min-width: 860px;
   border-collapse: collapse;
+  /* Fixed layout so the declared column widths hold and a long document title
+     truncates inside its cell instead of pushing Updated out of view. */
+  table-layout: fixed;
   font-size: var(--app-text-sm);
 }
 
@@ -46,7 +49,7 @@
 }
 
 .records-register-table thead th:nth-child(4) {
-  width: 190px;
+  width: 176px;
 }
 
 .records-register-table thead th:nth-child(5) {
@@ -62,7 +65,11 @@
   height: 60px;
   padding: var(--app-space-2) var(--app-space-3);
   border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  /* A row header is left-aligned like every other cell; the UA default for
+     <th> is centred. */
+  text-align: left;
   vertical-align: middle;
+  overflow-wrap: anywhere;
 }
 
 .records-register-table tbody tr:last-child > * {
@@ -361,16 +368,18 @@
     display: flex;
   }
 
+  /* Five controls (four filters plus sort) do not fit one phone row, so the
+     disclosed panel lays them out two-up. Composition only -- the control
+     appearance and the disclosure behaviour stay shared. */
   .records-register-page .base-toolbar__filters--mobile-disclosure.is-open {
+    display: grid;
     width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .records-register-page .base-toolbar__filters .base-field,
   .records-register-page .base-toolbar__filters .base-select,
-  .records-register-page .base-toolbar__filters .base-select__control,
-  .records-register-page .base-toolbar__sort .base-field,
-  .records-register-page .base-toolbar__sort .base-select,
-  .records-register-page .base-toolbar__sort .base-select__control {
+  .records-register-page .base-toolbar__filters .base-select__control {
     width: 100%;
   }
 }
@@ -381,7 +390,8 @@
     padding-left: var(--app-space-3);
   }
 
-  .add-document-grid--paired {
+  .add-document-grid--paired,
+  .records-register-page .base-toolbar__filters--mobile-disclosure.is-open {
     grid-template-columns: 1fr;
   }
 }
