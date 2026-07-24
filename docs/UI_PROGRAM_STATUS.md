@@ -851,18 +851,19 @@ UI-4 `AppLayout`/`routing.ts`/`LegacyFeatureMount` shell.
 ### Tests and checks
 
 Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
-ESLint, **430 unit tests** (+35 over the UI-4 baseline of 395: 31
-`rfi-register-react` + 2 `rfi-register-route-integration` + 2
-`rfi-register-tokens`), **119 Worker integration tests**, the Vite production
-build (`public/app/app.js` grows from ~338 kB to ~370 kB, ~114 kB gzip, for
-the new feature — expected one-time cost, no further bundle budget work is in
-this phase's scope), Pages Functions compilation, `npm audit --audit-level=high`
-(0 vulnerabilities), and the secret scan (394 tracked files). `npm run
+ESLint, **439 unit tests** (+44 over the UI-4 baseline of 395: 33
+`rfi-register-react` + 7 `rfi-register-css-parity` + 2
+`rfi-register-route-integration` + 2 `rfi-register-tokens`), **119 Worker
+integration tests**, the Vite production build (`public/app/app.js` grows
+from ~338 kB to ~370 kB, ~114 kB gzip, for the new feature — expected
+one-time cost, no further bundle budget work is in this phase's scope),
+Pages Functions compilation, `npm audit --audit-level=high` (0
+vulnerabilities), and the secret scan (394 tracked files). `npm run
 lab:build` passes (no shared component was modified; only consumed).
 
 New/changed suites:
 
-- `tests/unit/rfi-register-react.test.tsx` (31 tests, harness in
+- `tests/unit/rfi-register-react.test.tsx` (33 tests, harness in
   `tests/helpers/rfi-register-harness.tsx`) — five-column hierarchy and no
   Action column; editable-Subject-button vs. locked-Subject-link; explicit
   RFI-identity navigation; ordinary cells never navigate; one editor open at a
@@ -870,16 +871,28 @@ New/changed suites:
   Escape → trigger); every editable field present; changed-only commits with
   no per-keystroke PATCH; select-commits-on-change with the contact id;
   date-commits-on-blur; textarea Enter-inserts-newline vs. non-textarea
-  Enter-commits; required-field validation blocking the save; Saving→Saved
-  transition; 403 permission-loss message; 409 conflict reload + message +
-  updated row; Add RFI creating a draft, opening its editor, and focusing
-  Subject; column-header sort + `aria-sort` + direction toggle; the exact four
-  toolbar controls with no sort dropdown; search-replaces/filter-pushes
-  history-length deltas; an in-progress edit preserving URL filters;
-  filtered-empty vs. first-use-empty distinction with Clear All; browser Back
-  restoring a prior filter; loading/first-use-empty/permission-denied/
+  Enter-commits; required-field validation blocking the save, with
+  `aria-invalid`/linked `aria-describedby` asserted on the field; Saving→Saved
+  transition; 403 permission-loss message wired to the field's error slot;
+  409 conflict reload + message + updated row, also wired to the field's
+  error slot; Add RFI creating a draft, opening its editor, and focusing
+  Subject; column-header sort + `aria-sort` + direction toggle; the inactive
+  "Updated"/"Subject" headers announcing their correct default next
+  direction (descending/ascending respectively); the exact four toolbar
+  controls with no sort dropdown; search-replaces/filter-pushes
+  history-length deltas; an existing URL hash surviving search, filter, sort,
+  and Clear All; an in-progress edit preserving URL filters; filtered-empty
+  vs. first-use-empty distinction with Clear All; browser Back restoring a
+  prior filter; loading/first-use-empty/permission-denied/
   retryable-error-with-retry states; mobile cards rendered alongside the
   table.
+- `tests/unit/rfi-register-css-parity.test.ts` (7 tests) — asserts
+  `rfis.css`'s source matches the approved desktop/mobile behavior on `main`:
+  the 760px table/cards breakpoint and 900px editor-collapse breakpoint;
+  Subject's ink-by-default/accent-on-hover-or-expand color; single-line
+  clamp on Subject and the Question summary; ellipsis truncation on
+  drawing/spec references; established 168/118/90px widths for Party/Due/
+  Updated; and the non-italic, sans-serif "Unnumbered" draft treatment.
 - `tests/unit/rfi-register-route-integration.test.tsx` (2 tests) — proves
   `project-rfis` mounts `.rfi-register-page` (the native feature) and never
   invokes the legacy `rfis` feature factory, while `rfi-workspace` still
@@ -910,22 +923,26 @@ New/changed suites:
 
 ### Evidence
 
-Desktop (1280×900) and mobile (390×844-requested) captures generated from the
-real shell (`AppLayout`/`RfiRegisterFeature`, mocked session/project/RFI
-fetch) via a dev-only evidence harness
-(`src/ui/app/evidence/harness.tsx` + `vite.evidence.config.ts`, extended for
-UI-5 with RFI fixtures/fetch mocking and a `rfiScenario` query param that
-scripts interactive states — open editor, saving, validation error, conflict —
-through real DOM events, so a single deterministic screenshot suffices) and a
-new capture script, `scripts/capture-ui5-evidence.mjs`, committed at
-`docs/evidence/ui-5/`:
+Desktop (1280×900), tablet-gap (700×900 and 820×900), and mobile (500×900,
+see capture-tooling note) captures generated from the real shell
+(`AppLayout`/`RfiRegisterFeature`, mocked session/project/RFI fetch) via a
+dev-only evidence harness (`src/ui/app/evidence/harness.tsx` +
+`vite.evidence.config.ts`, extended for UI-5 with RFI fixtures/fetch mocking
+and a `rfiScenario` query param that scripts interactive states — open
+editor, saving, validation error, conflict — through real DOM events, so a
+single deterministic screenshot suffices) and a capture script,
+`scripts/capture-ui5-evidence.mjs`, committed at `docs/evidence/ui-5/`:
 
 - `rfi-register-desktop-populated.png` — table with an unnumbered due-soon
-  draft, a locked/issued overdue row, and a locked/closed row together.
+  draft, a locked/issued overdue row, a locked/closed row, and a
+  deliberately long-text row (long Subject, Question summary, combined
+  drawing/spec references, and Party/company name) demonstrating the
+  single-line clamp and ellipsis truncation together.
 - `rfi-register-desktop-editor-open.png` — the expandable editor open with
-  every field, focus ring on Subject.
+  every field, focus ring on Subject, two-column layout at desktop width.
 - `rfi-register-desktop-validation-error.png` — empty Subject blurred,
-  "Subject is required." shown, no save issued.
+  "Subject is required." shown inline via the field's own error slot
+  (`aria-invalid`/`aria-describedby` wired through `Field`), no save issued.
 - `rfi-register-desktop-saving.png` — an in-flight "Saving…" indicator
   (PATCH held open by the harness's `rfiPatchMode=slow`).
 - `rfi-register-desktop-conflict.png` — "Changed elsewhere. Latest values
@@ -936,6 +953,14 @@ new capture script, `scripts/capture-ui5-evidence.mjs`, committed at
 - `rfi-register-desktop-first-use-empty.png` — zero RFIs at all, "No RFIs
   yet."
 - `rfi-register-mobile-cards.png` — dedicated cards, not a compressed table.
+- `rfi-register-tablet-700-table.png` — the 641–760px gap: cards already
+  active at 700px (below the 760px table/cards breakpoint), matching current
+  `main` rather than the desktop table this range regressed to before the
+  PR #45 review correction pass (see below).
+- `rfi-register-tablet-820-editor-open.png` — the 761–900px gap: the desktop
+  table still active at 820px (above 760px) with the expandable editor
+  collapsed to one column (at/under the 900px editor breakpoint) — the
+  specific combination the review flagged as untested.
 
 **Capture-tooling note:** this environment has no `playwright-core` install
 and no pre-installed Chromium (unlike the Linux sandbox UI-3/UI-4 evidence was
@@ -943,20 +968,71 @@ captured in); the local Windows Chrome install is driven directly through its
 headless CLI (`--headless=new --virtual-time-budget=…`) via `execFile`
 (async — `execFileSync` would block the same process's own local static
 server, a same-process deadlock discovered and fixed during this phase).
-Chrome's `--window-size` did not honor widths requested below roughly 500 CSS
-px on this machine regardless of headless mode (confirmed by an
-`innerWidth` readout injected during debugging); the actual mobile capture
-above is therefore ~500px wide rather than a true 390px phone width. The
-register's toolbar filters were adjusted (see `rfis.css`'s
-`max-width: 640px` block: `flex-wrap`, and each filter field set to
-`flex: 1 1 100%` so the three selects stack full-width) to be robust
-regardless of the exact narrow width, since a native `<select>` will not
-shrink below its longest visible option text's content width (each nested
-flex context imposes its own `min-width: auto` floor). The mobile card layout
-itself — the primary requirement — is confirmed correct at this width; a true
-sub-400px capture could not be produced in this environment and should be
-spot-checked on a real device or a browser-automation tool with reliable
-small-viewport support.
+Chrome's `--window-size` does not honor widths requested below roughly 500 CSS
+px on this machine regardless of headless mode: an `innerWidth`/`scrollWidth`
+readout injected during debugging confirmed `window.innerWidth` reports 500 at
+requested widths from 280–390px alike, and — importantly — that
+`scrollWidth === innerWidth === 500` at that floor, i.e. the page has no
+horizontal overflow at its real rendered width. Requesting a narrower
+screenshot canvas than that floor (e.g. 390px) does not produce a narrower
+layout; it produces a **cropped** capture of the 500px layout, which looked
+like truncated/cut-off content but was a capture artifact, not a product bug.
+The mobile capture above is therefore taken at 500px (matching the real
+floor) rather than a misleadingly cropped 390px. A true sub-500px capture
+could not be produced in this environment and should be spot-checked on a
+real device or a browser-automation tool with reliable small-viewport
+support.
+
+### PR #45 review correction pass (2026-07-24)
+
+The first round of review on PR #45 found five issues, all fixed on the same
+branch:
+
+1. **URL hash loss.** `updateFilters` used `useSearchParams`'s setter, which
+   calls `navigate("?" + params)` internally and drops any existing hash.
+   Fixed by reading `useLocation`/`useNavigate` directly and passing an
+   explicit `{ pathname, search, hash }` location object, preserving
+   `location.hash` through search, filter, sort, and Clear All changes. New
+   test: "preserves an existing URL hash through search, filter, sort, and
+   Clear all".
+2. **Field errors not wired to `Field.error`.** `RfiEditorPanel` rendered a
+   standalone `ValidationMessage` instead of passing the failure message to
+   `Field`'s `error` prop, so controls never got `aria-invalid`/
+   `aria-describedby`. Fixed by passing `error={failure?.message}` to `Field`
+   and keeping only `SaveIndicator` in the separate save-state slot. New
+   assertions on the validation/403/409 tests confirm `aria-invalid="true"`
+   and a linked, populated `aria-describedby` target.
+3. **Responsive breakpoints diverged from `main`.** The table/cards switch
+   was at 640px and the editor stayed two-column until 640px, instead of
+   matching `public/app-shell.css`'s approved 760px (table/cards) and 900px
+   (editor collapse). Fixed by changing both breakpoints in `rfis.css` to
+   760px/900px; added `rfi-register-tablet-700-table.png` and
+   `rfi-register-tablet-820-editor-open.png` evidence for the previously
+   untested 641–900px gap.
+4. **Table hierarchy didn't match `main`.** Subject rendered in accent color
+   by default instead of ink-until-hover/expanded, had no single-line clamp
+   (Subject/Question) or ellipsis truncation (references), Party/Due/Updated
+   had no established fixed widths, and "Unnumbered" rendered
+   italic/monospace instead of the plain sans treatment. Fixed by porting
+   the corresponding rules from `public/app-shell.css`'s `.rfi-*` block into
+   `rfis.css` (`table-layout: fixed` with 128/168/118/90px columns,
+   `-webkit-line-clamp: 1` on Subject/Question, `text-overflow: ellipsis` on
+   references, ink-colored Subject with accent only on
+   hover/`aria-expanded`, sans/medium-weight "Unnumbered"). Added
+   `tests/unit/rfi-register-css-parity.test.ts` asserting these rules by
+   reading the CSS source, plus a long-text fixture row in both the unit
+   fixtures and the evidence harness to make the truncation visible in
+   captures.
+5. **Inactive "Updated" header announced the wrong next direction.** Every
+   inactive header always said "ascending" was next, but `Updated`'s default
+   direction is descending. Fixed by deriving the inactive label from
+   `SORT_KEYS[sortKey].defaultDir` in `RfiTable.tsx`. New test asserts the
+   inactive `Updated` header's `aria-label` is
+   `"Sort by Updated, descending"` and the inactive `Subject` header's is
+   `"Sort by Subject, ascending"`.
+
+All five fixes are covered by new or extended tests (see "Testing" above);
+`npm run check` was re-run clean afterward.
 
 ### Known limitations
 
@@ -965,14 +1041,14 @@ small-viewport support.
 - No `FilterChip` row was added (see "Shared BASE component adoption" above);
   revisit only if a later product decision wants active-filter chips.
 - Mobile evidence was captured at ~500px, not a true ~390px phone width, due
-  to a local Chrome headless-CLI limitation in this environment (see above).
-  The responsive CSS is written to be robust at narrower widths, but this was
-  not independently confirmed by a real capture at those widths in this
-  session.
-- No live Cloudflare Pages preview was available in this session (no
-  `wrangler` authentication); the Cloudflare Pages GitHub App integration is
-  expected to auto-deploy a preview once this branch is pushed, as it did for
-  UI-3/UI-4.
+  to a local Chrome headless-CLI limitation in this environment (see the
+  capture-tooling note above) — confirmed to be a capture-tooling floor, not
+  a product overflow bug, via an `innerWidth`/`scrollWidth` readout showing
+  zero horizontal overflow at that width. The responsive CSS is written to be
+  robust at narrower widths, but this was not independently confirmed by a
+  real capture below 500px in this session.
+- No live Cloudflare Pages preview was checked directly from this session
+  beyond the review round's own report that it deployed successfully.
 - `public/rfis-view.js`, `public/rfi-workspace-view.js`, and
   `tests/unit/rfi-ui.test.ts` are retained unchanged as rollback/reference
   coverage, per binding scope; their removal remains a later cleanup-phase

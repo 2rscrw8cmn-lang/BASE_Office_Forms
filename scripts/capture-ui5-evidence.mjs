@@ -91,7 +91,23 @@ async function shot(name, { width, height, query, budget = 3000 }) {
 }
 
 const DESKTOP = { width: 1280, height: 900 };
-const MOBILE = { width: 390, height: 844 };
+// A real phone width (~390px) is requested, but this machine's local Chrome
+// headless CLI enforces a ~500px floor on the actual layout viewport
+// (`window.innerWidth`) regardless of `--window-size` -- confirmed by an
+// injected `window.innerWidth`/`scrollWidth` readout, which reported 500 at
+// widths requested from 280-390px alike. Below that floor, Chrome still
+// renders at 500px but crops the screenshot to the smaller canvas, producing
+// a misleading partial-content image rather than a true narrow reflow. 500px
+// is used here instead so the capture shows the real, non-overflowing
+// rendered layout (confirmed via the same readout: scrollWidth === innerWidth
+// === 500, i.e. no horizontal overflow) rather than a deceptive crop.
+const MOBILE = { width: 500, height: 900 };
+// The 641-760px and 761-900px ranges are a real gap between the two
+// breakpoints (table/cards switches at 760px; the editor collapses to one
+// column at 900px) -- distinct from both the 1280px desktop shots and the
+// 390px phone shot, and the exact range PR #45 review flagged as regressed.
+const TABLET_NARROW = { width: 700, height: 900 };
+const TABLET_WIDE = { width: 820, height: 900 };
 
 await shot("rfi-register-desktop-populated.png", {
   ...DESKTOP,
@@ -125,6 +141,14 @@ await shot("rfi-register-desktop-first-use-empty.png", {
 await shot("rfi-register-mobile-cards.png", {
   ...MOBILE,
   query: "?route=/projects/p1/rfis",
+});
+await shot("rfi-register-tablet-700-table.png", {
+  ...TABLET_NARROW,
+  query: "?route=/projects/p1/rfis",
+});
+await shot("rfi-register-tablet-820-editor-open.png", {
+  ...TABLET_WIDE,
+  query: "?route=/projects/p1/rfis&rfiScenario=editor-open",
 });
 
 server.close();

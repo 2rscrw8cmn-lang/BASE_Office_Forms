@@ -18,7 +18,6 @@ import {
   Select,
   TextArea,
   TextInput,
-  ValidationMessage,
   SaveIndicator,
   type SaveState,
 } from "../../components";
@@ -146,6 +145,7 @@ export function RfiEditorPanel({
               label={meta.label}
               controlId={controlId}
               required={field === "subject" || field === "question"}
+              error={failure?.message}
               className={
                 meta.wide ? "rfi-register-editor__field--wide" : undefined
               }
@@ -226,11 +226,7 @@ export function RfiEditorPanel({
                 className="rfi-register-field-state"
                 data-field-state={`${rfi.id}:${field}`}
               >
-                {failure ? (
-                  <ValidationMessage>{failure.message}</ValidationMessage>
-                ) : (
-                  <SaveIndicator state={saveStateFor(field)} />
-                )}
+                {failure ? null : <SaveIndicator state={saveStateFor(field)} />}
               </span>
             </Field>
           );

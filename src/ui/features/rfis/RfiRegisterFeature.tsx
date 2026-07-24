@@ -9,7 +9,7 @@
 
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
   EmptyState,
@@ -61,11 +61,13 @@ function getFieldValue(
 }
 
 export function RfiRegisterFeature({ projectId }: { projectId: string }) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const filters = filtersFromSearchParams(searchParams);
   const rfisState = useProjectRfis(projectId);
   const queryClient = useQueryClient();
   const shell = useShell();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [editorOpenId, setEditorOpenId] = useState<string | null>(null);
   const [fieldStates, setFieldStates] = useState<FieldStatesByRfi>({});
@@ -75,9 +77,17 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   const updateFilters = useCallback(
     (patch: Partial<RfiFilters>, push: boolean) => {
       const merged = { ...filters, ...patch };
-      setSearchParams(filtersToSearchParams(merged), { replace: !push });
+      const nextSearch = filtersToSearchParams(merged).toString();
+      void navigate(
+        {
+          pathname: location.pathname,
+          search: nextSearch ? `?${nextSearch}` : "",
+          hash: location.hash,
+        },
+        { replace: !push },
+      );
     },
-    [filters, setSearchParams],
+    [filters, navigate, location.pathname, location.hash],
   );
 
   const setFieldState = useCallback(

@@ -294,6 +294,12 @@ describe("native RFI register — commit behavior", () => {
       expect(screen.getByText("Subject is required.")).toBeInTheDocument();
     });
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? "")?.textContent).toBe(
+      "Subject is required.",
+    );
   });
 
   it("shows Saving then Saved for a successful commit", async () => {
@@ -329,6 +335,12 @@ describe("native RFI register — commit behavior", () => {
         screen.getByText("You no longer have permission to edit this draft."),
       ).toBeInTheDocument();
     });
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? "")?.textContent).toBe(
+      "You no longer have permission to edit this draft.",
+    );
   });
 
   it("reloads the latest values and shows a conflict message on 409", async () => {
@@ -361,6 +373,13 @@ describe("native RFI register — commit behavior", () => {
         screen.getByRole("button", { name: "Changed by another editor" }),
       ).toBeInTheDocument();
     });
+    const conflictedInput = fieldInput("rfi-1", "subject") as HTMLInputElement;
+    expect(conflictedInput).toHaveAttribute("aria-invalid", "true");
+    const describedBy = conflictedInput.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? "")?.textContent).toBe(
+      "Changed elsewhere. Latest values loaded; review and retry.",
+    );
   });
 });
 
@@ -383,6 +402,23 @@ describe("native RFI register — Add RFI", () => {
 });
 
 describe("native RFI register — sorting", () => {
+  it("announces the correct next direction for an inactive header whose default is descending", async () => {
+    installRfiFetch({ rows: [rfi()] });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    // Default sort is by number (ascending), so "Updated" starts inactive.
+    // Its default direction is descending, so that -- not "ascending" -- is
+    // what a screen reader should announce as the next direction.
+    const updatedHeader = screen.getByRole("button", {
+      name: "Sort by Updated, descending",
+    });
+    expect(updatedHeader).toBeInTheDocument();
+    const subjectHeader = screen.getByRole("button", {
+      name: "Sort by Subject, ascending",
+    });
+    expect(subjectHeader).toBeInTheDocument();
+  });
+
   it("sorts on header click, toggles direction, and sets aria-sort", async () => {
     installRfiFetch({
       rows: [
@@ -490,6 +526,51 @@ describe("native RFI register — search, filters, and URL state", () => {
       screen.getAllByRole("button", { name: "Clear all" })[0],
     );
     await screen.findByRole("table");
+  });
+
+  it("preserves an existing URL hash through search, filter, sort, and Clear all", async () => {
+    installRfiFetch({
+      rows: [
+        rfi({ status: "draft" }),
+        rfi({
+          id: "rfi-closed",
+          status: "closed",
+          capabilities: { updateDraft: false },
+        }),
+      ],
+    });
+    renderRfiRegister("/projects/project-1/rfis#register-notes");
+    await screen.findByRole("table");
+    expect(window.location.hash).toBe("#register-notes");
+
+    const search = screen.getByRole("searchbox", { name: "Search RFIs" });
+    await userEvent.type(search, "door");
+    await waitFor(() => {
+      expect(window.location.search).toContain("q=door");
+    });
+    expect(window.location.hash).toBe("#register-notes");
+
+    const status = screen.getByRole("combobox", { name: "Status" });
+    fireEvent.change(status, { target: { value: "draft" } });
+    await waitFor(() => {
+      expect(window.location.search).toContain("status=draft");
+    });
+    expect(window.location.hash).toBe("#register-notes");
+
+    const subjectHeader = screen.getByRole("button", { name: /Subject/ });
+    await userEvent.click(subjectHeader);
+    await waitFor(() => {
+      expect(window.location.search).toContain("sort=subject");
+    });
+    expect(window.location.hash).toBe("#register-notes");
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Clear all" })[0],
+    );
+    await waitFor(() => {
+      expect(window.location.search).not.toContain("status=");
+    });
+    expect(window.location.hash).toBe("#register-notes");
   });
 
   it("restores filters on browser Back", async () => {

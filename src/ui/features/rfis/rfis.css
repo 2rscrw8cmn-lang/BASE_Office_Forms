@@ -24,6 +24,7 @@
 
 .rfi-register-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--app-text-sm);
 }
@@ -34,6 +35,24 @@
   border-bottom: var(--app-border-width) solid var(--app-border-subtle);
   background: var(--app-surface-sunken);
   white-space: nowrap;
+}
+
+/* RFI · Subject · Party · Due · Updated. Subject is the only column left
+ * unconstrained so it absorbs whatever width the other four don't need. */
+.rfi-register-table thead th:nth-child(1) {
+  width: 128px;
+}
+
+.rfi-register-table thead th:nth-child(3) {
+  width: 168px;
+}
+
+.rfi-register-table thead th:nth-child(4) {
+  width: 118px;
+}
+
+.rfi-register-table thead th:nth-child(5) {
+  width: 90px;
 }
 
 .rfi-register-sort-header {
@@ -79,6 +98,7 @@
 }
 
 .rfi-register-cell-id {
+  width: 128px;
   white-space: nowrap;
 }
 
@@ -103,7 +123,8 @@
 
 .rfi-register-id-number--draft {
   color: var(--app-text-muted);
-  font-style: italic;
+  font-family: var(--app-font-sans);
+  font-weight: var(--app-weight-medium);
 }
 
 .rfi-register-id-status {
@@ -122,21 +143,31 @@
 }
 
 .rfi-register-cell-subject {
+  width: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 220px;
 }
 
 .rfi-register-subject-open {
+  display: block;
+  width: 100%;
+  max-width: 100%;
   border: none;
   background: none;
   padding: 0;
   font: inherit;
-  font-weight: var(--app-weight-medium);
-  color: var(--app-accent);
+  font-weight: var(--app-weight-semibold);
+  color: var(--app-text-primary);
   text-align: left;
   cursor: pointer;
+}
+
+.rfi-register-subject-open:hover,
+.rfi-register-subject-open[aria-expanded="true"],
+.rfi-register-subject-link:hover {
+  color: var(--app-accent);
+  text-decoration: underline;
 }
 
 .rfi-register-subject-open:focus-visible,
@@ -145,29 +176,48 @@
   outline-offset: var(--app-focus-offset);
 }
 
+.rfi-register-subject-open-text,
 .rfi-register-subject-link {
-  font-weight: var(--app-weight-medium);
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.rfi-register-subject-link {
+  font-weight: var(--app-weight-semibold);
   color: var(--app-text-primary);
   text-decoration: none;
 }
 
-.rfi-register-subject-link:hover {
-  text-decoration: underline;
-}
-
 .rfi-register-subject-secondary {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--app-text-muted);
   font-size: var(--app-text-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .rfi-register-subject-meta {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--app-text-muted);
   font-size: var(--app-text-2xs);
   font-family: var(--app-font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .rfi-register-cell-text {
   color: var(--app-text-primary);
+}
+
+.rfi-register-cell-responsible {
+  width: 168px;
 }
 
 .rfi-register-responsible-empty {
@@ -182,6 +232,7 @@
 }
 
 .rfi-register-cell-due {
+  width: 118px;
   white-space: nowrap;
 }
 
@@ -202,6 +253,11 @@
 
 .rfi-register-due-urgency.is-due-soon {
   color: var(--app-warning);
+}
+
+.rfi-register-cell-updated {
+  width: 90px;
+  white-space: nowrap;
 }
 
 .rfi-register-updated-text {
@@ -243,6 +299,12 @@
   display: flex;
   justify-content: flex-end;
   margin-top: var(--app-space-4);
+}
+
+@media (max-width: 900px) {
+  .rfi-register-editor__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- Mobile cards ---- */
@@ -323,7 +385,7 @@
   font-size: var(--app-text-sm);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .rfi-register-table-wrap {
     display: none;
   }

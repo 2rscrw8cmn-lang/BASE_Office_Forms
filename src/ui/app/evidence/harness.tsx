@@ -117,6 +117,25 @@ const rfiBaseRows = [
     capabilities: { updateDraft: false },
     updatedAt: "2026-06-15T09:00:00Z",
   }),
+  // A deliberately long-text row -- long Subject, Question summary,
+  // combined drawing/spec references, and Party/company name -- so evidence
+  // captures show the single-line clamp and ellipsis truncation the approved
+  // register hierarchy relies on, not just short fixture text that happens
+  // to fit.
+  rfiRow({
+    id: "rfi-4",
+    subject:
+      "Resolve conflicting ceiling height requirements between the mechanical shaft enclosure and the acoustic soffit detail at the second-floor corridor",
+    question:
+      "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run -- please confirm which elevation governs and whether the duct routing needs to be revised.",
+    drawingReferences: "A2.31, A2.32, A2.33, M4.02",
+    specificationReferences: "09 51 13, 23 31 13, 23 05 93",
+    responsiblePartyId: RFI_CONTACT.id,
+    responsibleParty: "Alexandra Montgomery-Whitfield",
+    requestedResponseDate: "2026-08-12",
+    dueSoon: true,
+    updatedAt: "2026-07-24T10:00:00Z",
+  }),
 ];
 
 let conflictOccurred = false;

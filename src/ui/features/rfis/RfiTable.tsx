@@ -16,7 +16,7 @@ import {
   rfiDueUrgencyText,
   rfiStatusLabel,
 } from "./format";
-import { SORT_HEADERS, type RfiFilters } from "./urlState";
+import { SORT_HEADERS, SORT_KEYS, type RfiFilters } from "./urlState";
 import type { FieldState } from "./RfiEditorPanel";
 import { RfiEditorPanel } from "./RfiEditorPanel";
 import type {
@@ -73,7 +73,9 @@ function SortHeader({
     ? filters.direction === "asc"
       ? "descending"
       : "ascending"
-    : "ascending";
+    : SORT_KEYS[sortKey].defaultDir === "asc"
+      ? "ascending"
+      : "descending";
   const arrow = filters.direction === "asc" ? "↑" : "↓";
   return (
     <th scope="col" aria-sort={ariaSort}>
