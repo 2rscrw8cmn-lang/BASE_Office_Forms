@@ -125,6 +125,9 @@ export {
   type Crumb,
 } from "./patterns/Breadcrumbs";
 export {
+  ProjectStatusBadge,
+  type ProjectStatusBadgeProps,
+  PROJECT_STATUS_VOCABULARY,
   RfiStatusBadge,
   type RfiStatusBadgeProps,
   RFI_STATUS_VOCABULARY,

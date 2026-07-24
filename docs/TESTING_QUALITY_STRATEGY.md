@@ -241,10 +241,10 @@ Notion/import validation includes:
 Shared application components and migrated routes require:
 
 - component behavior tests for explicit variants and states;
-- keyboard and focus tests for dialogs, menus, tabs, drawers, and grids;
+- keyboard and focus tests for dialogs, menus, tabs, drawers, and accepted register controls;
 - route parity and browser history tests during shell migration;
 - server-capability and denied-action tests;
-- BaseDataGrid mount/destroy, editing, validation, rollback, save-state, and conflict-refresh tests;
+- adapter lifecycle/edit/save/conflict tests only if a future register has a separately accepted grid adapter;
 - URL-backed search/filter/sort restoration;
 - first-use empty versus filtered-empty distinction;
 - desktop, tablet, and mobile visual evidence;
@@ -302,6 +302,28 @@ Radix pointer/observer polyfills):
 Committed desktop and mobile UI Lab captures provide the visual evidence for the
 shared patterns (`docs/evidence/ui-3/`). An automated pixel-baseline
 visual-regression harness remains UI-10 scope.
+
+### 12A-ii. UI-6A Projects register coverage (implemented)
+
+UI-6A adds focused Happy DOM/Testing Library and Worker integration coverage
+for the native `/projects` route: authorized rendering and identity hierarchy;
+active/number/name/ID ordering; semantic table and dedicated mobile cards;
+search/status filtering and result announcements; URL parsing, normalization,
+replace/push behavior, hash preservation, and Back/Forward restoration; shared
+mobile disclosure attributes/counts; safe row, modifier-link, and
+text-selection navigation; loading, first-use empty, filtered empty,
+retry/request ID, and background refresh; exhaustive authoritative project
+status badges; and absence of role inference, Tabulator, `BaseDataGrid`,
+`role="grid"`, and redundant Actions/Open columns.
+
+The native Create Project workflow is covered for server-derived capability
+presence/absence, initial focus and focus restoration, Escape, inline client
+validation, pending submission, server validation/error/request ID recovery,
+confirmed success, and canonical Overview navigation without optimistic
+insertion. API integration tests prove `meta.capabilities.createProject` for
+each relevant role while retaining the list `data` array contract and legacy
+rollback tests. Deterministic evidence under `docs/evidence/ui-6a/` covers all
+required desktop/mobile and async/empty/error states.
 
 ### 12B. RFI Slice 1 reconciliation evidence
 

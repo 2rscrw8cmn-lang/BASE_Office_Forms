@@ -44,7 +44,8 @@ Tabulator behavior spike
 → React shell and route parity
 → RFI register as a native React feature using a compact semantic table,
   dedicated mobile cards, and a shared responsive draft Drawer
-→ Projects and Records registers
+→ Projects register + Create Project (UI-6A)
+→ Document Register + Add Document (UI-6B, after UI-6A review/merge)
 → RFI/Record/Revision workspaces
 → Dashboard/forms/Team/Administration
 → Library and Studio controls

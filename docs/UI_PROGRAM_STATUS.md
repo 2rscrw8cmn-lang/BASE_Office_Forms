@@ -1,8 +1,8 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-5 (native React RFI register) refined against the approved desktop/mobile mockups on branch `claude/ui-5-rfi-register-react`, starting from merged UI-4 (`6976f16`, PR #44). RFI Slice 1, UI-1, UI-2, UI-3, and UI-4 are complete and merged.
-**Active branch/PR:** `claude/ui-5-rfi-register-react`, draft PR #45 against `main`. PR #36, PR #41, PR #43, and PR #44 are merged to `main`.
+**Current phase:** UI-6A (native React Projects register) is implemented on `agent/ui-6a-projects-register-react`, starting from merged UI-5 (`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`, PR #45).
+**Active branch/PR:** `agent/ui-6a-projects-register-react`; draft PR pending against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -1119,11 +1119,45 @@ All five fixes are covered by new or extended tests (see "Testing" above);
   coverage, per binding scope; their removal remains a later cleanup-phase
   decision, not this phase's.
 
+### UI-5 closeout recommendation (historical)
+
+UI-5 was reviewed and merged as PR #45. Its former combined UI-6 follow-up has
+now been split into UI-6A Projects and UI-6B Document Register below.
+
+## 5E. UI-6A complete — native React Projects register
+
+UI-5 and PR #45 are merged to `main` as
+`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`. UI-6A replaces the
+`/projects` compatibility mount with `ProjectsRegisterFeature`; the legacy
+`public/projects-view.js` and `public/project-form.js` modules and their tests
+remain intact as the rollback path.
+
+The native feature uses the shared `RegisterPage`, `PageHeader`,
+`RegisterToolbar`, `FilterChip`, `FormDialog`, field primitives, async states,
+tokens, and responsive breakpoint. It provides a four-column semantic desktop
+table and dedicated mobile cards, canonical Overview links, safe row
+navigation, deterministic active/number/name/ID ordering, URL-backed `q` and
+`status` state, mobile filter disclosure, distinct first-use/filtered empty
+states, retry/request-ID handling, and the native Create Project workflow. It
+does not use Tabulator, `BaseDataGrid`, `role="grid"`, a redundant Actions/Open
+column, or role-name authorization inference.
+
+`GET /api/v2/projects` keeps its existing `data` array unchanged and adds
+`meta.capabilities.createProject`, derived on the server from
+`canCreateProjects`. This is backwards-compatible for existing consumers while
+making the current create policy authoritative for React presentation.
+
+Focused UI, route, contract, API integration, status-vocabulary, create,
+history, accessibility, and rollback coverage was added. Deterministic evidence
+for populated, filtered, Create dialog, mobile cards, collapsed/expanded mobile
+filters, first-use empty, filtered empty, and error states is committed under
+`docs/evidence/ui-6a/`.
+
 ### Next recommended action
 
-UI-6 (Projects and Records registers) is next, per the standard phase
-sequence — no UI-5 acceptance item is incomplete. Do not merge this PR without
-explicit approval.
+Review and merge UI-6A before starting UI-6B. UI-6B migrates only the Document
+Register and Add Document workflow; it must not begin on this branch. Do not
+merge this PR without explicit approval.
 
 ## 6. Phase status
 
@@ -1135,8 +1169,9 @@ explicit approval.
 | RFI Slice 1                         | Complete; merged and closed out in production                  | none                                |
 | UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
-| UI-5 — RFI register                 | **Implemented; not merged** (`claude/ui-5-rfi-register-react`) | Review and merge, then UI-6         |
-| UI-6 — Projects + Records           | Not started                                                    | Shared register contract            |
+| UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
+| UI-6A — Projects register           | **Implemented; draft PR pending** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B       |
+| UI-6B — Document Register           | Not started                                                    | UI-6A reviewed and merged           |
 | UI-7 — Detail workspaces            | Not started                                                    | Shared workspace contract           |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
@@ -1157,14 +1192,9 @@ explicit approval.
 
 ## 8. Next action
 
-UI-4 is complete and merged to `main` as `6976f16` (PR #44). UI-5 (native React
-RFI register, §5D) is implemented and visually refined on
-`claude/ui-5-rfi-register-react` in draft PR #45. The register route renders
-the native `RfiRegisterFeature`; the RFI workspace remains
-compatibility-mounted through UI-7. Verification and refreshed
-desktop/mobile/tablet evidence are complete with the dependency-audit risk
-recorded in §5D. Nothing is merged.
-
-UI-6 (Projects and Records registers) is the next active phase after UI-5 is
-reviewed and merged. RFI Slice 2A backend architecture may proceed
+UI-5 is complete and merged to `main` as `86b11e1` (PR #45). UI-6A is
+implemented on `agent/ui-6a-projects-register-react`; review its draft PR and
+merge it only with explicit approval. After UI-6A is reviewed and merged,
+start UI-6B as a separate branch/PR that migrates only the Document Register and
+Add Document workflow. RFI Slice 2A backend architecture may proceed
 independently once `main` is pulled and stable.

@@ -154,7 +154,7 @@ Red is not used for ordinary focus or normal form borders. Error and danger trea
 | Radius                 | 4–6 px                                             |
 | Page gutter            | Responsive token; consistent across page patterns  |
 | Panel shadow           | Minimal; borders carry most structure              |
-| Register row height    | Compact but readable; standardized by BaseDataGrid |
+| Register row height    | Compact but readable; standardized by shared register tokens |
 
 Component variants must be explicit, such as `size="compact"`, rather than changed by a parent feature selector.
 
@@ -169,6 +169,9 @@ Every route must use one of these patterns.
 ### 5.1 Directory/register page
 
 Use for Projects, Records, RFIs, Submittals, Issuances, and contacts.
+
+Projects, Records, and RFIs use domain-specific native semantic desktop tables
+and dedicated mobile cards. They do not use Tabulator or `BaseDataGrid`.
 
 Required structure:
 
@@ -306,11 +309,12 @@ Radix may provide behavior, but BASE owns the rendered styling and component con
 
 ### 6.4 BaseDataGrid
 
-If a future high-volume register adopts Tabulator, it must be wrapped by one
-`BaseDataGrid` integration. Feature modules may configure columns and feature
-actions but may not instantiate or theme Tabulator directly. The RFI register
-remains on its controlled custom table after Spike 0 rejected Tabulator's
-keyboard behavior.
+If a future high-volume register outside the accepted Projects, Records, and
+RFI contracts adopts Tabulator, it must be wrapped by one `BaseDataGrid`
+integration. Feature modules may configure columns and feature actions but may
+not instantiate or theme Tabulator directly. Projects, Records, and RFIs remain
+on native semantic tables with dedicated mobile cards; `BaseDataGrid` is not an
+option for those routes.
 
 `BaseDataGrid` owns:
 

@@ -1,5 +1,5 @@
 import { Dialog as RadixDialog } from "radix-ui";
-import type { SubmitEventHandler, ReactNode } from "react";
+import type { ReactNode, RefObject, SubmitEventHandler } from "react";
 import { cx } from "../util/cx";
 import { IconButton } from "../primitives/IconButton";
 import { Button } from "../primitives/Button";
@@ -21,6 +21,8 @@ export interface FormDialogProps {
   loading?: boolean;
   /** Submission error summary shown above the footer. */
   errorSummary?: ReactNode;
+  /** Optional first field for create/edit workflows. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
   /** Mobile presentation: centred dialog or bottom sheet. */
   variant?: "modal" | "sheet";
   className?: string;
@@ -46,6 +48,7 @@ export function FormDialog({
   cancelLabel = "Cancel",
   loading = false,
   errorSummary,
+  initialFocusRef,
   variant = "modal",
   className,
 }: FormDialogProps) {
@@ -62,6 +65,14 @@ export function FormDialog({
         <RadixDialog.Overlay className="base-overlay" />
         <RadixDialog.Content
           className={cx("base-dialog", `base-dialog--${variant}`, className)}
+          onOpenAutoFocus={
+            initialFocusRef
+              ? (event) => {
+                  event.preventDefault();
+                  initialFocusRef.current?.focus();
+                }
+              : undefined
+          }
         >
           <form
             className="base-form-dialog"

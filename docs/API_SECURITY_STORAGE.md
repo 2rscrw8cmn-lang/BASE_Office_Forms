@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 ## 1. API versioning
 
 Keep the existing shared-library API operational.
@@ -33,6 +32,13 @@ Do not silently change the meaning of existing `/api/documents` endpoints.
 - `PATCH /api/v2/projects/:projectId`
 - `GET /api/v2/projects/:projectId/activity`
 - `GET /api/v2/projects/:projectId/contacts`
+
+`GET /api/v2/projects` preserves its existing authorized `data` array and adds
+`meta.capabilities.createProject`. The flag is evaluated server-side through
+the same `canCreateProjects` policy enforced by `POST /api/v2/projects`.
+Browser code may use it to present the action but may never infer that action
+from membership role strings. The current creation policy permits
+organization administrators and document-control administrators only.
 
 ### Templates
 
@@ -176,20 +182,20 @@ Every service call checks:
 
 ## 5.1 Permission matrix
 
-| Action | Org Admin | Doc Control | Project Manager | Contributor | Viewer |
-|---|---:|---:|---:|---:|---:|
-| Manage members | Yes | No | No | No | No |
-| Manage branding | Yes | Yes | No | No | No |
-| Publish template | Yes | Yes | No | No | No |
-| Create project | Yes | Yes | Yes | No | No |
-| Edit project routing | Yes | Yes | Yes | No | No |
-| Create record draft | Yes | Yes | Yes | Yes | No |
-| Issue RFI | Yes | Yes | Yes | Configurable | No |
-| Submit submittal | Yes | Yes | Yes | Configurable | No |
-| Record response/review | Yes | Yes | Yes | Assigned only | No |
-| Close/void/reopen | Yes | Yes | Yes | No | No |
-| Create external share | Yes | Yes | Yes | Configurable | No |
-| View/download | Yes | Yes | Yes | Yes | Yes |
+| Action                 | Org Admin | Doc Control | Project Manager |   Contributor | Viewer |
+| ---------------------- | --------: | ----------: | --------------: | ------------: | -----: |
+| Manage members         |       Yes |          No |              No |            No |     No |
+| Manage branding        |       Yes |         Yes |              No |            No |     No |
+| Publish template       |       Yes |         Yes |              No |            No |     No |
+| Create project         |       Yes |         Yes |              No |            No |     No |
+| Edit project routing   |       Yes |         Yes |             Yes |            No |     No |
+| Create record draft    |       Yes |         Yes |             Yes |           Yes |     No |
+| Issue RFI              |       Yes |         Yes |             Yes |  Configurable |     No |
+| Submit submittal       |       Yes |         Yes |             Yes |  Configurable |     No |
+| Record response/review |       Yes |         Yes |             Yes | Assigned only |     No |
+| Close/void/reopen      |       Yes |         Yes |             Yes |            No |     No |
+| Create external share  |       Yes |         Yes |             Yes |  Configurable |     No |
+| View/download          |       Yes |         Yes |             Yes |           Yes |    Yes |
 
 ## 6. Tenant isolation
 

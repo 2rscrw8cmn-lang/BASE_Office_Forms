@@ -1,11 +1,10 @@
 # Current Application Structure
 
 **Status:** Authenticated workspace inventory — the UI-4 React application shell
-(global composition, routing, session/project context, drawer, project tabs)
-plus the Dashboard, Projects, Project Overview, and project Records register
-surfaces, the UI-3 BASE component library and UI Lab, and (UI-5) the native
-React project RFI register
-**Updated:** 2026-07-24 (UI-5)
+(global composition, routing, session/project context, drawer, project tabs),
+the UI-3 BASE component library and UI Lab, the UI-5 native RFI register, and
+the UI-6A native Projects register and Create Project workflow
+**Updated:** 2026-07-24 (UI-6A)
 
 ## Runtime shape
 
@@ -70,6 +69,17 @@ Browser
 │   ├── format.ts                              date/status presentation helpers
 │   ├── types.ts                                read-model types
 │   └── rfis.css                                feature-local, token-based layout CSS
+├── src/ui/features/projects/                 (UI-6A) native React Projects register
+│   ├── ProjectsRegisterFeature.tsx             top-level states, URL filters, capability wiring
+│   ├── ProjectsTable.tsx                       four-column semantic desktop table
+│   ├── ProjectsCards.tsx                       dedicated mobile project cards
+│   ├── CreateProjectDialog.tsx                 shared FormDialog create workflow
+│   ├── useProjects.ts                          TanStack Query list hook
+│   ├── api.ts                                   typed list/create API client and request errors
+│   ├── urlState.ts                              q/status URL state, filtering, deterministic sort
+│   ├── format.ts                                location/date presentation helpers
+│   ├── types.ts                                 project read-model and create-input types
+│   └── projects.css                             composition-only, token-based layout CSS
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
 ├── src/ui/components/index.ts                 BASE component library barrel + CSS import
@@ -86,8 +96,8 @@ Browser
 ├── public/app-api.js                          shared /api/v2 browser client
 ├── public/app-format.js                       shared label/date/reason helpers
 ├── public/dashboard-view.js                   Work Dashboard feature module
-├── public/projects-view.js                    Projects directory feature module
-├── public/project-form.js                     Create Project dialog
+├── public/projects-view.js                    (rollback/reference only, UI-6A) legacy Projects register
+├── public/project-form.js                     (rollback/reference only, UI-6A) legacy Create dialog
 ├── public/project-overview-view.js            Project Overview feature module
 ├── public/records-view.js                     Project Records register feature module
 ├── public/add-document-form.js                Guided Add Document workflow
@@ -462,40 +472,36 @@ work currently requires your attention." only when items are absent, never
 implying no projects unless the project count is zero), API error with retry,
 and a request ID when available.
 
-The **Projects** directory renders the authenticated project list as a
-professional table on desktop and cards on mobile, using only fields the project
-API returns (number, name, status, city/region, updated date). The page header
-keeps its eyebrow, left-aligned title, and description together, with the
-Create Project action placed on the right on desktop and stacked full width on
-mobile; the title is never centered. Search, status filter, result count, and a
-restrained clear-filters link form one cohesive toolbar in which search takes the
-most width and the status filter stays compact, rather than each control sitting
-in its own heavy bordered box. The desktop table has a stronger column hierarchy
-with readable (non-tiny) sentence-case header labels, a confident row height, the
-project name emphasized in a semantic `th[scope="row"]`, a compact status badge,
-and a distinct Open chip affordance; the table and toolbar share the same content
-width. Mobile keeps compact, touch-friendly cards. The directory provides text
-search across number and name, a status filter built from the statuses present,
-a clear-filter action, an announced result count, and a no-results state.
-Sorting is deterministic: active first, then project number, name, and ID.
-Client-side search and filtering only narrow the already server-authorized list
-and are never an authorization mechanism.
+The **Projects** route is native React as of UI-6A. It renders only the
+server-authorized `GET /api/v2/projects` array, using project number, name,
+authoritative status, city/region, and updated timestamp. Desktop uses a native
+semantic table with exactly Project, Status, Location, and Updated columns;
+mobile uses dedicated full-card links. Project name links and safe
+noninteractive row areas navigate to `/projects/:projectId/overview` without
+interfering with native modifier clicks, controls, or text selection. There is
+no Actions/Open column, Tabulator, `BaseDataGrid`, or `role="grid"`.
 
-The **Create Project** action appears only for roles the backend permits to
-create projects (`org_admin` and `document_control_admin`, mirroring
-`canCreateProjects`); other roles never see it, and the backend remains
-authoritative. The dialog (`project-form.js`) uses a compact grouped layout:
-project number and status on the first row, project name full width, city and
-state/region on one row, then description. Fields use neutral borders with a
-maroon focus ring; red is reserved for validation errors only, so focusing a
-valid field never reads as an error. A divider separates the footer actions. The
-dialog has dialog semantics, a focus trap, initial focus, Escape-to-close, focus
-restoration, labelled title and description, inline validation linked with
-`aria-describedby`, a submission loading state, and server error display with the
-request ID. Its behavior and payload are unchanged: it sends only fields the
-current create schema accepts and never optimistically shows a project before the
-server confirms; on success it announces, closes, and navigates to the new
-project's Overview.
+`q` and `status` are React Router URL state. Search replaces history; status and
+Clear push history; unrelated hash state is preserved. The status options are
+restricted to authoritative values present in the authorized response, and
+invalid/unavailable values normalize away. Search and status filtering only
+narrow that response. Sorting remains deterministic: active first, then project
+number, project name, and project ID. Shared toolbar/filter-chip/result-count
+patterns, distinct first-use and filtered-empty states, retry/request-ID
+handling, and the UI-5 mobile filter disclosure are reused unchanged.
+
+The **Create Project** action is rendered only when
+`meta.capabilities.createProject` is true. The server derives that flag through
+the existing `canCreateProjects` policy (currently organization and
+document-control administrators); React never infers it from membership role
+strings. The native `CreateProjectDialog` uses shared `FormDialog` and field
+primitives for project number, name, status, city, region/state, and
+description. It preserves initial focus, Escape/close and focus restoration,
+inline required-field errors, pending/disabled submission, server error and
+request ID display, and sends no optimistic list insertion. After server
+confirmation it announces success, closes, and navigates to the new Project
+Overview. `public/projects-view.js` and `public/project-form.js` are retained
+unchanged as rollback/reference modules.
 
 The **Project Overview** reuses the shell's project header and tabs and presents
 its counts (records, draft revisions, published revisions, files, issuances,
@@ -1205,18 +1211,21 @@ src/infrastructure/storage/  R2 file storage adapter
 src/ui/theme/                application semantic tokens (single source)
 src/ui/components/            BASE component library (primitives/interactive/patterns)
 src/ui/app/                   UI-4 React application shell, routing, query hooks, feature mount
-src/ui/app/evidence/          dev-only shell + UI-5 RFI-scenario screenshot harness (never shipped)
+src/ui/app/evidence/          dev-only shell + UI-5/UI-6A scenario screenshot harness (never shipped)
 src/ui/features/rfis/         (UI-5) native React RFI register feature
+src/ui/features/projects/     (UI-6A) native React Projects register + Create workflow
 src/ui/lab/                   development-only UI Lab (real components, dev-only build)
-tests/unit/                  schema, renderer, domain, UI-3 component, UI-4 shell, and UI-5 RFI regressions
+tests/unit/                  schema, renderer, domain, shared component, shell, RFI, and Projects regressions
 tests/integration/           Worker-runtime, D1, R2 (local/test binding), and API regressions
-tests/helpers/               reusable D1, route, component-DOM, and RFI-register test harnesses
+tests/helpers/               reusable D1, route, component-DOM, RFI, and Projects test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
 scripts/capture-ui4-evidence.mjs  dev-only Playwright/Chromium screenshot capture for the UI-4 shell
 scripts/capture-ui5-evidence.mjs  dev-only Chrome DevTools Protocol evidence capture with exact mobile CSS viewports
+scripts/capture-ui6a-evidence.mjs deterministic native Projects evidence capture at exact viewports
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
 docs/evidence/ui-5/          committed native RFI register desktop/mobile/tablet and Drawer-state captures
+docs/evidence/ui-6a/         committed native Projects desktop/mobile/register-state captures
 .github/workflows/           pull-request validation
 ```
 

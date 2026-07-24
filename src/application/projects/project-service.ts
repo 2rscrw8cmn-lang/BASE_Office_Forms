@@ -22,7 +22,11 @@ import { hasOrganizationWideFileManagement } from "../../domain/files/authorizat
 import type { FileCapability } from "../../domain/files/errors";
 import { requireIssuanceManagement } from "../../domain/issuances/authorization";
 import type { IssuanceCapability } from "../../domain/issuances/errors";
-import type { Project, ProjectStatus } from "../../domain/projects/project";
+import {
+  PROJECT_STATUSES,
+  type Project,
+  type ProjectStatus,
+} from "../../domain/projects/project";
 import { D1ProjectMembershipsRepository } from "../../infrastructure/db/d1/project-memberships-repository";
 import {
   D1ProjectsRepository,
@@ -373,7 +377,5 @@ export class ProjectService {
 }
 
 export function isProjectStatus(value: string): value is ProjectStatus {
-  return ["planning", "active", "closeout", "suspended", "archived"].includes(
-    value,
-  );
+  return (PROJECT_STATUSES as readonly string[]).includes(value);
 }

@@ -1,0 +1,228 @@
+/*
+ * Composition-only layout for the native Projects register. Shared controls,
+ * states, badges, dialogs, focus treatments, and colors remain component-owned.
+ */
+
+.projects-register-page {
+  gap: var(--app-space-4);
+  padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
+}
+
+.projects-register-table-wrap {
+  overflow-x: auto;
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.projects-register-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: var(--app-text-sm);
+}
+
+.projects-register-table thead th {
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  background: var(--app-surface-sunken);
+  color: var(--app-text-primary);
+  font-weight: var(--app-weight-medium);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.projects-register-table thead th:nth-child(1) {
+  width: 42%;
+}
+
+.projects-register-table thead th:nth-child(2) {
+  width: 130px;
+}
+
+.projects-register-table thead th:nth-child(4) {
+  width: 132px;
+}
+
+.projects-register-table tbody th,
+.projects-register-table tbody td {
+  height: 60px;
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  vertical-align: middle;
+}
+
+.projects-register-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.projects-register-row {
+  cursor: pointer;
+}
+
+.projects-register-row:hover {
+  background: var(--app-surface-hover);
+}
+
+.projects-register-name {
+  display: block;
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-weight: var(--app-weight-semibold);
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.projects-register-name:hover {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+
+.projects-register-name:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.projects-register-number {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-family: var(--app-font-mono);
+  font-size: var(--app-text-xs);
+  font-weight: var(--app-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-register-updated {
+  color: var(--app-text-muted);
+  white-space: nowrap;
+}
+
+.projects-register-cards {
+  display: none;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.projects-register-card {
+  display: flex;
+  min-height: 132px;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  color: var(--app-text-primary);
+  text-decoration: none;
+}
+
+.projects-register-card:hover {
+  border-color: var(--app-border-strong);
+  background: var(--app-surface-hover);
+}
+
+.projects-register-card:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.projects-register-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.projects-register-card__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-1);
+}
+
+.projects-register-card__identity strong {
+  overflow: hidden;
+  font-size: var(--app-text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-register-card__identity span {
+  color: var(--app-text-muted);
+  font-family: var(--app-font-mono);
+  font-size: var(--app-text-xs);
+}
+
+.projects-register-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-3);
+  padding-top: var(--app-space-3);
+  border-top: var(--app-border-width) solid var(--app-border-subtle);
+}
+
+.projects-register-card__facts > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-1);
+}
+
+.projects-register-card__label {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+.projects-create-grid {
+  display: grid;
+  gap: var(--app-space-4);
+}
+
+.projects-create-grid--paired {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.projects-create-request-id {
+  margin-bottom: 0;
+  color: inherit;
+  font-size: var(--app-text-xs);
+}
+
+@media (max-width: 760px) {
+  .projects-register-table-wrap {
+    display: none;
+  }
+
+  .projects-register-cards {
+    display: flex;
+  }
+
+  .projects-register-page .base-toolbar__filters--mobile-disclosure.is-open {
+    width: 100%;
+  }
+
+  .projects-register-page .base-toolbar__filters .base-field,
+  .projects-register-page .base-toolbar__filters .base-select,
+  .projects-register-page .base-toolbar__filters .base-select__control {
+    width: 100%;
+  }
+}
+
+@media (max-width: 460px) {
+  .projects-register-page {
+    padding-right: var(--app-space-3);
+    padding-left: var(--app-space-3);
+  }
+
+  .projects-register-card__facts,
+  .projects-create-grid--paired {
+    grid-template-columns: 1fr;
+  }
+}

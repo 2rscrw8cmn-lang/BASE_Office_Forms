@@ -31,6 +31,7 @@ import { ShellIcon } from "./ShellIcon";
 import { ShellProvider, type ShellBridge } from "./ShellContext";
 import { LegacyFeatureMount } from "./LegacyFeatureMount";
 import { RfiRegisterFeature } from "../features/rfis/RfiRegisterFeature";
+import { ProjectsRegisterFeature } from "../features/projects/ProjectsRegisterFeature";
 import {
   LoadingState,
   SessionErrorState,
@@ -288,13 +289,7 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
     if (route.id === "projects") {
       const gate = sessionGate("Loading projects");
       if (gate) return gate;
-      return (
-        <LegacyFeatureMount
-          key="projects"
-          descriptor={{ key: "projects", kind: "projects" }}
-          locationKey={locationKey}
-        />
-      );
+      return <ProjectsRegisterFeature />;
     }
     if (projectId) {
       const gate = sessionGate("Loading project");

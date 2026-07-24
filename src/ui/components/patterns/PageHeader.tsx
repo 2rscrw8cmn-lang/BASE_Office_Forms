@@ -13,6 +13,10 @@ export interface PageHeaderProps {
   secondaryActions?: ReactNode;
   /** Renders the h1; set false when a parent already owns the page heading. */
   asHeading?: boolean;
+  /** Optional shell-compatible heading id for route focus management. */
+  headingId?: string;
+  /** Optional programmatic-focus tab index for route headings. */
+  headingTabIndex?: number;
   className?: string;
 }
 
@@ -28,6 +32,8 @@ export function PageHeader({
   primaryAction,
   secondaryActions,
   asHeading = true,
+  headingId,
+  headingTabIndex,
   className,
 }: PageHeaderProps) {
   return (
@@ -37,7 +43,13 @@ export function PageHeader({
           <p className="base-page-header__eyebrow">{eyebrow}</p>
         ) : null}
         {asHeading ? (
-          <h1 className="base-page-header__title">{title}</h1>
+          <h1
+            id={headingId}
+            tabIndex={headingTabIndex}
+            className="base-page-header__title"
+          >
+            {title}
+          </h1>
         ) : (
           <p className="base-page-header__title">{title}</p>
         )}

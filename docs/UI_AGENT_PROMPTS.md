@@ -167,20 +167,59 @@ Do not enable incomplete official issuance or infer permissions client-side. The
 Port the existing tests/unit/rfi-ui.test.ts register behaviors into React tests without weakening or deleting the legacy rollback tests, and add the full required coverage list from the UI-5 prompt handoff (parity, keyboard, accessibility, conflict, permission, responsive, and visual evidence). Reconcile IMPLEMENTATION_ROADMAP.md, UI_IMPLEMENTATION_PLAYBOOK.md, this prompt file, and UX_RFI_SPEC.md wherever they still describe a spreadsheet/grid register. Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, and the PR body.
 ```
 
-## Prompt UI-6 — Projects and Records registers
+## Prompt UI-6A — Projects register
 
 ```text
 [INSERT REQUIRED PREAMBLE]
 
-Implement UI-6 from docs/UI_IMPLEMENTATION_PLAYBOOK.md.
+Implement UI-6A from docs/UI_IMPLEMENTATION_PLAYBOOK.md after confirming UI-5
+and PR #45 are merged.
 
-Migrate Projects and Records to the React application foundation and shared register patterns. Reuse PageHeader, RegisterToolbar, filters, chips, result counts, states, status components, responsive logic, and BaseDataGrid or the approved simpler register component as appropriate.
+Migrate only `/projects` and the Create Project workflow to the React
+application foundation. Reuse PageHeader, RegisterToolbar, FilterChip,
+RegisterPage, FormDialog, field/input primitives, status components, states,
+tokens, and the UI-5 responsive filter disclosure. Keep the legacy controllers
+as rollback modules.
 
-Projects must preserve authorized project data, create capability, compact identity, status/location/updated information, filters, canonical navigation, and mobile behavior.
+Render a native semantic four-column desktop table (Project, Status, Location,
+Updated) and dedicated mobile cards. Preserve authorized project data,
+deterministic active/number/name/ID ordering, URL-backed q/status state,
+canonical Overview navigation, safe row/link behavior, and every required
+async/empty/error state. Add the smallest backwards-compatible server-derived
+createProject capability if the API lacks one; never infer permissions from
+role strings.
 
-Records must preserve stable Record identity separate from Revision and File identity, authoritative current revision, draft indicators, file counts, archive visibility, filters, Add Document capability, canonical navigation, and tenant-safe data already returned by the API.
+Do not use Tabulator, BaseDataGrid, role="grid", spreadsheet behavior, or a
+redundant Actions/Open column. Do not change the Document Register or begin
+UI-6B/later work. Add route, URL-history, responsive, accessibility,
+capability, create-workflow, vocabulary, rollback, and deterministic visual
+evidence coverage. Update CURRENT_APPLICATION_STRUCTURE.md,
+UI_PROGRAM_STATUS.md, API/security/UX/testing docs, and the PR body.
+```
 
-Do not add redundant action columns or duplicate facts. Add parity, responsive, accessibility, and visual tests. Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, affected UX docs, and the PR body.
+## Prompt UI-6B — Document Register
+
+```text
+[INSERT REQUIRED PREAMBLE]
+
+Implement UI-6B from docs/UI_IMPLEMENTATION_PLAYBOOK.md only after UI-6A has
+been reviewed and merged.
+
+Migrate only `/projects/:projectId/records` and the Add Document workflow from
+the compatibility controllers to native React. Reuse the shared register
+system established by UI-5 and UI-6A. Render a native semantic desktop table
+and dedicated mobile cards; do not use Tabulator, BaseDataGrid, role="grid",
+spreadsheet selection, or a redundant open-only action column.
+
+Preserve stable Record identity separate from Revision and File identity,
+authoritative current revision, honest draft indicators, file counts, archive
+visibility, URL filters, Add Document capability, canonical navigation, and
+tenant-safe server data. Do not reopen Projects or begin UI-7, Dashboard,
+Overview, Team, Administration, Library, or Studio work. Retain legacy rollback
+modules and add parity, history, responsive, accessibility, capability,
+workflow, and deterministic visual evidence coverage. Update
+CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, affected API/security/
+UX/testing docs, and the PR body.
 ```
 
 ## Prompt UI-7 — Detail workspaces

@@ -11,13 +11,19 @@ import {
   type RevisionStatus,
 } from "../../src/domain/revisions/revision";
 import {
+  PROJECT_STATUSES,
+  type ProjectStatus,
+} from "../../src/domain/projects/project";
+import {
   ATTENTION_CONDITIONS,
   ATTENTION_VOCABULARY,
   AttentionBadge,
+  PROJECT_STATUS_VOCABULARY,
   RECORD_STATUS_VOCABULARY,
   RFI_STATUS_VOCABULARY,
   REVISION_STATUS_VOCABULARY,
   RecordStatusBadge,
+  ProjectStatusBadge,
   RevisionStatusBadge,
   RfiStatusBadge,
 } from "../../src/ui/components/patterns/StatusBadge";
@@ -64,6 +70,24 @@ describe("Record status vocabulary matches the authoritative domain enum", () =>
       render(<RecordStatusBadge status={status} />);
       expect(
         screen.getByText(RECORD_STATUS_VOCABULARY[status].label),
+      ).toBeInTheDocument();
+    },
+  );
+});
+
+describe("Project status vocabulary matches the authoritative domain enum", () => {
+  it("has exactly one entry per ProjectStatus", () => {
+    expect(
+      sorted(Object.keys(PROJECT_STATUS_VOCABULARY) as ProjectStatus[]),
+    ).toEqual(sorted(PROJECT_STATUSES));
+  });
+
+  it.each(PROJECT_STATUSES)(
+    "renders a readable label for project status %s",
+    (status) => {
+      render(<ProjectStatusBadge status={status} />);
+      expect(
+        screen.getByText(PROJECT_STATUS_VOCABULARY[status].label),
       ).toBeInTheDocument();
     },
   );

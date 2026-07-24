@@ -53,6 +53,7 @@ export function el(selector: string): HTMLElement {
 
 export interface FetchConfig {
   session: () => Response;
+  projects?: () => Response;
   project?: (id: string) => Response;
 }
 
@@ -63,6 +64,9 @@ export function installFetch(config: FetchConfig) {
     calls.push(url);
     if (url.includes("/api/v2/session"))
       return Promise.resolve(config.session());
+    if (/\/api\/v2\/projects(?:\?|$)/.test(url) && config.projects) {
+      return Promise.resolve(config.projects());
+    }
     const match = /\/api\/v2\/projects\/([^/?]+)$/.exec(url);
     if (match && config.project) {
       return Promise.resolve(config.project(decodeURIComponent(match[1])));

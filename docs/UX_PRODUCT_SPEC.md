@@ -336,24 +336,38 @@ The UI reflects, but never replaces, backend authorization.
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Purpose           | Find and enter an accessible project workspace.                                                                                                                                                                                                            |
 | Primary user      | Any authenticated user with project access.                                                                                                                                                                                                                |
-| Route             | `/projects`; query parameters preserve `q`, `status`, `sort`, and archive visibility.                                                                                                                                                                      |
-| Required API data | `id`, `projectNumber`, `name`, `status`, `description`, address summary when useful, `updatedAt`, and `archivedAt`. Current `GET /api/v2/projects` supports active accessible projects but has no search, filters, pagination, or archived-project option. |
-| Major components  | `AppSidebar`, `PageHeader`, `ProjectSearch`, `ProjectFilters`, `ProjectsTable`, `ProjectCard`, `StatusBadge`, state components.                                                                                                                            |
-| Primary actions   | Open project. Project creation is shown only to authorized users if included in the implementation PR; it uses the supported project create API and is not required to redesign project administration.                                                    |
-| Authorization     | The backend list is already scoped to organization-wide readers or active project memberships. Administration and create controls require explicit capability.                                                                                             |
+| Route             | `/projects`; query parameters preserve `q` and `status` plus unrelated hash state.                                                                                                                                                                        |
+| Required API data | `id` for routing, `projectNumber`, `name`, authoritative `status`, address city/region, and `updatedAt`. `GET /api/v2/projects` returns the accessible list plus server-derived `meta.capabilities.createProject`; it has no search, pagination, or archived-project option. |
+| Major components  | `AppSidebar`, `PageHeader`, `RegisterToolbar`, `FilterChip`, `ProjectsTable`, `ProjectsCards`, `ProjectStatusBadge`, `CreateProjectDialog`, and shared state components.                                                                                    |
+| Primary actions   | Enter a project through its name or safe row/card area. Create project is the single primary action only when `meta.capabilities.createProject` is true.                                                                                                   |
+| Authorization     | The backend list is scoped to organization-wide readers or active project memberships. Client filters only narrow it. Create presentation and enforcement use the server-derived capability/current create policy, never role-string inference.              |
 
-**Desktop behavior:** Use a sortable table with Project, Project number, Status, Updated, and an explicit **Open project** action. Default ordering may follow the current API's name ascending order; the active sort is always labeled.
+**Desktop behavior:** Use a semantic native table with exactly Project, Status,
+Location, and Updated. Project name is primary and project number is secondary;
+missing numbers are labeled honestly. The name link and safe noninteractive row
+area navigate to the canonical Overview route. There is no redundant Actions or
+Open column, Tabulator, `BaseDataGrid`, or spreadsheet behavior. Ordering is
+active first, then project number, project name, and project ID.
 
-**Mobile behavior:** Use cards with name, project number, status, and updated date. The card action is **Open project**.
+**Mobile behavior:** Use dedicated full-card links with name, number, status,
+location, and updated date. Search remains visible; Status uses the shared
+mobile filter disclosure and active-count badge.
 
-**Search/filter/sort:** For the first small-data release, search may be case-insensitive client-side across name and project number after the full accessible list loads. Status filters use canonical project statuses with friendly labels. If volume requires pagination, move all search/filter/sort to the server together; never search only the current page.
+**Search/filter:** Search is case-insensitive across name and project number
+after the complete accessible list loads. Status options are canonical values
+present in that response. Search URL changes replace history; Status and Clear
+push history; Back/Forward and direct URLs restore the view. If volume requires
+pagination, move search/filter together to the server; never search only one
+page.
 
 - **Loading:** Table-row or card skeletons.
 - **Empty:** “No projects are available to you.” Do not imply the organization has no projects.
 - **Filtered empty:** “No projects match these filters,” with **Clear filters**.
 - **Error:** Generic list failure, retry, and request ID.
 - **Success feedback:** A newly created project, when that optional action is included, opens at its overview with a persisted success message.
-- **Accessibility:** Semantic table and `aria-sort`; search has a visible label; card list headings contain project name and number.
+- **Accessibility:** Semantic table, native links, labelled search, polite
+  result counts, disclosure `aria-expanded`/`aria-controls`, and card accessible
+  names containing project name and number.
 
 ### 7.3 Project overview
 
@@ -650,8 +664,8 @@ All JSON endpoints use `{ data, meta: { requestId } }` on success and `{ error: 
 
 | Workflow         | Current endpoint(s)                                                                                                                        | UI-relevant behavior                                                                                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session context  | `GET /api/v2/session`                                                                                                                      | Returns user ID, organization, membership role, and project permission data; not yet a normalized per-action capability contract                                                                  |
-| Projects         | `GET/POST /api/v2/projects`; `GET/PATCH /api/v2/projects/:projectId`                                                                       | Accessible active projects list, create, detail, and update                                                                                                                                       |
+| Session context  | `GET /api/v2/session`                                                                                                                      | Returns user ID, organization, membership role, and project permission data; it is not a universal normalized per-action capability contract                                                       |
+| Projects         | `GET/POST /api/v2/projects`; `GET/PATCH /api/v2/projects/:projectId`                                                                       | Accessible active projects list; GET adds server-derived `meta.capabilities.createProject` without changing its `data` array; create, detail, and update                                             |
 | Project contacts | `GET/POST /api/v2/projects/:projectId/contacts`; `PATCH .../contacts/:contactId`                                                           | Contacts are not equivalent to membership/team authorization                                                                                                                                      |
 | Records          | `GET/POST /api/v2/projects/:projectId/records`; `GET/PATCH .../records/:recordId`; `POST .../archive`                                      | `includeArchived` is the only list option; record number is nullable; list is created-newest first                                                                                                |
 | Revisions        | `GET/POST .../records/:recordId/revisions`; `GET .../revisions/:revisionId`; `POST .../publish`                                            | Server numbers revisions; list is revision-number descending; publishing supersedes the prior published revision and updates `currentRevisionId`                                                  |
@@ -662,7 +676,8 @@ All JSON endpoints use `{ data, meta: { requestId } }` on success and `{ error: 
 ### 9.2 Important current constraints
 
 - Project, record, revision, file, and issuance list endpoints are unpaginated.
-- Project list excludes archived projects and sorts by name.
+- Project list excludes archived projects; the native UI applies deterministic
+  active/number/name/ID ordering to the authorized response.
 - Record list can include archived records but has no server search/filter/sort beyond archive inclusion.
 - Revision list is newest revision number first.
 - File list is oldest upload first.
