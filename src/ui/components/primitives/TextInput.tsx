@@ -14,7 +14,10 @@ export interface TextInputProps extends Omit<
 /**
  * Single-line text control. Inside a Field it inherits id, required,
  * aria-invalid, and aria-describedby automatically; standalone it accepts them
- * directly.
+ * directly. Inside a Field, the Field's id (its `controlId` prop, or an
+ * auto-generated id) is always authoritative — an `id` passed directly to
+ * this control is only honoured when it is used standalone, outside a Field,
+ * so the label's `htmlFor` can never become disconnected from this control.
  */
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   function TextInput(
@@ -36,7 +39,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       <input
         ref={ref}
         {...rest}
-        id={id ?? field?.controlId}
+        id={field?.controlId ?? id}
         type={type ?? "text"}
         className={cx(
           "base-input",

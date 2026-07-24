@@ -219,16 +219,42 @@ happens in the migration phases.
   HelpText, ValidationMessage, Badge, Tooltip, Divider, Spinner, Skeleton.
   `Field` provides a context that wires each control's id, `required`,
   `aria-invalid`, and `aria-describedby` to its label, help, and error.
+  `Field` accepts an optional `controlId` prop that is the one authoritative
+  id for both the label and the child control; each control resolves
+  `field?.controlId ?? id`, so Field's id (generated or explicit) always wins
+  over a caller-provided `id` when the control is used inside a Field — the
+  label can never become disconnected from the control it actually renders. A
+  caller `id` is honoured normally when a control is used standalone, outside
+  a Field.
 - **Interactive** (`src/ui/components/interactive/`): Dialog, AlertDialog,
   DropdownMenu, Popover, Tabs, Toast, CommandMenu, Collapsible, Drawer. Radix
   primitives supply focus trap, keyboard, and dismissal behaviour; BASE owns the
   rendered styling and component contract. `radix-ui` is imported only inside
-  `src/ui/components/` (enforced).
+  `src/ui/components/` (enforced). `DropdownMenu` renders each item/separator
+  pair through a `React.Fragment`, not a wrapping `<div>`. `CommandMenu`
+  derives its list/option DOM ids from `useId()` (so multiple instances never
+  collide) and re-derives its active index from the current filtered length on
+  every render — clamped in range, `-1` for an empty collection — so
+  `aria-activedescendant` can never reference an out-of-range item even if
+  `items` shrinks or the active item disappears under a filter or capability
+  change while the menu is open; its search input takes an explicit `label`
+  prop (default `"Search commands"`).
 - **Application patterns** (`src/ui/components/patterns/`): AppShell, PageHeader,
   ProjectHeader, ProjectTabs, RegisterPage, RegisterToolbar, FilterChip, Panel,
   MetadataStrip, FileRow, ActivityFeed, EmptyState, ErrorState, PermissionState,
-  FormDialog, WorkspaceSection, Breadcrumbs, plus `StatusBadge` (the one
-  centralized status vocabulary and tone map) and `SaveIndicator`
+  FormDialog, WorkspaceSection, Breadcrumbs, plus one domain-typed status
+  vocabulary per authoritative domain status enum — `RfiStatusBadge`
+  (`RFI_STATUS_VOCABULARY: Record<RfiStatus, …>`, sourced from
+  `src/domain/rfis/rfi.ts`: `draft`, `ready_to_issue`, `open`,
+  `response_received`, `closed`, `returned_for_clarification`, `void`),
+  `RecordStatusBadge` (`active`, `archived`, from
+  `src/domain/records/record.ts`), and `RevisionStatusBadge` (`draft`,
+  `published`, `superseded`, from `src/domain/revisions/revision.ts`) — plus a
+  separate `AttentionBadge`/`ATTENTION_VOCABULARY` for the calculated
+  `due_soon`/`overdue` conditions, which are never stored statuses and are
+  deliberately kept out of the status enums. Each vocabulary's key type is
+  imported from `src/domain`, so an incomplete map fails to typecheck the
+  moment a domain enum changes; `SaveIndicator` remains
   (Saving/Saved/Failed/Conflict). `RegisterPage` renders exactly one of the
   required loading/populated/first-use-empty/filtered-empty/error states.
 - **UI Lab.** `src/ui/lab/` is a development-only route/artifact. `catalog.tsx`
@@ -624,20 +650,28 @@ published rendering.
 
 ### UI-3 component library tests
 
-The UI-3 library adds five focused suites, run under Happy DOM with Testing
+The UI-3 library has six focused suites, run under Happy DOM with Testing
 Library (opted in per file with a `// @vitest-environment happy-dom` docblock;
 `tests/helpers/setup-component-dom.ts` registers jest-dom, auto-cleanup, and the
 Radix pointer/observer polyfills):
 
 - `tests/unit/base-components-behavior.test.tsx` — component behaviour and
   explicit states: Button click/`type=button`/loading-blocks-interaction,
-  keyboard checkbox toggle, and Field wiring (`required`, `aria-invalid`, the
-  two-id `aria-describedby`, and the linked error alert).
+  keyboard checkbox toggle, Field wiring (`required`, `aria-invalid`, the
+  two-id `aria-describedby`, and the linked error alert), and a "Field control
+  id consistency" section covering generated ids, an explicit `controlId`, a
+  caller `id` on the child control that must not disconnect the label, and
+  standalone (outside-Field) usage — for TextInput, TextArea, Select, and
+  DateInput.
 - `tests/unit/base-components-keyboard.test.tsx` — keyboard and focus for the
   overlay/navigation components: Dialog labelling + focus-into-subtree + Escape,
   Drawer open/Escape/focus-restoration, Tabs arrow-key selection and
-  tab/tabpanel roles, DropdownMenu open-on-Enter + item activation, and
-  CommandMenu filter + arrow/Enter selection.
+  tab/tabpanel roles, DropdownMenu open-on-Enter + item activation, CommandMenu
+  filter + arrow/Enter selection, and a "CommandMenu robustness" section
+  covering two simultaneously mounted instances (id collision safety), items
+  shrinking while the menu stays open, the active item disappearing after
+  filtering, an empty items collection, and the search input's default and
+  overridden accessible name.
 - `tests/unit/base-components-accessibility.test.tsx` — accessible names for
   icon-only controls, decorative-vs-meaningful icon exposure, status conveyed as
   text, labelled radio groups and breadcrumbs, the filter-chip remove name, and
@@ -647,6 +681,13 @@ Radix pointer/observer polyfills):
   registered and declared, brand tokens are only read through documented
   fallbacks, and `lucide-react`/`radix-ui` are imported only from their single
   allowed locations.
+- `tests/unit/base-status-badges.test.tsx` — domain-status vocabulary
+  exhaustiveness: `RFI_STATUS_VOCABULARY`/`RECORD_STATUS_VOCABULARY`/
+  `REVISION_STATUS_VOCABULARY` keys exactly match their domain constants
+  (`RFI_STATUSES`/`RECORD_STATUSES`/`REVISION_STATUSES`), no non-authoritative
+  alias (`responded`/`issued`/`in_review`) remains, `due_soon`/`overdue` do not
+  overlap the stored RFI status enum, and every authoritative status/condition
+  renders a readable label (`it.each` over all domain values).
 - `tests/unit/ui-lab-catalog.test.tsx` — the UI Lab renders the real production
   components: every required state is covered across the catalog, all three
   component groups are present, every example mounts without throwing, and the

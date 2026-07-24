@@ -257,17 +257,28 @@ A UI migration is not accepted because it looks cleaner. Behavioral parity, acce
 ### 12A-i. UI-3 component library test coverage (implemented)
 
 The UI-3 BASE component library satisfies the §12A component requirements with
-five Happy DOM + Testing Library suites (opted in per file with
+six Happy DOM + Testing Library suites (opted in per file with
 `// @vitest-environment happy-dom`; shared setup in
 `tests/helpers/setup-component-dom.ts` registers jest-dom, auto-cleanup, and the
 Radix pointer/observer polyfills):
 
 - `tests/unit/base-components-behavior.test.tsx` — explicit variants/states
   (button click/type/loading, keyboard checkbox toggle, Field id/required/
-  aria-invalid/aria-describedby/error wiring).
+  aria-invalid/aria-describedby/error wiring), plus a "Field control id
+  consistency" section proving Field's `controlId` prop is the one
+  authoritative id for both the label and the child control — a caller `id`
+  set directly on TextInput/TextArea/Select/DateInput can never disconnect the
+  label — while a standalone control (outside Field) still honours its own
+  `id`.
 - `tests/unit/base-components-keyboard.test.tsx` — keyboard and focus for
   dialogs, drawers, tabs, menus, and the command palette (labelling, focus trap,
-  Escape, focus restoration, arrow navigation, activation).
+  Escape, focus restoration, arrow navigation, activation), plus a "CommandMenu
+  robustness" section: two simultaneously mounted instances never collide on
+  DOM id (`useId()`-derived), the active index clamps correctly when `items`
+  shrinks while open, the active item recovers when it disappears under
+  filtering, an empty items collection never produces a negative/dangling
+  active index or `aria-controls`/`aria-activedescendant` reference, and the
+  search input's accessible name (default and overridden via `label`).
 - `tests/unit/base-components-accessibility.test.tsx` — accessible names for
   icon-only controls, decorative-vs-meaningful icons, text-not-colour status,
   labelled groups/landmarks, and error/save live regions.
@@ -275,6 +286,15 @@ Radix pointer/observer polyfills):
   colour literals in component or lab CSS, every `--app-*` token registered and
   declared, brand tokens read only through documented fallbacks, and
   `lucide-react`/`radix-ui` imported only from their single allowed locations.
+- `tests/unit/base-status-badges.test.tsx` — proves each status vocabulary
+  (`RFI_STATUS_VOCABULARY`/`RECORD_STATUS_VOCABULARY`/
+  `REVISION_STATUS_VOCABULARY`) is authoritative against its domain source:
+  the map's keys exactly equal the domain constant
+  (`RFI_STATUSES`/`RECORD_STATUSES`/`REVISION_STATUSES` from `src/domain`), no
+  non-authoritative alias (`responded`/`issued`/`in_review`) is present, the
+  calculated `due_soon`/`overdue` attention conditions never overlap the
+  stored RFI status enum, and every authoritative status/condition renders a
+  readable label (`it.each` over every domain value — 19 assertions).
 - `tests/unit/ui-lab-catalog.test.tsx` — the UI Lab renders the real production
   components across every required state (default/hover/focus/selected/disabled/
   loading/error/long-text/empty) without throwing.

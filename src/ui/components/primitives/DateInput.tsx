@@ -12,7 +12,9 @@ export interface DateInputProps extends Omit<
 
 /**
  * Native date control. Uses the browser date picker (server remains
- * authoritative for validation) and inherits Field wiring.
+ * authoritative for validation) and inherits Field wiring. Inside a Field,
+ * the Field's id is always authoritative over an `id` passed directly here —
+ * see TextInput for why.
  */
 export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
   function DateInput(
@@ -34,7 +36,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         ref={ref}
         {...rest}
         type="date"
-        id={id ?? field?.controlId}
+        id={field?.controlId ?? id}
         className={cx(
           "base-input",
           "base-input--date",

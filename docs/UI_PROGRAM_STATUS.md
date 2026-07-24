@@ -1,9 +1,26 @@
 # BASE UI Program Status
 
-**Status date:** 2026-07-23
-**Current phase:** UI-3 (BASE component library + UI Lab) implemented on branch `claude/base-components-ui-lab-5l05ux`, ready for review. RFI Slice 1, UI-1, and UI-2 are complete.
-**Active PR:** UI-3 on `claude/base-components-ui-lab-5l05ux` (open for review, not merged). PR #36 and PR #41 are merged.
+**Status date:** 2026-07-24
+**Current phase:** UI-3 (BASE component library + UI Lab) implemented on branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft), ready for final product-owner review after a foundation review pass. RFI Slice 1, UI-1, and UI-2 are complete.
+**Active PR:** PR #43 on `claude/base-components-ui-lab-5l05ux` (draft, not merged). PR #36 and PR #41 are merged.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+
+> **2026-07-24 UI-3 foundation-review fixes (PR #43):**
+> A foundation review of PR #43 found five issues, all addressed on the same
+> branch: (1) `CommandMenu` used fixed, instance-colliding DOM ids and an
+> unguarded active index that could point past the end of a shrunk/filtered
+> list; (2) `Field`'s label could become disconnected from its control if the
+> caller passed an `id` directly to a child control instead of through Field;
+> (3) the status vocabulary mixed an invented flat status list (including
+> non-authoritative aliases like `responded`/`issued`/`in_review`) with
+> calculated due/overdue conditions instead of the real domain status enums;
+> (4) `DropdownMenu` wrapped each item in an unnecessary `<div>`. All four are
+> fixed — see §"UI-3 complete" below for the full breakdown — plus (5) a
+> `DropdownMenu` markup cleanup while touching interactive components. Full
+> `npm run check` passes (Prettier, Cloudflare types, TypeScript, ESLint,
+> **336 unit tests**, **119 Worker integration tests**, the production build,
+> Pages Functions build, `npm audit --audit-level=high` clean, and the secret
+> scan); `npm run lab:build` passes. No merge occurred; PR #43 stays draft.
 
 > **2026-07-23 UI-3 implementation:**
 > The BASE application component library, a development-only UI Lab, and the
@@ -248,7 +265,61 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
 
 ## 5A. UI-3 complete — component library and UI Lab
 
-Branch `claude/base-components-ui-lab-5l05ux`. Not merged.
+Branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft). Not merged.
+
+### Foundation review fixes (2026-07-24)
+
+1. **CommandMenu robustness and accessibility.** `listId`/option ids were
+   fixed strings (`base-command-list`, `base-command-{itemId}`), so two
+   mounted instances collided. The active index was only reset on query
+   change, so it could point past the end of the list if `items` shrank or
+   the active item disappeared under a filter/capability change while the
+   menu stayed open. Fixed: ids are now derived per instance from `useId()`;
+   the active index is re-derived from the *current* filtered length on every
+   render (clamped in range, `-1` for an empty collection) in addition to a
+   reset-on-filter-change effect, so `aria-activedescendant` can never
+   dereference an out-of-range item; `aria-controls` is omitted when there is
+   no list to control; the search input now takes an explicit `label` prop
+   (default `"Search commands"`). New tests in
+   `tests/unit/base-components-keyboard.test.tsx` (§"CommandMenu robustness")
+   cover two simultaneous instances, items shrinking while open, the active
+   item disappearing after filtering, an empty collection, and the combobox's
+   accessible name (default and overridden).
+2. **Field/control id consistency.** A caller-provided `id` on a child control
+   (`TextInput`/`TextArea`/`Select`/`DateInput`) used to win over Field's own
+   id, silently disconnecting the label's `htmlFor`. Fixed: `Field` gained an
+   optional `controlId` prop that is the one authoritative id for both the
+   label and the child control; each control now resolves
+   `field?.controlId ?? id`, so Field's id (generated or explicit) always wins
+   when a control is used inside a Field, while an `id` prop passed to a
+   standalone control (outside Field) is unaffected. New tests in
+   `tests/unit/base-components-behavior.test.tsx` (§"Field control id
+   consistency") cover generated ids, explicit `controlId`, a caller `id`
+   attempting to disconnect the label, and standalone usage for all four
+   controls.
+3. **Status vocabulary.** The prior single `STATUS_VOCABULARY`/`StatusBadge`
+   mixed an invented flat list — including non-authoritative aliases
+   (`responded`, `issued`, `in_review`) — with calculated `due_soon`/`overdue`
+   conditions that are never stored statuses
+   (`src/domain/rfis/rfi.ts` — "Overdue and due-soon are calculated
+   conditions, never stored statuses"). Fixed: `StatusBadge.tsx` now exports
+   one domain-typed vocabulary per authoritative status enum —
+   `RFI_STATUS_VOCABULARY: Record<RfiStatus, …>` (all seven statuses: `draft`,
+   `ready_to_issue`, `open`, `response_received`, `closed`,
+   `returned_for_clarification`, `void`), `RECORD_STATUS_VOCABULARY:
+   Record<RecordStatus, …>` (`active`, `archived`), and
+   `REVISION_STATUS_VOCABULARY: Record<RevisionStatus, …>` (`draft`,
+   `published`, `superseded`) — plus a separate `AttentionBadge`/
+   `ATTENTION_VOCABULARY` for the calculated `due_soon`/`overdue` conditions,
+   kept out of the stored-status enums. Each map's key type is imported
+   directly from `src/domain/{rfis,records,revisions}` so TypeScript rejects
+   an incomplete map the moment a domain enum changes.
+   `tests/unit/base-status-badges.test.tsx` additionally asserts at runtime
+   that each vocabulary's keys exactly match its domain constant, that no
+   non-authoritative alias remains, and that every authoritative status
+   renders a readable label (19 tests, `it.each` over all domain statuses).
+4. **DropdownMenu markup.** Replaced the unnecessary `<div>` wrapper around
+   each `RadixMenu.Item`/`RadixMenu.Separator` pair with a `React.Fragment`.
 
 ### Scope delivered
 
@@ -267,9 +338,11 @@ Branch `claude/base-components-ui-lab-5l05ux`. Not merged.
 - **Application patterns.** AppShell, PageHeader, ProjectHeader, ProjectTabs,
   RegisterPage, RegisterToolbar, FilterChip, Panel, MetadataStrip, FileRow,
   ActivityFeed, EmptyState (first-use vs filtered), ErrorState, PermissionState,
-  FormDialog, WorkspaceSection, Breadcrumbs, plus `StatusBadge` (the one
-  centralized status vocabulary) and `SaveIndicator` (Saving/Saved/Failed/
-  Conflict).
+  FormDialog, WorkspaceSection, Breadcrumbs, plus `RfiStatusBadge`/
+  `RecordStatusBadge`/`RevisionStatusBadge` (one domain-typed status
+  vocabulary per authoritative domain enum — see the foundation-review fixes
+  above), `AttentionBadge` (calculated due-soon/overdue, never a stored
+  status), and `SaveIndicator` (Saving/Saved/Failed/Conflict).
 - **One icon component.** `src/ui/components/icons/Icon.tsx` wraps Lucide; it is
   the only module importing `lucide-react` (enforced).
 - **One stylesheet, no raw colours.** `src/ui/components/base-components.css`
@@ -286,21 +359,27 @@ Branch `claude/base-components-ui-lab-5l05ux`. Not merged.
 ### Tests and checks
 
 Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
-ESLint, **301 unit tests**, **119 Worker integration tests**, the Vite
+ESLint, **336 unit tests**, **119 Worker integration tests**, the Vite
 production build, static-asset verification, Pages Functions compilation,
-`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan. New
-UI-3 suites: `base-components-behavior`, `base-components-keyboard` (Dialog,
-Drawer, Tabs, DropdownMenu, CommandMenu keyboard/focus), `base-components-
-accessibility`, `base-component-tokens` (token enforcement + single-source
-Radix/Lucide imports), and `ui-lab-catalog` (real components across every
-required state). Component suites run under Happy DOM via
-`tests/helpers/setup-component-dom.ts`.
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan.
+`npm run lab:build` passes. UI-3 suites: `base-components-behavior` (incl.
+Field control-id consistency), `base-components-keyboard` (Dialog, Drawer,
+Tabs, DropdownMenu, CommandMenu keyboard/focus, plus the CommandMenu
+robustness cases from the review), `base-components-accessibility`,
+`base-component-tokens` (token enforcement + single-source Radix/Lucide
+imports), `base-status-badges` (domain-status vocabulary exhaustiveness — new),
+and `ui-lab-catalog` (real components across every required state). Component
+suites run under Happy DOM via `tests/helpers/setup-component-dom.ts`.
 
 ### Evidence
 
 Desktop (1280px) and mobile (390px) UI Lab captures are committed at
 `docs/evidence/ui-3/ui-lab-desktop.png` and `ui-lab-mobile.png`, generated from
 the built lab with the pre-installed Chromium.
+`docs/evidence/ui-3/ui-lab-desktop-primitives-r2.jpg` (2026-07-24) recaptures
+the Primitives group after the status-vocabulary rework, showing all seven RFI
+statuses, both Record statuses, all three Revision statuses, and the two
+calculated attention conditions rendering with distinct tones.
 
 ### Known limitations
 
@@ -313,13 +392,19 @@ the built lab with the pre-installed Chromium.
   UI-10's scope.
 - Google Fonts (Archivo) load over the network; in the offline capture the lab
   falls back to `system-ui`, which does not affect layout or component contracts.
+- Issuance-domain statuses (`src/domain/issuances/issuance.ts`) have no stored
+  status enum today (issuances are immutable point-in-time records), so no
+  `IssuanceStatusBadge` exists yet; add one only if/when the domain introduces
+  a real issuance status field.
 
 ### Next recommended action
 
-UI-4 (React application shell and route parity): compose `AppShell`,
-`ProjectTabs`, navigation, TanStack Query, toast, and error-boundary providers
-around the shared components, preserving canonical URLs and `/api/v2`. RFI
-Slice 2 issuance UI is now unblocked for its component needs.
+UI-3 is ready for final product-owner review on PR #43 (draft, not merged).
+Once approved and merged, UI-4 (React application shell and route parity) is
+next: compose `AppShell`, `ProjectTabs`, navigation, TanStack Query, toast, and
+error-boundary providers around the shared components, preserving canonical
+URLs and `/api/v2`. RFI Slice 2 issuance UI is now unblocked for its component
+needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
 
 ## 6. Phase status
 
@@ -329,7 +414,7 @@ Slice 2 issuance UI is now unblocked for its component needs.
 | UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
-| UI-3 — Components + UI Lab   | **Implemented; ready for review** (`claude/base-components-ui-lab-5l05ux`) | Review and merge |
+| UI-3 — Components + UI Lab   | **Implemented; ready for final product-owner review** (PR #43, draft, `claude/base-components-ui-lab-5l05ux`) | Review and merge |
 | UI-4 — React shell           | **Now unblocked**          | Compose shared components into the shell         |
 | UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
@@ -354,10 +439,12 @@ Slice 2 issuance UI is now unblocked for its component needs.
 ## 8. Next action
 
 UI-3 (Components + UI Lab) is implemented on
-`claude/base-components-ui-lab-5l05ux` and awaits review and merge; the exit
-gate — a feature team can build a standard register or detail workspace without
-new global visual CSS — is met by the shared component set, the single tokenized
-stylesheet, and the token-enforcement test. Once merged, UI-4 (React shell and
-route parity) is the next active phase and composes these components; RFI
-Slice 2A backend architecture may proceed independently once `main` is pulled
-and stable.
+`claude/base-components-ui-lab-5l05ux` (PR #43, draft) and, after the
+2026-07-24 foundation-review fixes (§5A), is ready for final product-owner
+review and merge; the exit gate — a feature team can build a standard register
+or detail workspace without new global visual CSS — is met by the shared
+component set, the single tokenized stylesheet, and the token-enforcement
+test. UI-4 and RFI Slice 2 do not begin before PR #43 merges. Once merged,
+UI-4 (React shell and route parity) is the next active phase and composes
+these components; RFI Slice 2A backend architecture may proceed independently
+once `main` is pulled and stable.

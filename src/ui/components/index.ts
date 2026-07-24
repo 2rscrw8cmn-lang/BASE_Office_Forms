@@ -125,10 +125,20 @@ export {
   type Crumb,
 } from "./patterns/Breadcrumbs";
 export {
-  StatusBadge,
-  STATUS_VOCABULARY,
-  type StatusBadgeProps,
-  type StatusKey,
+  RfiStatusBadge,
+  type RfiStatusBadgeProps,
+  RFI_STATUS_VOCABULARY,
+  RecordStatusBadge,
+  type RecordStatusBadgeProps,
+  RECORD_STATUS_VOCABULARY,
+  RevisionStatusBadge,
+  type RevisionStatusBadgeProps,
+  REVISION_STATUS_VOCABULARY,
+  AttentionBadge,
+  type AttentionBadgeProps,
+  type AttentionCondition,
+  ATTENTION_CONDITIONS,
+  ATTENTION_VOCABULARY,
   type StatusDescriptor,
 } from "./patterns/StatusBadge";
 export {

@@ -1,5 +1,5 @@
 import { Dialog as RadixDialog } from "radix-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { cx } from "../util/cx";
 import { Icon, type IconName } from "../icons/Icon";
 
@@ -18,6 +18,8 @@ export interface CommandMenuProps {
   items: CommandItem[];
   placeholder?: string;
   emptyLabel?: string;
+  /** Accessible name for the search input. */
+  label?: string;
 }
 
 function matches(item: CommandItem, query: string): boolean {
@@ -29,8 +31,14 @@ function matches(item: CommandItem, query: string): boolean {
 
 /**
  * Command palette on the Radix Dialog primitive (focus trap, Escape, restore)
- * with a filterable, arrow-navigable list. Selection runs the item's action and
- * closes the palette. A single keyboard-first entry point for global actions.
+ * with a filterable, arrow-navigable list. Selection runs the item's action
+ * and closes the palette. A single keyboard-first entry point for global
+ * actions.
+ *
+ * IDs are derived from `useId()` so multiple instances can mount at once
+ * without colliding. The active index is re-derived from the current filtered
+ * length on every render rather than trusted from state alone, so it can
+ * never point past the end of a shrunk or emptied list.
  */
 export function CommandMenu({
   open,
@@ -38,34 +46,54 @@ export function CommandMenu({
   items,
   placeholder = "Type a command or search…",
   emptyLabel = "No matching commands",
+  label = "Search commands",
 }: CommandMenuProps) {
+  const instanceId = useId();
+  const listId = `${instanceId}-list`;
+  const optionId = (id: string) => `${instanceId}-option-${id}`;
+
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const listId = "base-command-list";
+  const [rawActiveIndex, setRawActiveIndex] = useState(0);
 
   const filtered = useMemo(
     () => (query ? items.filter((item) => matches(item, query)) : items),
     [items, query],
   );
 
+  // Reset to the top whenever the filtered collection changes shape — typing,
+  // items shrinking/growing, or an item disappearing under a capability
+  // change — so a stale index is never carried across a re-filter.
   useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
+    setRawActiveIndex(0);
+  }, [filtered]);
 
   useEffect(() => {
     if (!open) setQuery("");
   }, [open]);
 
-  const activeItem: CommandItem | undefined = filtered[activeIndex];
-  const listRef = useRef<HTMLUListElement>(null);
+  // Clamp against the *current* filtered length on every render instead of
+  // trusting state alone: -1 for an empty collection, otherwise in range.
+  // This keeps aria-activedescendant and the highlighted row correct even in
+  // the single render before the effect above catches up.
+  const activeIndex =
+    filtered.length === 0
+      ? -1
+      : Math.min(Math.max(rawActiveIndex, 0), filtered.length - 1);
+  const activeItem: CommandItem | undefined =
+    activeIndex >= 0 ? filtered[activeIndex] : undefined;
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (filtered.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((index) => Math.min(index + 1, filtered.length - 1));
+      setRawActiveIndex((index) =>
+        Math.min(Math.max(index, 0) + 1, filtered.length - 1),
+      );
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((index) => Math.max(index - 1, 0));
+      setRawActiveIndex((index) =>
+        Math.max(Math.min(index, filtered.length - 1) - 1, 0),
+      );
     } else if (event.key === "Enter") {
       event.preventDefault();
       if (activeItem) {
@@ -88,6 +116,7 @@ export function CommandMenu({
             <input
               className="base-command__input"
               placeholder={placeholder}
+              aria-label={label}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -95,11 +124,9 @@ export function CommandMenu({
               onKeyDown={onKeyDown}
               role="combobox"
               aria-expanded="true"
-              aria-controls={listId}
+              aria-controls={filtered.length > 0 ? listId : undefined}
               aria-activedescendant={
-                filtered.length > 0
-                  ? `base-command-${filtered[activeIndex].id}`
-                  : undefined
+                activeItem ? optionId(activeItem.id) : undefined
               }
               autoFocus
             />
@@ -107,16 +134,11 @@ export function CommandMenu({
           {filtered.length === 0 ? (
             <p className="base-command__empty">{emptyLabel}</p>
           ) : (
-            <ul
-              id={listId}
-              ref={listRef}
-              className="base-command__list"
-              role="listbox"
-            >
+            <ul id={listId} className="base-command__list" role="listbox">
               {filtered.map((item, index) => (
                 <li
                   key={item.id}
-                  id={`base-command-${item.id}`}
+                  id={optionId(item.id)}
                   role="option"
                   aria-selected={index === activeIndex}
                   className={cx(
@@ -124,7 +146,7 @@ export function CommandMenu({
                     index === activeIndex && "base-command__item--active",
                   )}
                   onMouseEnter={() => {
-                    setActiveIndex(index);
+                    setRawActiveIndex(index);
                   }}
                   onClick={() => {
                     item.onSelect();

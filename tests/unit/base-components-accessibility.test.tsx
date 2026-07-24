@@ -5,7 +5,7 @@ import { IconButton } from "../../src/ui/components/primitives/IconButton";
 import { Icon } from "../../src/ui/components/icons/Icon";
 import { RadioGroup } from "../../src/ui/components/primitives/RadioGroup";
 import { Badge } from "../../src/ui/components/primitives/Badge";
-import { StatusBadge } from "../../src/ui/components/patterns/StatusBadge";
+import { RfiStatusBadge } from "../../src/ui/components/patterns/StatusBadge";
 import { FilterChip } from "../../src/ui/components/patterns/FilterChip";
 import { Breadcrumbs } from "../../src/ui/components/patterns/Breadcrumbs";
 import { ErrorState } from "../../src/ui/components/patterns/ErrorState";
@@ -32,8 +32,8 @@ describe("Icon-only controls have accessible names", () => {
 
 describe("Status is conveyed through text, not colour alone", () => {
   it("renders a readable status label", () => {
-    render(<StatusBadge status="overdue" />);
-    expect(screen.getByText("Overdue")).toBeInTheDocument();
+    render(<RfiStatusBadge status="void" />);
+    expect(screen.getByText("Void")).toBeInTheDocument();
   });
 
   it("keeps a badge label available to assistive tech", () => {

@@ -15,7 +15,9 @@ export interface SelectProps extends Omit<
 /**
  * Native single-select. The native control is used deliberately for short
  * option lists and correct mobile behaviour; the chevron is decorative. Rich
- * command-style pickers use CommandMenu/Popover instead.
+ * command-style pickers use CommandMenu/Popover instead. Inside a Field, the
+ * Field's id is always authoritative over an `id` passed directly here — see
+ * TextInput for why.
  */
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   function Select(
@@ -43,7 +45,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={ref}
           {...rest}
-          id={id ?? field?.controlId}
+          id={field?.controlId ?? id}
           className={cx("base-input", "base-select__control", className)}
           aria-invalid={isInvalid || undefined}
           aria-describedby={describedBy ?? field?.describedBy}

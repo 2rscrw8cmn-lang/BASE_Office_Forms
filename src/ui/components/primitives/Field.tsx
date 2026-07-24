@@ -32,6 +32,16 @@ export interface FieldProps {
   required?: boolean;
   /** Visually hide the label while keeping it accessible. */
   hideLabel?: boolean;
+  /**
+   * Explicit id for the control. When set, this becomes the one authoritative
+   * id used by both the label's `htmlFor` and the child control — pass an id
+   * here rather than directly on the child control. A child control's own
+   * `id` prop is only honoured when it is used standalone, outside a Field;
+   * inside a Field the control always defers to this (or the auto-generated
+   * id), so the label can never point at a different element than the one
+   * actually rendered.
+   */
+  controlId?: string;
   className?: string;
   children: ReactNode;
 }
@@ -48,11 +58,12 @@ export function Field({
   error,
   required = false,
   hideLabel = false,
+  controlId: explicitControlId,
   className,
   children,
 }: FieldProps) {
   const base = useId();
-  const controlId = `${base}-control`;
+  const controlId = explicitControlId ?? `${base}-control`;
   const labelId = `${base}-label`;
   const helpId = `${base}-help`;
   const errorId = `${base}-error`;

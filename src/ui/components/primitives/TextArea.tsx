@@ -6,7 +6,11 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   invalid?: boolean;
 }
 
-/** Multi-line text control with the same Field wiring as TextInput. */
+/**
+ * Multi-line text control with the same Field wiring as TextInput. Inside a
+ * Field, the Field's id is always authoritative over an `id` passed directly
+ * here — see TextInput for why.
+ */
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
   function TextArea(
     {
@@ -27,7 +31,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         ref={ref}
         {...rest}
         rows={rows}
-        id={id ?? field?.controlId}
+        id={field?.controlId ?? id}
         className={cx("base-input", "base-textarea", className)}
         aria-invalid={isInvalid || undefined}
         aria-describedby={describedBy ?? field?.describedBy}

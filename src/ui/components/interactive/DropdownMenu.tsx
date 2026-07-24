@@ -1,5 +1,5 @@
 import { DropdownMenu as RadixMenu } from "radix-ui";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { cx } from "../util/cx";
 import { Icon, type IconName } from "../icons/Icon";
 
@@ -44,7 +44,7 @@ export function DropdownMenu({
           sideOffset={6}
         >
           {items.map((item) => (
-            <div key={item.id}>
+            <Fragment key={item.id}>
               {item.separatorBefore ? (
                 <RadixMenu.Separator className="base-menu__separator" />
               ) : null}
@@ -59,7 +59,7 @@ export function DropdownMenu({
                 {item.icon ? <Icon name={item.icon} size={15} /> : null}
                 <span>{item.label}</span>
               </RadixMenu.Item>
-            </div>
+            </Fragment>
           ))}
         </RadixMenu.Content>
       </RadixMenu.Portal>

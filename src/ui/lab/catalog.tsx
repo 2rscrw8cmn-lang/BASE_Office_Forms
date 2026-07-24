@@ -11,6 +11,7 @@ import { useState, type ReactNode } from "react";
 import {
   ActivityFeed,
   AlertDialog,
+  AttentionBadge,
   Badge,
   Breadcrumbs,
   Button,
@@ -40,12 +41,14 @@ import {
   ProjectHeader,
   ProjectTabs,
   RadioGroup,
+  RecordStatusBadge,
   RegisterToolbar,
+  RevisionStatusBadge,
+  RfiStatusBadge,
   SaveIndicator,
   Select,
   Skeleton,
   Spinner,
-  StatusBadge,
   Tabs,
   TextArea,
   TextInput,
@@ -516,19 +519,29 @@ export const CATALOG: LabEntry[] = [
   },
   {
     id: "status-badge",
-    name: "StatusBadge",
+    name: "RfiStatusBadge / RecordStatusBadge / RevisionStatusBadge / AttentionBadge",
     group: "primitive",
-    description: "Centralized status vocabulary and tone map.",
+    description:
+      "Domain-typed status vocabularies (one map per authoritative domain status enum) plus the calculated due/overdue attention condition — never a feature-invented status list.",
     examples: [
       {
         state: "default",
         render: () => (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <StatusBadge status="draft" />
-            <StatusBadge status="open" />
-            <StatusBadge status="overdue" />
-            <StatusBadge status="issued" />
-            <StatusBadge status="closed" />
+            <RfiStatusBadge status="draft" />
+            <RfiStatusBadge status="ready_to_issue" />
+            <RfiStatusBadge status="open" />
+            <RfiStatusBadge status="response_received" />
+            <RfiStatusBadge status="returned_for_clarification" />
+            <RfiStatusBadge status="closed" />
+            <RfiStatusBadge status="void" />
+            <RecordStatusBadge status="active" />
+            <RecordStatusBadge status="archived" />
+            <RevisionStatusBadge status="draft" />
+            <RevisionStatusBadge status="published" />
+            <RevisionStatusBadge status="superseded" />
+            <AttentionBadge condition="due_soon" />
+            <AttentionBadge condition="overdue" />
           </div>
         ),
       },
@@ -778,7 +791,7 @@ export const CATALOG: LabEntry[] = [
             projectName="OHPA Conway"
             facts={
               <>
-                <StatusBadge status="open" /> <span>Conway, AR</span>
+                <RfiStatusBadge status="open" /> <span>Conway, AR</span>
               </>
             }
           />
@@ -870,7 +883,7 @@ export const CATALOG: LabEntry[] = [
           <MetadataStrip
             items={[
               { label: "Number", value: "RFI-014", mono: true },
-              { label: "Status", value: <StatusBadge status="open" /> },
+              { label: "Status", value: <RfiStatusBadge status="open" /> },
               { label: "Due", value: "2026-08-01", mono: true },
               { label: "Party", value: "Structural EOR" },
             ]}
