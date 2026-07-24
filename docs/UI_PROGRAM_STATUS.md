@@ -2,7 +2,7 @@
 
 **Status date:** 2026-07-24
 **Current phase:** UI-6A (native React Projects register) is implemented on `agent/ui-6a-projects-register-react`, starting from merged UI-5 (`86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`, PR #45).
-**Active branch/PR:** `agent/ui-6a-projects-register-react`; draft PR pending against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`.
+**Active branch/PR:** `agent/ui-6a-projects-register-react`; draft PR #46 against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -1172,7 +1172,7 @@ merge this PR without explicit approval.
 | UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
 | UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
-| UI-6A — Projects register           | **Implemented; draft PR pending** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B       |
+| UI-6A — Projects register           | **Implemented; draft PR #46** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B       |
 | UI-6B — Document Register           | Not started                                                    | UI-6A reviewed and merged           |
 | UI-7 — Detail workspaces            | Not started                                                    | Shared workspace contract           |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
