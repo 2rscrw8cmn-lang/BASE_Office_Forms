@@ -1,8 +1,8 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-6B (native React Document Register) is implemented on `claude/ui-6b-document-register-evonty`, stacked on the still-unmerged UI-6A branch.
-**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR #47 against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`. **UI-6A (PR #46) is open, not merged**, so UI-6B branches from `agent/ui-6a-projects-register-react` rather than from `main`; see §5F "Branch stacking" for why and what that means for review order.
+**Current phase:** UI-6B (native React Document Register) is implemented on `claude/ui-6b-document-register-evonty`, rebased onto `main` after UI-6A merged.
+**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR #47 against `main`. PR #36, PR #41, PR #43, PR #44, PR #45, and **PR #46 (UI-6A)** are merged to `main` (`main` is now `0b5ec89`). UI-6A merged as a **squash commit**, which broke the ancestry UI-6B had relied on while stacked; UI-6B was rebased (`--onto` the new `main`) to restore a clean, conflict-free diff. See §5F "Branch stacking and the post-squash rebase" for the full account.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -807,6 +807,40 @@ Branch `claude/ui-5-rfi-register-react`, based on merged UI-4 (`6976f16`).
 Historical branch record: PR #45 subsequently merged to `main` as
 `86b11e1bf0a3f1ef9f255d1e5cc872b41516c36d`.
 
+### Branch stacking and the post-squash rebase (2026-07-24, update)
+
+UI-6A (PR #46) merged into `main` as `0b5ec89` **as a single squash commit**
+(GitHub's "Squash and merge"), not a merge commit. That distinction mattered:
+this branch had been stacked on UI-6A's pre-merge tip (`6dc61ec`), and a squash
+commit has no ancestry relationship to the commits it was squashed from — from
+git's point of view, `0b5ec89` is an unrelated commit that happens to touch the
+same files. A regular 3-way merge of this branch against the new `main` was
+therefore genuinely conflicted (confirmed via `git merge --no-commit`; GitHub
+reported `mergeable_state: dirty`), even though the two sets of changes do not
+overlap in intent.
+
+The fix was `git rebase --onto origin/main 6dc61ec claude/ui-6b-document-register-evonty`:
+replaying only the 5 commits unique to this branch (the diff between `6dc61ec`
+and this branch's tip) onto the new `main`, rather than trying to 3-way-merge
+full history. That rebase applied with zero conflicts, confirming the two
+branches' changes were disjoint all along — the conflict was structural
+(squash-vs-merge ancestry), not a real content collision. Verified with
+`git merge-base --is-ancestor origin/main <rebased-branch>` (true) before
+pushing.
+
+Rebasing also picked up a freshly-flagged high-severity `brace-expansion`
+advisory (transitive via `eslint -> minimatch`, devDependency-only, no
+production exposure) that postdated this branch's last audit run. Resolved
+with the non-breaking `npm audit fix` (not `--force`); one `package-lock.json`
+line changed. Full `npm run check` re-run clean after the rebase: 569 unit +
+120 Worker integration tests, build, Functions build, 0 vulnerabilities,
+secret scan.
+
+`claude/ui-6b-document-register-evonty` was then force-pushed (with
+`--force-with-lease`, after confirming no one else had pushed to it) to this
+new, rebased history. PR #47 now shows 53 changed files (down from 94) and no
+longer carries UI-6A's diff.
+
 ### Confirmed starting point
 
 `main` at the start of this phase was `6976f16` ("UI-4: React application
@@ -1406,8 +1440,8 @@ Detail Workspaces** only after UI-6B is merged.
 | UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
 | UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
-| UI-6A — Projects register           | **Implemented; draft PR #46 open, NOT merged** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B merges |
-| UI-6B — Document Register           | **Implemented; draft PR #47** (`claude/ui-6b-document-register-evonty`, stacked on UI-6A) | Merge UI-6A, then review and merge UI-6B |
+| UI-6A — Projects register           | **Complete; merged** (`0b5ec89`, PR #46, squash)                | none                                 |
+| UI-6B — Document Register           | **Implemented; draft PR #47**, rebased onto `main` post-merge  | Review and merge UI-6B               |
 | UI-7 — Detail workspaces            | Not started — **the exact next phase**                         | Review and merge UI-6B first        |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
@@ -1434,9 +1468,9 @@ open**. UI-6B is implemented on `claude/ui-6b-document-register-evonty`
 (draft PR #47), stacked on the UI-6A branch because UI-6A had not merged when
 UI-6B began.
 
-Merge order is therefore: review and merge UI-6A (PR #46), then review and
-merge UI-6B (PR #47). Only after UI-6B is reviewed and merged should **UI-7 Detail
-Workspaces** begin — the Record, Revision, and RFI detail routes are the exact
-next phase, and they remain compatibility-mounted until then. RFI Slice 2A
-backend architecture may proceed independently once `main` is pulled and
-stable.
+**UI-6A (PR #46) merged** as `0b5ec89`. UI-6B was rebased onto the new `main`
+and is ready for review (§5F). Review and merge UI-6B (PR #47) next. Only
+after UI-6B merges should **UI-7 Detail Workspaces** begin — the Record,
+Revision, and RFI detail routes are the exact next phase, and they remain
+compatibility-mounted until then. RFI Slice 2A backend architecture may
+proceed independently once `main` is pulled and stable.
