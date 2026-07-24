@@ -272,6 +272,10 @@ await shot("rfi-register-desktop-populated.png", {
   ...DESKTOP,
   query: "?route=/projects/p1/rfis",
 });
+await shot("rfi-register-desktop-actions-menu.png", {
+  ...DESKTOP,
+  query: "?route=/projects/p1/rfis&rfiScenario=action-menu",
+});
 await shot("rfi-register-desktop-new-draft.png", {
   ...DESKTOP,
   query: "?route=/projects/p1/rfis&rfiScenario=new-draft",
@@ -304,6 +308,10 @@ await shot("rfi-register-desktop-first-use-empty.png", {
 await shot("rfi-register-mobile-390-cards.png", {
   ...MOBILE_390,
   query: "?route=/projects/p1/rfis",
+});
+await shot("rfi-register-mobile-390-filters-open.png", {
+  ...MOBILE_390,
+  query: `?route=${encodeURIComponent("/projects/p1/rfis?status=draft")}&rfiScenario=mobile-filters`,
 });
 await shot("rfi-register-mobile-390-drawer.png", {
   ...MOBILE_390,

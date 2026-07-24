@@ -10,6 +10,11 @@ const register = readFileSync(
 const editor = readFileSync("src/ui/features/rfis/RfiEditorPanel.tsx", "utf8");
 const table = readFileSync("src/ui/features/rfis/RfiTable.tsx", "utf8");
 const cards = readFileSync("src/ui/features/rfis/RfiCards.tsx", "utf8");
+const drawer = readFileSync("src/ui/components/interactive/Drawer.tsx", "utf8");
+const toolbar = readFileSync(
+  "src/ui/components/patterns/RegisterToolbar.tsx",
+  "utf8",
+);
 
 const HEX = /#[0-9a-fA-F]{3,8}\b/;
 const FUNCTIONAL_COLOR = /\b(?:rgb|rgba|hsl|hsla)\(/;
@@ -36,6 +41,15 @@ describe("RFI register shared-component boundary", () => {
     expect(editor).toMatch(/\bCollapsible\b/);
     expect(table).not.toMatch(/RfiEditorPanel|editor-row|data-editor-row/);
     expect(register).toMatch(/<RfiEditorPanel/);
+    expect(register).toMatch(/size="detail"/);
+    expect(drawer).toMatch(/size\?: "navigation" \| "detail"/);
+  });
+
+  it("uses the shared toolbar disclosure rather than an RFI-only mobile filter control", () => {
+    expect(register).toMatch(/mobileFilterDisclosure/);
+    expect(toolbar).toMatch(/base-toolbar__filter-toggle/);
+    expect(toolbar).toMatch(/aria-expanded/);
+    expect(toolbar).toMatch(/aria-controls/);
   });
 
   it("does not import Radix or Lucide directly from the feature", () => {

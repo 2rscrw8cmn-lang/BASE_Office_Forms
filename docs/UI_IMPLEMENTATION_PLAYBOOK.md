@@ -342,8 +342,9 @@ UI-5 visual refinement:
   RFIs retain their authoritative number and canonical workspace link; the
   database UUID is never shown;
 - the row primary area opens an editable draft in the Drawer or navigates an
-  issued/locked RFI to its canonical workspace; the action menu exposes only
-  `Edit draft` or `Open RFI` as appropriate;
+  issued/locked RFI to its canonical workspace; an editable draft's overflow
+  menu orders `Edit details` then `Open RFI`, while a locked/issued row exposes
+  only `Open RFI`;
 - the shared Drawer covers Subject, Assigned to, Response due, Question,
   Contractor recommendation, and a shared `Collapsible` for Drawing and
   Specification references, built from the UI-3 `Drawer`, `Collapsible`,
@@ -351,6 +352,15 @@ UI-5 visual refinement:
 - changed-only commits: text/date controls commit on blur, selects commit on
   selection, Enter commits a non-textarea control by blurring it, Enter in a
   textarea inserts a newline, unchanged values never call the API;
+- the Drawer footer has secondary `Open` (the `file-text` icon) and `Close`.
+  `Open` first blurs an active field, waits for the normal changed-only commit
+  without a timeout, and navigates only when it is unchanged or saves
+  successfully; validation, 403, failed save, and 409 feedback keep the
+  Drawer open for correction/retry;
+- `Drawer` owns a shared `navigation` (default) and `detail` size contract:
+  detail is `clamp(500px, 45vw, 660px)` above 760px and full viewport width at
+  or below 760px. `RegisterToolbar` keeps desktop filters inline but exposes a
+  shared 44px mobile filter disclosure with active-count and Clear access;
 - contact selection by project-contact ID, with the unresolved-legacy-text
   handling preserved;
 - capability-gated Add RFI that creates one draft, clears incompatible
@@ -371,6 +381,9 @@ UI-5 visual refinement:
 
 - feature code does not instantiate Tabulator and does not build a second
   grid abstraction;
+- this RFI composition is the accepted reference-register pattern. Follow its
+  focused feature components and shared primitives for later registers rather
+  than introducing a large generic `BaseRegister` abstraction;
 - the API remains authoritative; no new endpoints or response-shape changes
   without a verified blocking gap;
 - role strings are not interpreted in the client;

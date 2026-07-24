@@ -146,25 +146,37 @@ export function RfiCards({
                     data-rfi-card-actions={rfi.id}
                   />
                 }
-                items={[
+                items={
                   rfi.capabilities.updateDraft
-                    ? {
-                        id: "edit",
-                        label: "Edit draft",
-                        icon: "pencil",
-                        onSelect: () => {
-                          onOpenEditor(rfi.id);
+                    ? [
+                        {
+                          id: "edit",
+                          label: "Edit details",
+                          icon: "pencil",
+                          onSelect: () => {
+                            onOpenEditor(rfi.id);
+                          },
                         },
-                      }
-                    : {
-                        id: "open",
-                        label: "Open RFI",
-                        icon: "file-text",
-                        onSelect: () => {
-                          shell.navigate(href);
+                        {
+                          id: "open",
+                          label: "Open RFI",
+                          icon: "file-text",
+                          onSelect: () => {
+                            shell.navigate(href);
+                          },
                         },
-                      },
-                ]}
+                      ]
+                    : [
+                        {
+                          id: "open",
+                          label: "Open RFI",
+                          icon: "file-text",
+                          onSelect: () => {
+                            shell.navigate(href);
+                          },
+                        },
+                      ]
+                }
               />
             </div>
 

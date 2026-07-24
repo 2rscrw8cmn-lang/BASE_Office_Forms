@@ -61,6 +61,23 @@ describe("Drawer keyboard and focus", () => {
       expect(document.activeElement).toBe(trigger);
     });
   });
+
+  it("exposes the reusable detail size without changing navigation Drawers", () => {
+    render(
+      <>
+        <Drawer open title="Navigation">
+          <p>Navigation</p>
+        </Drawer>
+        <Drawer open side="right" size="detail" title="RFI detail">
+          <p>Detail</p>
+        </Drawer>
+      </>,
+    );
+    const dialogs = screen.getAllByRole("dialog", { hidden: true });
+    expect(dialogs[0]).toHaveClass("base-drawer--navigation");
+    expect(dialogs[0]).not.toHaveClass("base-drawer--detail");
+    expect(dialogs[1]).toHaveClass("base-drawer--detail");
+  });
 });
 
 describe("Tabs keyboard navigation", () => {

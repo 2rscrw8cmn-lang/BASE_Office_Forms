@@ -254,8 +254,6 @@ preview-schema mismatch documented above. The new guarded fixture supplies the
 minimum Access identity and synthetic project used for the passing browser
 retest; it does not alter the source route or its read model.
 
-
-
 ## 4. UI-2 exit gate
 
 UI-2 is complete only when all of these are true:
@@ -333,7 +331,7 @@ Branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft). Not merged.
    change, so it could point past the end of the list if `items` shrank or
    the active item disappeared under a filter/capability change while the
    menu stayed open. Fixed: ids are now derived per instance from `useId()`;
-   the active index is re-derived from the *current* filtered length on every
+   the active index is re-derived from the _current_ filtered length on every
    render (clamped in range, `-1` for an empty collection) in addition to a
    reset-on-filter-change effect, so `aria-activedescendant` can never
    dereference an out-of-range item; `aria-controls` is omitted when there is
@@ -365,7 +363,7 @@ Branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft). Not merged.
    `RFI_STATUS_VOCABULARY: Record<RfiStatus, …>` (all seven statuses: `draft`,
    `ready_to_issue`, `open`, `response_received`, `closed`,
    `returned_for_clarification`, `void`), `RECORD_STATUS_VOCABULARY:
-   Record<RecordStatus, …>` (`active`, `archived`), and
+Record<RecordStatus, …>` (`active`, `archived`), and
    `REVISION_STATUS_VOCABULARY: Record<RevisionStatus, …>` (`draft`,
    `published`, `superseded`) — plus a separate `AttentionBadge`/
    `ATTENTION_VOCABULARY` for the calculated `due_soon`/`overdue` conditions,
@@ -430,6 +428,15 @@ and `ui-lab-catalog` (real components across every required state). Component
 suites run under Happy DOM via `tests/helpers/setup-component-dom.ts`.
 
 ### Evidence
+
+**Current final evidence (2026-07-24):** `scripts/capture-ui5-evidence.mjs`
+builds the real shell/evidence harness and records desktop, tablet, and true
+390×844/430×932 emulated mobile states. It includes the editable-draft
+overflow menu, detail Drawer with Open/Close, validation, saving, conflict,
+empty states, mobile cards, and the expanded filter disclosure. The files under
+`docs/evidence/ui-5/` are regenerated from the final interaction model;
+obsolete inline-editor and cropped-viewport captures have been removed. The
+historical capture notes that follow are superseded by this paragraph.
 
 Desktop (1280px) and mobile (390px) UI Lab captures are committed at
 `docs/evidence/ui-3/ui-lab-desktop.png` and `ui-lab-mobile.png`, generated from
@@ -502,7 +509,7 @@ Branch `claude/ui-4-react-foundation-ywnpm2`. Not merged.
 ### Scope decision (documented)
 
 UI-4 keeps the established sidebar chrome via `app-shell.css` rather than
-adopting the UI-3 `AppShell`/`ProjectTabs` *visual* primitives, which imply a
+adopting the UI-3 `AppShell`/`ProjectTabs` _visual_ primitives, which imply a
 top-navigation paradigm shift. Because the feature screens are not yet migrated,
 that swap would be a redesign that risks the not-yet-migrated feature layout,
 not a parity migration. The shared components are composed where additive
@@ -568,7 +575,7 @@ state through `window.history.pushState`/`replaceState` issued directly
 (bypassing the router) and reread it from `window.location.search` inside
 their own `mount()` — see `rfis-view.js`'s `readFiltersFromUrl()`. Because
 `LegacyFeatureMount`'s creation effect only ran when the feature descriptor's
-key changed, a query/hash-only navigation to the *same* route (a genuine React
+key changed, a query/hash-only navigation to the _same_ route (a genuine React
 Router navigation, or browser Back/Forward — the only two things that actually
 move `window.location` when a `<BrowserRouter>` is in use, since raw
 `pushState` calls made directly by a feature bypass the router entirely and
@@ -576,7 +583,7 @@ never fire `popstate`) never told the existing controller to reread the URL.
 
 Fixed: `LegacyFeatureMount` now accepts a `locationKey` prop (`AppLayout`
 supplies `${route.pathname}${location.search}${location.hash}`). A second
-effect, independent of the creation effect, remounts the *existing* controller
+effect, independent of the creation effect, remounts the _existing_ controller
 (`controller.mount(container)`) whenever `locationKey` changes while the
 descriptor stays the same — no new factory call, no new `reload()`. A ref
 tracks the location a freshly created controller "started" at, so the first
@@ -612,10 +619,10 @@ Fixed: `useProject` now accepts a `revalidationKey` (the route's normalized
 pathname, supplied by `AppLayout`). Using React's documented "adjust state
 during render in response to a changed prop" pattern, an `epoch` counter is
 bumped exactly when `revalidationKey` changes for a route that has a
-`projectId` — deliberately *not* on query/hash-only changes on the same route,
+`projectId` — deliberately _not_ on query/hash-only changes on the same route,
 and not on ordinary rerenders, since neither is a route transition worth
 distrusting existing authorization over. The epoch is part of the query key
-(`["project", projectId, epoch]`), so a bump is a *brand-new* query — no stale
+(`["project", projectId, epoch]`), so a bump is a _brand-new_ query — no stale
 `ready` data lingers while the fresh answer is pending — and `AppLayout`
 already only mounts the destination feature once `project.status === "ready"`,
 so no feature request can begin before the revalidated project confirms
@@ -751,39 +758,49 @@ optimistic-concurrency contracts remain unchanged.
   and question summary, status, Assigned to, Due, and the same action menu.
 - Add RFI and every editable draft use one shared right-side `Drawer`; it is
   full-screen at 760px and below, stacks paired fields below 460px, scrolls
-  internally, and retains a safe-area-aware sticky Close footer.
+  internally, and retains a safe-area-aware sticky footer with secondary
+  `Open` (`file-text`) and `Close`. `Open` first resolves the normal
+  changed-only commit path and only then navigates to the workspace; validation,
+  403, failed saves, and conflicts retain the Drawer and field feedback.
 - `RfiEditorPanel.tsx` is Drawer form content, not an inline row. Field order
   is Subject; Assigned to + Response due; Question; optional Contractor
   recommendation; collapsed Additional information for Drawing and
   Specification references.
 - Row primary areas open editable drafts or navigate issued/locked RFIs.
-  Menus expose only `Edit draft` and `Open RFI` as appropriate. Escape first
+  Draft menus order `Edit details` then `Open RFI`; locked/issued menus expose
+  only `Open RFI`. Escape first
   blurs the active control through the existing commit path, then closes and
   restores focus to the opener.
 - Shared UI-3 `Drawer`, `Collapsible`, fields/inputs, menus, icons, badges,
   `SaveIndicator`, and state components are reused. Feature code has no direct
   Radix/Lucide imports and no feature-owned SVG, button, badge, or dialog
   system.
-- UI Lab now demonstrates both left- and right-side Drawers. Shared layer
-  tokens place overlays at 240, Drawers at 250, and toasts at 300; a regression
-  test prevents a Drawer from falling beneath its scrim or mobile shell.
+- UI Lab now demonstrates navigation and detail Drawer sizes and the shared
+  mobile `RegisterToolbar` disclosure. Detail Drawers are
+  `clamp(500px, 45vw, 660px)` above 760px and full-width at or below it;
+  desktop filters stay inline while mobile keeps Search visible and reveals
+  full-width filters with a 44px filter button, active count, and Clear access.
 - Evidence capture now uses Chrome DevTools Protocol emulation and asserts the
   requested 390×844 and 430×932 CSS viewports with no horizontal overflow.
-  Desktop populated/new/edit/validation/saving/conflict/empty states, mobile
-  cards/full-screen Drawer/collapsible states, and 768/820 tablet Drawers are
-  committed under `docs/evidence/ui-5/`.
-- Final verification passes format checking, generated Cloudflare types plus
-  TypeScript, ESLint, 442 unit tests, 119 Worker integration tests, production
-  UI/assets build, Pages Functions build, secret scan, UI Lab build, evidence
-  build, and all 14 screenshot captures. `npm run check` reaches the dependency
-  audit and then reports the repository's known two high-severity React Router
-  findings (`GHSA-qwww-vcr4-c8h2`); the offered fix is a breaking
-  `npm audit fix --force` and was deliberately not applied.
+  Desktop populated/actions-menu/new/edit/validation/saving/conflict/empty
+  states, mobile cards/filter-disclosure/full-screen Drawer/collapsible states,
+  and 768/820 tablet Drawers are committed under `docs/evidence/ui-5/`.
+- React Router is deliberately migrated to `react-router` 8.3.0 and the retired
+  DOM package is removed. `.node-version`, package engines, and CI are pinned
+  to Node 22.22.0; `npm audit --audit-level=high` passes with zero
+  vulnerabilities. Verification also covers the interaction, shared-component,
+  and router-migration regressions.
 
 The remainder of §5D records the initial implementation and review history. It
 is retained for auditability; this refinement and the current contracts in
 `docs/UX_RFI_SPEC.md`, `docs/UI_IMPLEMENTATION_PLAYBOOK.md`, and
 `docs/CURRENT_APPLICATION_STRUCTURE.md` are authoritative.
+
+**Continuation 2026-07-24:** this native RFI composition is the accepted
+reference-register pattern. Later registers must compose the shared
+`RegisterToolbar` and Drawer primitives through focused feature components;
+do not introduce a broad generic `BaseRegister` abstraction. PR #45 remains a
+draft and is not merged.
 
 Branch `claude/ui-5-rfi-register-react`, based on merged UI-4 (`6976f16`).
 Not merged.
@@ -1110,22 +1127,22 @@ explicit approval.
 
 ## 6. Phase status
 
-| Phase                        | Status                     | Next gate                                        |
-| ---------------------------- | -------------------------- | ------------------------------------------------ |
-| Spike 0 — Tabulator          | Complete; rejected for RFI | Future high-volume proposal only                 |
-| UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
-| UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
-| RFI Slice 1                  | Complete; merged and closed out in production | none                            |
-| UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43) | none                                   |
-| UI-4 — React shell           | Complete; merged (`6976f16`, PR #44) | none                                    |
-| UI-5 — RFI register          | **Implemented; not merged** (`claude/ui-5-rfi-register-react`) | Review and merge, then UI-6 |
-| UI-6 — Projects + Records    | Not started                | Shared register contract                         |
-| UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
-| UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
-| UI-9 — Library + Studio      | Not started                | Application foundation stable                    |
-| UI-10 — Enforcement/cleanup  | Not started                | Route parity and visual baselines                |
-| RFI Slice 2A — backend architecture | Not started; may begin after `main` is pulled and stable | Independent of UI-3 |
-| RFI Slice 2 — issuance UI     | Unblocked for components; still gated on review/merge | UI-3 shared components now exist  |
+| Phase                               | Status                                                         | Next gate                           |
+| ----------------------------------- | -------------------------------------------------------------- | ----------------------------------- |
+| Spike 0 — Tabulator                 | Complete; rejected for RFI                                     | Future high-volume proposal only    |
+| UI-1 — Audit and decisions          | Complete                                                       | Binding documents and ADRs recorded |
+| UI-2 — CSS + React/Vite             | Complete; merged (`a1ade6d`)                                   | none                                |
+| RFI Slice 1                         | Complete; merged and closed out in production                  | none                                |
+| UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
+| UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
+| UI-5 — RFI register                 | **Implemented; not merged** (`claude/ui-5-rfi-register-react`) | Review and merge, then UI-6         |
+| UI-6 — Projects + Records           | Not started                                                    | Shared register contract            |
+| UI-7 — Detail workspaces            | Not started                                                    | Shared workspace contract           |
+| UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
+| UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
+| UI-10 — Enforcement/cleanup         | Not started                                                    | Route parity and visual baselines   |
+| RFI Slice 2A — backend architecture | Not started; may begin after `main` is pulled and stable       | Independent of UI-3                 |
+| RFI Slice 2 — issuance UI           | Unblocked for components; still gated on review/merge          | UI-3 shared components now exist    |
 
 ## 7. Current constraints and risks
 

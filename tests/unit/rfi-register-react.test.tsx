@@ -150,6 +150,62 @@ describe("native RFI register — identity and subject navigation", () => {
       await screen.findByRole("dialog", { name: "Edit RFI draft" }),
     ).toBeInTheDocument();
   });
+
+  it("offers Edit details then Open RFI for an editable draft", async () => {
+    installRfiFetch({ rows: [rfi()] });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-rfi-actions="rfi-1"]',
+    );
+    expect(trigger).not.toBeNull();
+    await userEvent.click(trigger as HTMLElement);
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Edit details", "Open RFI"]);
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Open RFI" }),
+    );
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/projects/project-1/rfis/rfi-1");
+    });
+  });
+
+  it("offers only Open RFI for locked rows and navigates from the mobile menu", async () => {
+    installRfiFetch({
+      rows: [
+        rfi({
+          id: "rfi-locked",
+          rfiNumber: "RFI-004",
+          capabilities: { updateDraft: false },
+        }),
+      ],
+    });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-rfi-card-actions="rfi-locked"]',
+    );
+    expect(trigger).not.toBeNull();
+    await userEvent.click(trigger as HTMLElement);
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Open RFI"]);
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Open RFI" }),
+    );
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(
+        "/projects/project-1/rfis/rfi-locked",
+      );
+    });
+  });
 });
 
 describe("native RFI register — expandable editor", () => {
@@ -204,6 +260,119 @@ describe("native RFI register — expandable editor", () => {
       expect(document.querySelector('[data-editor-drawer="rfi-1"]')).toBeNull();
       expect(document.activeElement).toBe(trigger);
     });
+  });
+
+  it("opens the canonical workspace from the Drawer when nothing changed", async () => {
+    installRfiFetch({ rows: [rfi()] });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    await openEditor();
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/projects/project-1/rfis/rfi-1");
+    });
+  });
+
+  it("waits for a valid changed field before opening the workspace", async () => {
+    let resolveUpdate!: (response: Response) => void;
+    const update = new Promise<Response>((resolve) => {
+      resolveUpdate = resolve;
+    });
+    const { calls } = installRfiFetch({
+      rows: [rfi()],
+      onUpdate: () => update,
+    });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    await openEditor();
+    const input = fieldInput("rfi-1", "subject") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Saved before open" } });
+    fireEvent.blur(input);
+    await waitFor(() => {
+      expect(calls.filter((call) => call.method === "PATCH")).toHaveLength(1);
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(window.location.pathname).toBe("/projects/project-1/rfis");
+    resolveUpdate(
+      jsonResponse({ data: { subject: "Saved before open", lockVersion: 2 } }),
+    );
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/projects/project-1/rfis/rfi-1");
+    });
+  });
+
+  it.each([
+    {
+      name: "required-field validation",
+      update: undefined,
+      change: "",
+      message: "Subject is required.",
+    },
+    {
+      name: "permission loss",
+      update: () =>
+        jsonResponse(
+          { error: { code: "AUTHORIZATION_DENIED", message: "Forbidden" } },
+          { status: 403 },
+        ),
+      change: "Blocked by permission",
+      message: "You no longer have permission to edit this draft.",
+    },
+    {
+      name: "failed save",
+      update: () => jsonResponse({}, { status: 500 }),
+      change: "Blocked by failure",
+      message: undefined,
+    },
+  ])(
+    "keeps the Drawer open when $name blocks Open",
+    async ({ update, change, message }) => {
+      installRfiFetch({ rows: [rfi()], onUpdate: update });
+      renderRfiRegister();
+      await screen.findByRole("table");
+      await openEditor();
+      const input = fieldInput("rfi-1", "subject") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: change } });
+      fireEvent.blur(input);
+      await userEvent.click(screen.getByRole("button", { name: "Open" }));
+      await waitFor(() => {
+        if (message) {
+          expect(screen.getByText(message)).toBeInTheDocument();
+        } else {
+          expect(input).toHaveAttribute("aria-invalid", "true");
+        }
+      });
+      expect(window.location.pathname).toBe("/projects/project-1/rfis");
+      expect(
+        screen.getByRole("dialog", { name: "Edit RFI draft" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("keeps the Drawer open after a conflict blocks Open", async () => {
+    installRfiFetch({
+      rows: [rfi()],
+      onUpdate: () =>
+        jsonResponse(
+          { error: { code: "RFI_VERSION_CONFLICT", message: "Conflict" } },
+          { status: 409 },
+        ),
+      reloadRows: [rfi({ subject: "Changed elsewhere", lockVersion: 2 })],
+    });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    await openEditor();
+    const input = fieldInput("rfi-1", "subject") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Stale edit" } });
+    fireEvent.blur(input);
+    await screen.findByText(
+      "Changed elsewhere. Latest values loaded; review and retry.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(window.location.pathname).toBe("/projects/project-1/rfis");
+    expect(
+      screen.getByRole("dialog", { name: "Edit RFI draft" }),
+    ).toBeInTheDocument();
   });
 
   it("closes the editor on Escape from a field and returns focus to the trigger", async () => {
@@ -564,6 +733,32 @@ describe("native RFI register — search, filters, and URL state", () => {
       expect(screen.getAllByText("Saved").length).toBeGreaterThan(0);
     });
     expect(window.location.search).toContain("status=draft");
+  });
+
+  it("provides an accessible mobile filter disclosure while Search and Clear remain available", async () => {
+    installRfiFetch({ rows: [rfi()] });
+    renderRfiRegister();
+    await screen.findByRole("table");
+    const search = screen.getByRole("searchbox", { name: "Search RFIs" });
+    const toggle = screen.getByRole("button", { name: "Show filters" });
+    expect(search).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle.getAttribute("aria-controls")).toBeTruthy();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const status = screen.getByRole("combobox", { name: "Status" });
+    fireEvent.change(status, { target: { value: "draft" } });
+    await waitFor(() => {
+      expect(window.location.search).toContain("status=draft");
+    });
+    expect(
+      screen.getByRole("button", { name: "Hide filters" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Hide filters" }));
+    expect(
+      screen.getByRole("button", { name: "Show 1 active filters" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
   });
 
   it("shows a filtered-empty state with Clear, distinct from first-use empty", async () => {

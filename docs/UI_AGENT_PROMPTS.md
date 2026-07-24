@@ -146,11 +146,14 @@ on LegacyFeatureMount until UI-7.
 
 Preserve exactly: columns RFI, Subject, Status, Assigned to, Due, Updated, and
 an accessible visually unlabeled Actions column; Draft badges instead of
-"Unnumbered"; row-primary-area open/navigation; Edit draft/Open RFI menus; and
+"Unnumbered"; row-primary-area open/navigation; editable-draft menus ordered
+Edit details/Open RFI and locked/issued Open RFI-only menus; and
 the shared Drawer fields Subject, Assigned to, Response due, Question,
 Contractor recommendation, plus collapsed Additional information for drawing
 and specification references. Use shared Drawer/Collapsible/Field/input/
-ValidationMessage/SaveIndicator/Button components. Keep changed-only commits
+ValidationMessage/SaveIndicator/Button components. Its detail Drawer footer
+has secondary Open (`file-text`) and Close: Open waits for the normal
+changed-only commit and only navigates on unchanged/success. Keep changed-only commits
 (blur for text/date, selection for selects, Enter-blurs-non-textarea,
 Enter-inserts-newline-in-textarea), Escape-commits-then-closes-and-returns-
 focus, per-field Saving/Saved/Failed/Conflict states, contact-ID selection,

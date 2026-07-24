@@ -51,7 +51,8 @@ export interface RfiEditorPanelProps {
    * data, so the panel re-derives its displayed values from the server
    * without losing focus or remounting. */
   resetSignal: number;
-  onCommit: (field: RfiEditableField, rawValue: string) => void;
+  onCommit: (field: RfiEditableField, rawValue: string) => Promise<boolean>;
+  onOpenWorkspace: () => void;
   onClose: () => void;
 }
 
@@ -61,6 +62,7 @@ export function RfiEditorPanel({
   fieldStates,
   resetSignal,
   onCommit,
+  onOpenWorkspace,
   onClose,
 }: RfiEditorPanelProps) {
   const [values, setValues] = useState<Record<RfiEditableField, string>>(() =>
@@ -87,7 +89,7 @@ export function RfiEditorPanel({
   }
 
   function commit(field: RfiEditableField) {
-    onCommit(field, values[field]);
+    void onCommit(field, values[field]);
   }
 
   function handleKeyDown(
@@ -212,7 +214,7 @@ export function RfiEditorPanel({
               value={values.responsiblePartyId}
               onChange={(event) => {
                 setValue("responsiblePartyId", event.target.value);
-                onCommit("responsiblePartyId", event.target.value);
+                void onCommit("responsiblePartyId", event.target.value);
               }}
               onKeyDown={(event) => {
                 handleKeyDown(event, false);
@@ -373,6 +375,16 @@ export function RfiEditorPanel({
       </div>
 
       <footer className="rfi-register-editor__foot">
+        <Button
+          variant="secondary"
+          type="button"
+          iconStart="file-text"
+          data-editor-open-workspace
+          data-id={rfi.id}
+          onClick={onOpenWorkspace}
+        >
+          Open
+        </Button>
         <Button
           variant="secondary"
           type="button"

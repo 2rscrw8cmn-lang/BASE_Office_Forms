@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { cx } from "../util/cx";
 import { Icon } from "../icons/Icon";
+import { IconButton } from "../primitives/IconButton";
 
 export interface RegisterToolbarProps {
   /** Search value (controlled). */
@@ -10,6 +11,11 @@ export interface RegisterToolbarProps {
   searchPlaceholder?: string;
   /** Compact filter controls (Selects, Popover triggers). */
   filters?: ReactNode;
+  /** Reusable mobile disclosure for the same semantic filter controls. */
+  mobileFilterDisclosure?: {
+    activeCount: number;
+    label?: string;
+  };
   /** Sort control. */
   sort?: ReactNode;
   /** Active filter chips row. */
@@ -30,13 +36,31 @@ export function RegisterToolbar({
   searchLabel = "Search",
   searchPlaceholder = "Search…",
   filters,
+  mobileFilterDisclosure,
   sort,
   chips,
   resultCount,
   className,
 }: RegisterToolbarProps) {
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const filterPanelId = useId();
+  const hasMobileDisclosure = filters != null && mobileFilterDisclosure != null;
+  const activeFilterCount = mobileFilterDisclosure?.activeCount ?? 0;
+  const filterLabel = mobileFilterDisclosure?.label ?? "Filters";
+  const toggleLabel = mobileFiltersOpen
+    ? `Hide ${filterLabel.toLowerCase()}`
+    : activeFilterCount > 0
+      ? `Show ${String(activeFilterCount)} active ${filterLabel.toLowerCase()}`
+      : `Show ${filterLabel.toLowerCase()}`;
+
   return (
-    <div className={cx("base-toolbar", className)}>
+    <div
+      className={cx(
+        "base-toolbar",
+        hasMobileDisclosure && "base-toolbar--mobile-filter-disclosure",
+        className,
+      )}
+    >
       <div className="base-toolbar__row">
         {onSearchChange ? (
           <div className="base-toolbar__search">
@@ -57,8 +81,35 @@ export function RegisterToolbar({
             />
           </div>
         ) : null}
+        {hasMobileDisclosure ? (
+          <span className="base-toolbar__filter-toggle">
+            <IconButton
+              icon="filter"
+              label={toggleLabel}
+              aria-controls={filterPanelId}
+              aria-expanded={mobileFiltersOpen}
+              onClick={() => {
+                setMobileFiltersOpen((open) => !open);
+              }}
+            />
+            {activeFilterCount > 0 ? (
+              <span className="base-toolbar__filter-count" aria-hidden="true">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
         {filters != null ? (
-          <div className="base-toolbar__filters">{filters}</div>
+          <div
+            id={hasMobileDisclosure ? filterPanelId : undefined}
+            className={cx(
+              "base-toolbar__filters",
+              hasMobileDisclosure && "base-toolbar__filters--mobile-disclosure",
+              hasMobileDisclosure && mobileFiltersOpen && "is-open",
+            )}
+          >
+            {filters}
+          </div>
         ) : null}
         {sort != null ? <div className="base-toolbar__sort">{sort}</div> : null}
       </div>

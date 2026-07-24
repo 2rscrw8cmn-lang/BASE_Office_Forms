@@ -180,8 +180,8 @@ resolved, so a project the user cannot access never triggers a feature request.
 
 `LegacyFeatureMount` also takes a `locationKey`
 (`${route.pathname}${location.search}${location.hash}`, supplied by
-`AppLayout`) so a query/hash-only navigation to the *same* route — a genuine
-React Router navigation, or browser Back/Forward — remounts the *existing*
+`AppLayout`) so a query/hash-only navigation to the _same_ route — a genuine
+React Router navigation, or browser Back/Forward — remounts the _existing_
 controller (`controller.mount(container)` again, no new factory call, no new
 `reload()`) so a legacy controller that reads filter/sort state from
 `window.location.search` inside its own `mount()` (`records-view.js`,
@@ -636,8 +636,8 @@ Updated, and an accessible visually unlabeled Actions column. Drafts show the
 shared `Draft` badge, never "Unnumbered"; issued rows show their authoritative
 number and canonical workspace link. The row primary area opens an editable
 draft (`capabilities.updateDraft === true`) in the shared Drawer or navigates a
-locked/issued RFI. The action menu is deliberately narrow: `Edit draft` or
-`Open RFI`. Column-header sorting (`SORT_HEADERS`/`SORT_KEYS` in
+locked/issued RFI. Editable-draft action menus order `Edit details` then
+`Open RFI`; locked/issued menus contain only `Open RFI`. Column-header sorting (`SORT_HEADERS`/`SORT_KEYS` in
 `urlState.ts`) and `aria-sort` retain the approved URL-backed behavior,
 including default number ascending and tie-break-by-id.
 
@@ -652,7 +652,10 @@ date controls commit on blur, Assigned to commits on selection, Enter commits
 a non-textarea control by blurring it, Enter inserts a newline in a textarea,
 and an unchanged value never calls the API. Escape blurs the active field
 through the same commit path, closes the Drawer, and returns focus to its row
-trigger; Close uses the same focus-return contract.
+trigger; Close uses the same focus-return contract. The footer's secondary
+`Open` action blurs an active control, waits for the tracked changed-only
+commit, and navigates only on unchanged/success; validation, 403, failed-save,
+and 409 states keep the Drawer open with their field feedback.
 Per-field Saving/Saved/Failed/Conflict feedback comes from
 `RfiRegisterFeature.tsx`'s own commit logic (not a generic form library): a
 `403` shows "You no longer have permission to edit this draft." at the
@@ -682,10 +685,13 @@ client-side filtering is never an authorization boundary.
 Mobile renders a dedicated two-line card list (`RfiCards.tsx`) — draft badge
 or official number, relative Updated time, Subject, question summary, status,
 Assigned to, Due, and the same action menu/Drawer triggers. It replaces the
-desktop table at `max-width: 760px`. The Drawer is full-screen at that
-breakpoint, stacks paired fields below 460px, uses an internal scroll region,
-and keeps a safe-area-aware sticky footer. At tablet and desktop widths it is
-a right-side panel up to 660px wide.
+desktop table at `max-width: 760px`. The shared Drawer defaults to navigation
+sizing; the RFI editor uses `size="detail"`, which is full-screen at that
+breakpoint and `clamp(500px, 45vw, 660px)` above it. It stacks paired fields
+below 460px, uses an internal scroll region, and keeps a safe-area-aware sticky
+footer. `RegisterToolbar` keeps desktop filters inline and uses its shared 44px
+mobile filter disclosure, active count, and reachable Clear control below the
+same breakpoint.
 
 `rfis.css` is feature-local, token-based CSS (no raw colour literals; every
 colour is a registered `--app-*` token, enforced by
@@ -702,6 +708,12 @@ their overlays, and toasts above Drawers (`--app-z-header: 20`,
 Lab Drawer section includes both left- and right-side examples; the token suite
 guards the layer order so a full-screen mobile Drawer cannot fall beneath the
 shell header or its own scrim.
+
+The RFI composition is the accepted reference-register pattern: focused
+feature components compose shared `Drawer` and `RegisterToolbar` primitives;
+later registers must reuse that pattern rather than introduce a broad generic
+`BaseRegister`. Routing imports use `react-router` 8.3.0 (not the retired DOM
+package); `.node-version`, package engines, and CI require Node 22.22.0.
 
 `public/rfis-view.js` and its existing test coverage
 (`tests/unit/rfi-ui.test.ts`) are retained unchanged as rollback/reference

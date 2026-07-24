@@ -26,7 +26,7 @@ import { createRfiDraft, updateRfiField, RfiApiError } from "./api";
 import { EDITABLE_FIELDS, validationMessage } from "./editableFields";
 import { RfiCards } from "./RfiCards";
 import { RfiEditorPanel, type FieldState } from "./RfiEditorPanel";
-import { RfiTable } from "./RfiTable";
+import { RfiTable, rfiWorkspaceHref } from "./RfiTable";
 import {
   applyFilters,
   DUE_OPTIONS,
@@ -47,9 +47,8 @@ import {
 } from "./useProjectRfis";
 import type { RfiEditableField, RfiListItem } from "./types";
 
-type FieldStatesByRfi = Record<
-  string,
-  Partial<Record<RfiEditableField, FieldState>>
+type FieldStatesByRfi = Partial<
+  Record<string, Partial<Record<RfiEditableField, FieldState>>>
 >;
 
 function getFieldValue(
@@ -74,6 +73,10 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   const [editorResetSignal, setEditorResetSignal] = useState(0);
   const [creating, setCreating] = useState(false);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
+  const pendingCommitsRef = useRef(new Map<string, Set<Promise<boolean>>>());
+  const blockingCommitFieldsRef = useRef(
+    new Map<string, Set<RfiEditableField>>(),
+  );
 
   const updateFilters = useCallback(
     (patch: Partial<RfiFilters>, push: boolean) => {
@@ -97,6 +100,20 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
         ...prev,
         [rfiId]: { ...prev[rfiId], [field]: next ?? undefined },
       }));
+    },
+    [],
+  );
+
+  const setCommitBlocked = useCallback(
+    (rfiId: string, field: RfiEditableField, blocked: boolean) => {
+      const fields = blockingCommitFieldsRef.current.get(rfiId) ?? new Set();
+      if (blocked) {
+        fields.add(field);
+        blockingCommitFieldsRef.current.set(rfiId, fields);
+        return;
+      }
+      fields.delete(field);
+      if (fields.size === 0) blockingCommitFieldsRef.current.delete(rfiId);
     },
     [],
   );
@@ -135,91 +152,155 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   }, [editorOpenId, shell]);
 
   const commitField = useCallback(
-    async (rfiId: string, field: RfiEditableField, rawValue: string) => {
-      if (rfisState.status !== "ready") return;
-      const rfi = rfisState.data.rfis.find((item) => item.id === rfiId);
-      if (!rfi?.capabilities.updateDraft) return;
-      const nextText = rawValue.trim();
-      const normalized = nextText || null;
-      const current = getFieldValue(rfi, field);
-      const validation = validationMessage(field, nextText);
-      if (validation) {
-        setFieldState(rfiId, field, { status: "failed", message: validation });
-        shell.announce(validation);
-        return;
-      }
-      if (normalized === current) {
-        setFieldState(rfiId, field, null);
-        return;
-      }
-      setFieldState(rfiId, field, { status: "saving", message: "Saving…" });
-      shell.announce("Saving…");
-      try {
-        const data = await updateRfiField(
-          projectId,
-          rfiId,
-          field,
-          normalized,
-          rfi.lockVersion,
-        );
-        queryClient.setQueryData<ProjectRfisQueryResult>(
-          projectRfisQueryKey(projectId),
-          (old) => {
-            if (!old || old.kind !== "ready") return old;
-            return {
-              kind: "ready",
-              data: {
-                ...old.data,
-                rfis: old.data.rfis.map((item) =>
-                  item.id === rfiId
-                    ? { ...item, ...(data as Partial<RfiListItem>) }
-                    : item,
-                ),
-              },
-            };
-          },
-        );
-        setFieldState(rfiId, field, { status: "saved", message: "Saved" });
-        shell.announce(`${EDITABLE_FIELDS[field].label} saved.`);
-        window.setTimeout(() => {
-          setFieldStates((prev) => {
-            if (prev[rfiId][field]?.status !== "saved") return prev;
-            return { ...prev, [rfiId]: { ...prev[rfiId], [field]: undefined } };
-          });
-        }, 1400);
-      } catch (error) {
-        if (error instanceof RfiApiError && error.status === 409) {
-          try {
-            await queryClient.refetchQueries({
-              queryKey: projectRfisQueryKey(projectId),
-              exact: true,
-            });
-          } catch {
-            // Keep current rows if the refresh itself fails.
-          }
+    (rfiId: string, field: RfiEditableField, rawValue: string) => {
+      const commit = async (): Promise<boolean> => {
+        if (rfisState.status !== "ready") return false;
+        const rfi = rfisState.data.rfis.find((item) => item.id === rfiId);
+        if (!rfi?.capabilities.updateDraft) return false;
+        const nextText = rawValue.trim();
+        const normalized = nextText || null;
+        const current = getFieldValue(rfi, field);
+        const validation = validationMessage(field, nextText);
+        if (validation) {
           setFieldState(rfiId, field, {
-            status: "conflict",
-            message:
-              "Changed elsewhere. Latest values loaded; review and retry.",
+            status: "failed",
+            message: validation,
           });
-          shell.announce(
-            "This RFI changed elsewhere. Latest values were loaded.",
-          );
-          setEditorResetSignal((value) => value + 1);
-          return;
+          setCommitBlocked(rfiId, field, true);
+          shell.announce(validation);
+          return false;
         }
-        const message =
-          error instanceof RfiApiError && error.status === 403
-            ? "You no longer have permission to edit this draft."
-            : error instanceof Error
-              ? error.message
-              : "Could not save. Try again.";
-        setFieldState(rfiId, field, { status: "failed", message });
-        shell.announce(message);
-      }
+        if (normalized === current) {
+          const remainsBlocked =
+            blockingCommitFieldsRef.current.get(rfiId)?.has(field) ?? false;
+          if (!remainsBlocked) setFieldState(rfiId, field, null);
+          return !remainsBlocked;
+        }
+        setCommitBlocked(rfiId, field, false);
+        setFieldState(rfiId, field, { status: "saving", message: "Saving…" });
+        shell.announce("Saving…");
+        try {
+          const data = await updateRfiField(
+            projectId,
+            rfiId,
+            field,
+            normalized,
+            rfi.lockVersion,
+          );
+          queryClient.setQueryData<ProjectRfisQueryResult>(
+            projectRfisQueryKey(projectId),
+            (old) => {
+              if (!old || old.kind !== "ready") return old;
+              return {
+                kind: "ready",
+                data: {
+                  ...old.data,
+                  rfis: old.data.rfis.map((item) =>
+                    item.id === rfiId
+                      ? { ...item, ...(data as Partial<RfiListItem>) }
+                      : item,
+                  ),
+                },
+              };
+            },
+          );
+          setFieldState(rfiId, field, { status: "saved", message: "Saved" });
+          setCommitBlocked(rfiId, field, false);
+          shell.announce(`${EDITABLE_FIELDS[field].label} saved.`);
+          window.setTimeout(() => {
+            setFieldStates((prev) => {
+              if (prev[rfiId]?.[field]?.status !== "saved") return prev;
+              return {
+                ...prev,
+                [rfiId]: { ...prev[rfiId], [field]: undefined },
+              };
+            });
+          }, 1400);
+          return true;
+        } catch (error) {
+          if (error instanceof RfiApiError && error.status === 409) {
+            try {
+              await queryClient.refetchQueries({
+                queryKey: projectRfisQueryKey(projectId),
+                exact: true,
+              });
+            } catch {
+              // Keep current rows if the refresh itself fails.
+            }
+            setFieldState(rfiId, field, {
+              status: "conflict",
+              message:
+                "Changed elsewhere. Latest values loaded; review and retry.",
+            });
+            setCommitBlocked(rfiId, field, true);
+            shell.announce(
+              "This RFI changed elsewhere. Latest values were loaded.",
+            );
+            setEditorResetSignal((value) => value + 1);
+            return false;
+          }
+          const message =
+            error instanceof RfiApiError && error.status === 403
+              ? "You no longer have permission to edit this draft."
+              : error instanceof Error
+                ? error.message
+                : "Could not save. Try again.";
+          setFieldState(rfiId, field, { status: "failed", message });
+          setCommitBlocked(rfiId, field, true);
+          shell.announce(message);
+          return false;
+        }
+      };
+
+      const pending = commit();
+      const rfiPending = pendingCommitsRef.current.get(rfiId) ?? new Set();
+      rfiPending.add(pending);
+      pendingCommitsRef.current.set(rfiId, rfiPending);
+      void pending.finally(() => {
+        const active = pendingCommitsRef.current.get(rfiId);
+        if (active === undefined) return;
+        active.delete(pending);
+        if (active.size === 0) pendingCommitsRef.current.delete(rfiId);
+      });
+      return pending;
     },
-    [rfisState, projectId, queryClient, shell, setFieldState],
+    [rfisState, projectId, queryClient, shell, setCommitBlocked, setFieldState],
   );
+
+  const waitForRfiCommits = useCallback(async (rfiId: string) => {
+    // Let a blur handler register its normal changed-only commit before reading
+    // the pending set. No timeout is used to infer completion.
+    await Promise.resolve();
+    const waitForCurrentCommits = async (): Promise<boolean> => {
+      const pending = pendingCommitsRef.current.get(rfiId);
+      if (pending === undefined || pending.size === 0) {
+        return !blockingCommitFieldsRef.current.get(rfiId)?.size;
+      }
+      const results = await Promise.all([...pending]);
+      if (results.some((result) => !result)) return false;
+      if (blockingCommitFieldsRef.current.get(rfiId)?.size) return false;
+      return waitForCurrentCommits();
+    };
+    return waitForCurrentCommits();
+  }, []);
+
+  const handleOpenWorkspace = useCallback(async () => {
+    if (!editorOpenId || rfisState.status !== "ready") return;
+    const activeEditor = rfisState.data.rfis.find(
+      (item) => item.id === editorOpenId,
+    );
+    if (!activeEditor) return;
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement.closest(`[data-editor-drawer="${editorOpenId}"]`) &&
+      activeElement.matches("input, textarea, select")
+    ) {
+      activeElement.blur();
+    }
+    if (!(await waitForRfiCommits(editorOpenId))) return;
+    shell.navigate(rfiWorkspaceHref(projectId, activeEditor.id));
+  }, [editorOpenId, projectId, rfisState, shell, waitForRfiCommits]);
 
   const handleAddRfi = useCallback(
     async (trigger?: HTMLElement) => {
@@ -319,6 +400,11 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   const { rfis, responsibleContacts, capabilities } = rfisState.data;
   const filtered = applyFilters(rfis, filters);
   const active = hasActiveFilters(filters);
+  const activeFilterCount = [
+    filters.status !== "all",
+    filters.responsible !== "all",
+    filters.due !== "all",
+  ].filter(Boolean).length;
   const draftCount = rfis.filter((rfi) => !rfi.rfiNumber).length;
   const activeEditorRfi = editorOpenId
     ? (rfis.find((rfi) => rfi.id === editorOpenId) ?? null)
@@ -390,6 +476,10 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
             }}
             searchLabel="Search RFIs"
             searchPlaceholder="Search number, subject, or assignee…"
+            mobileFilterDisclosure={{
+              activeCount: activeFilterCount,
+              label: "filters",
+            }}
             filters={
               <>
                 <Field label="Status" hideLabel controlId="rfi-status">
@@ -520,6 +610,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
         <Drawer
           open
           side="right"
+          size="detail"
           title={
             newDraftId === activeEditorRfi.id ? "New RFI" : "Edit RFI draft"
           }
@@ -534,7 +625,10 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
             fieldStates={fieldStates[activeEditorRfi.id] ?? {}}
             resetSignal={editorResetSignal}
             onCommit={(field, value) => {
-              void commitField(activeEditorRfi.id, field, value);
+              return commitField(activeEditorRfi.id, field, value);
+            }}
+            onOpenWorkspace={() => {
+              void handleOpenWorkspace();
             }}
             onClose={closeEditor}
           />

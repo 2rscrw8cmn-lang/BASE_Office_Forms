@@ -10,7 +10,7 @@
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { AppProviders, ShellRoutes, createQueryClient } from "../App";
 import type {
   FeatureControllerDeps,
@@ -354,6 +354,21 @@ function setNativeValue(
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function openMenuTrigger(trigger: HTMLElement) {
+  trigger.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 1,
+      pointerType: "mouse",
+    }),
+  );
+  trigger.dispatchEvent(
+    new MouseEvent("mouseup", { bubbles: true, button: 0 }),
+  );
+  trigger.click();
+}
+
 async function waitForSelector(
   selector: string,
   timeout = 4000,
@@ -371,6 +386,14 @@ async function waitForSelector(
 
 async function runRfiScenario() {
   if (rfiScenario === "none") return;
+  if (rfiScenario === "mobile-filters") {
+    const filters = (await waitForSelector(
+      'button[aria-label^="Show"][aria-controls]',
+    )) as HTMLButtonElement;
+    filters.click();
+    await waitForSelector(".base-toolbar__filters--mobile-disclosure.is-open");
+    return;
+  }
   if (rfiScenario === "new-draft") {
     const add = (await waitForSelector(
       "[data-create-rfi]",
@@ -380,6 +403,14 @@ async function runRfiScenario() {
     return;
   }
   await waitForSelector('[data-subject-edit][data-id="rfi-1"]');
+  if (rfiScenario === "action-menu") {
+    const actions = (await waitForSelector(
+      'button[aria-label^="Actions for"]',
+    )) as HTMLButtonElement;
+    openMenuTrigger(actions);
+    await waitForSelector(".base-menu");
+    return;
+  }
   document
     .querySelector<HTMLButtonElement>('[data-subject-edit][data-id="rfi-1"]')
     ?.click();

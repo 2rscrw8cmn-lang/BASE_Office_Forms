@@ -44,8 +44,9 @@ The primary operational RFI screen.
 Approved desktop columns (binding, per §13): RFI, Subject, Status, Assigned
 to, Due, Updated, and an accessible visually unlabeled Actions column. Draft
 identity uses the shared `Draft` badge; issued rows use the authoritative
-official number. Subject carries a restrained question summary. Actions expose
-only `Edit draft` or `Open RFI` according to server capabilities and lifecycle.
+official number. Subject carries a restrained question summary. Editable drafts
+expose an overflow menu ordered `Edit details`, then `Open RFI`; locked/issued
+rows expose only `Open RFI`.
 No standalone sort dropdown or RFI-number filter is added.
 
 Rules:
@@ -86,6 +87,11 @@ Boundaries:
 - Submit/Issued Date and RFI Number are never typed manually.
 - Only one draft Drawer is open at a time; closing returns focus to the
   originating row action or Add RFI control.
+- Its footer provides secondary `Open` (with the shared `file-text` icon) and
+  `Close`. `Open` blurs the focused field, reuses its changed-only commit, and
+  waits for pending work; it navigates to the workspace only after no change or
+  a successful save. Validation, 403, failed-save, and 409 conflict feedback
+  retain the Drawer for correction or retry.
 
 A successful field update persists through the authoritative RFI update service,
 updates the row without losing table context, writes the required activity
