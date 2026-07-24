@@ -42,7 +42,7 @@ Tabulator behavior spike
 → application/document CSS separation + React/Vite foundation
 → BASE components and UI Lab
 → React shell and route parity
-→ RFI register through BaseDataGrid
+→ RFI register as a native React feature using a controlled semantic table
 → Projects and Records registers
 → RFI/Record/Revision workspaces
 → Dashboard/forms/Team/Administration

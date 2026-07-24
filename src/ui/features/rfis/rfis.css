@@ -1,0 +1,358 @@
+/*
+ * Feature-local layout for the native RFI register (UI-5). Structural/layout
+ * rules only -- buttons, badges, save indicators, filter/toolbar chrome, and
+ * async states come from the shared BASE component library
+ * (`src/ui/components`), never recreated here. Every colour is a registered
+ * `--app-*` token; there are no raw colour literals.
+ */
+
+.rfi-register-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
+}
+
+/* ---- Desktop table ---- */
+
+.rfi-register-table-wrap {
+  overflow-x: auto;
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.rfi-register-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--app-text-sm);
+}
+
+.rfi-register-table thead th {
+  text-align: left;
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  background: var(--app-surface-sunken);
+  white-space: nowrap;
+}
+
+.rfi-register-sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-1);
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--app-weight-medium);
+  color: var(--app-text-primary);
+  cursor: pointer;
+}
+
+.rfi-register-sort-header:hover,
+.rfi-register-sort-header.is-active {
+  color: var(--app-accent);
+}
+
+.rfi-register-sort-header:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.rfi-register-sort-arrow {
+  font-size: var(--app-text-xs);
+}
+
+.rfi-register-table tbody th,
+.rfi-register-table tbody td {
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  vertical-align: top;
+}
+
+.rfi-register-row.is-locked {
+  background: var(--app-surface);
+}
+
+.rfi-register-row:hover {
+  background: var(--app-surface-hover);
+}
+
+.rfi-register-cell-id {
+  white-space: nowrap;
+}
+
+.rfi-register-id-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.rfi-register-id-link:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.rfi-register-id-number {
+  font-family: var(--app-font-mono);
+  font-weight: var(--app-weight-semibold);
+  color: var(--app-text-primary);
+}
+
+.rfi-register-id-number--draft {
+  color: var(--app-text-muted);
+  font-style: italic;
+}
+
+.rfi-register-id-status {
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-register-id-status.is-attention {
+  color: var(--app-warning);
+  font-weight: var(--app-weight-medium);
+}
+
+.rfi-register-id-legacy {
+  font-size: var(--app-text-2xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-register-cell-subject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+}
+
+.rfi-register-subject-open {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--app-weight-medium);
+  color: var(--app-accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rfi-register-subject-open:focus-visible,
+.rfi-register-subject-link:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.rfi-register-subject-link {
+  font-weight: var(--app-weight-medium);
+  color: var(--app-text-primary);
+  text-decoration: none;
+}
+
+.rfi-register-subject-link:hover {
+  text-decoration: underline;
+}
+
+.rfi-register-subject-secondary {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+.rfi-register-subject-meta {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-2xs);
+  font-family: var(--app-font-mono);
+}
+
+.rfi-register-cell-text {
+  color: var(--app-text-primary);
+}
+
+.rfi-register-responsible-empty {
+  color: var(--app-text-muted);
+}
+
+.rfi-register-responsible-company,
+.rfi-register-responsible-legacy {
+  display: block;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-register-cell-due {
+  white-space: nowrap;
+}
+
+.rfi-register-due-date {
+  display: block;
+}
+
+.rfi-register-due-urgency {
+  display: block;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-register-due-urgency.is-overdue {
+  color: var(--app-danger);
+  font-weight: var(--app-weight-medium);
+}
+
+.rfi-register-due-urgency.is-due-soon {
+  color: var(--app-warning);
+}
+
+.rfi-register-updated-text {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+/* ---- Expandable draft editor ---- */
+
+.rfi-register-editor {
+  padding: var(--app-space-4);
+  background: var(--app-surface-sunken);
+  border-radius: var(--app-radius-md);
+}
+
+.rfi-register-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-4);
+}
+
+.rfi-register-editor__field--wide {
+  grid-column: 1 / -1;
+}
+
+.rfi-register-legacy-note {
+  margin: var(--app-space-1) 0 0;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-register-field-state {
+  display: block;
+  margin-top: var(--app-space-1);
+  min-height: 1.2em;
+}
+
+.rfi-register-editor__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--app-space-4);
+}
+
+/* ---- Mobile cards ---- */
+
+.rfi-register-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.rfi-register-card {
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  padding: var(--app-space-3);
+}
+
+.rfi-register-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-1);
+  text-decoration: none;
+  color: inherit;
+}
+
+.rfi-register-card-main:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: var(--app-focus-offset);
+}
+
+.rfi-register-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  flex-wrap: wrap;
+}
+
+.rfi-register-card-number {
+  font-family: var(--app-font-mono);
+  font-weight: var(--app-weight-semibold);
+}
+
+.rfi-register-card-number.is-draft {
+  color: var(--app-text-muted);
+  font-style: italic;
+}
+
+.rfi-register-card-subject {
+  font-weight: var(--app-weight-medium);
+}
+
+.rfi-register-card-question {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-sm);
+}
+
+.rfi-register-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--app-space-2);
+  margin: var(--app-space-3) 0 0;
+  padding-top: var(--app-space-2);
+  border-top: var(--app-border-width) solid var(--app-border-subtle);
+}
+
+.rfi-register-card-facts dt {
+  font-size: var(--app-text-2xs);
+  color: var(--app-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.rfi-register-card-facts dd {
+  margin: 0;
+  font-size: var(--app-text-sm);
+}
+
+@media (max-width: 640px) {
+  .rfi-register-table-wrap {
+    display: none;
+  }
+
+  .rfi-register-cards {
+    display: flex;
+  }
+
+  /* The shared RegisterToolbar's filter group does not wrap internally, and a
+   * native <select> will not shrink below the width its longest visible
+   * option text needs (flex items default to min-width:auto). Stacking each
+   * filter full-width avoids relying on exactly how much three selects can
+   * compress into a narrow row, which varies by device and font metrics.
+   * Scoped to this feature so the shared component is unchanged. */
+  .rfi-register-page .base-toolbar__filters {
+    flex-wrap: wrap;
+  }
+
+  .rfi-register-page .base-toolbar__filters .base-field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .rfi-register-page .base-toolbar__filters .base-select {
+    min-width: 0;
+  }
+
+  .rfi-register-page .base-toolbar__filters .base-select__control {
+    min-width: 0;
+    width: 100%;
+  }
+}

@@ -24,7 +24,7 @@ UI-1     Audit, design contract, and decisions                 [complete]
 UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
-UI-5     RFI register using BaseDataGrid + Tabulator
+UI-5     RFI register as a native React feature (controlled table, no Tabulator)
 UI-6     Projects and Records registers
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
@@ -295,48 +295,104 @@ Move global application composition into the new foundation while keeping featur
 
 The shell is stable enough that feature migrations no longer need to modify global navigation or invent page containers.
 
-## 8. UI-5 — RFI register and BaseDataGrid decision
+## 8. UI-5 — RFI register as a native React feature
 
 ### Objective
 
-Migrate the RFI register with the controlled custom-table interaction model.
-Do not adopt Tabulator for this route: Spike 0 rejected it because its keyboard
-behavior regressed. The detailed `BaseDataGrid` contract below is retained for
-a future accepted high-volume register, not as an RFI delivery prerequisite.
+Migrate `/projects/:projectId/rfis` from the compatibility-mounted
+`public/rfis-view.js` controller to a native React feature inside the UI-4
+shell, using a native semantic `<table>` on desktop and a dedicated card
+pattern on mobile. This is a parity migration and shared-component adoption
+phase, not a redesign of the RFI interaction model.
+
+Do not adopt Tabulator for this route: Spike 0 rejected it because its
+keyboard behavior regressed against the approved model. Do not make
+`BaseDataGrid` an RFI prerequisite; the detailed `BaseDataGrid` contract
+(§6.4 of `APP_UI_FOUNDATION.md`) is retained only for a future accepted
+high-volume register, log, or export, through a separate acceptance decision.
+
+The RFI workspace route (`/projects/:projectId/rfis/:rfiId`) stays
+compatibility-mounted through `LegacyFeatureMount` until UI-7.
+
+### Approved interaction model (binding)
+
+The register preserves the model approved in `docs/UX_RFI_SPEC.md` §13 and
+implemented by `public/rfis-view.js`:
+
+- one expandable draft editor beneath the selected row, not a grid cell
+  editor;
+- ordinary cursor/text selection inside the editor's controls;
+- no cell/row selection state, no arrow-key cell navigation, no Tab
+  save-and-move, and no `role="grid"` semantics;
+- Escape commits any pending change through the same blur path already used
+  for that control, then closes the editor and returns focus to the Subject
+  trigger — never a silent rollback of an already-typed value;
+- per-field Saving/Saved/Failed/Conflict feedback, not a whole-row or
+  whole-grid save state;
+- capability-gated direct editing (`row.capabilities.updateDraft`), never a
+  role-string inference in the browser.
 
 ### Required behavior
 
-- all current RFI fields and authoritative IDs;
-- click-to-select;
-- Enter to edit/save;
-- Tab and Shift+Tab save-and-move;
-- Escape cancel;
-- arrow navigation;
-- changed-only blur commits;
-- capability-based draft-only editing;
-- Saving, Saved, Failed, and Conflict states;
-- row refresh with URL/filter preservation;
-- contact selection by project-contact ID;
-- search, filters, active chips, sort, and result count;
-- inline Add RFI focused on Subject;
-- explicit navigation into workspace;
-- desktop frozen identity columns;
-- deliberate mobile behavior;
-- loading, empty, filtered empty, missing, and retry states.
+- the preserved five-column desktop hierarchy: RFI, Subject, Party, Due,
+  Updated — no Action column, no standalone sort dropdown, no
+  redundant status/question columns;
+- the RFI identity column as an explicit link to the canonical workspace
+  route (official number, "Unnumbered" for a draft, status as secondary
+  text, imported legacy reference when present, issue-repair attention state
+  when returned by the server); the database UUID is never shown;
+- an editable draft's Subject as a button that opens the row's expandable
+  editor; a locked/non-editable RFI's Subject as a canonical workspace link;
+  ordinary Party/Due/Updated cells never navigate;
+- the expandable editor covering Subject, Responsible Party, Requested
+  Response Date, Question, Contractor Suggestion, Drawing References, and
+  Specification References, built from the shared `Field`/`TextInput`/
+  `TextArea`/`Select`/`DateInput`/`ValidationMessage`/`SaveIndicator`/`Button`
+  components;
+- changed-only commits: text/date controls commit on blur, selects commit on
+  selection, Enter commits a non-textarea control by blurring it, Enter in a
+  textarea inserts a newline, unchanged values never call the API;
+- contact selection by project-contact ID, with the unresolved-legacy-text
+  handling preserved;
+- capability-gated Add RFI that creates one unnumbered draft, clears
+  incompatible search/status filtering, opens the new draft's editor, and
+  focuses Subject;
+- URL-backed `q`, `status`, `responsible`, `due`, `sort`, `direction` query
+  parameters with the existing replace-on-search / push-on-filter-or-sort
+  history behavior, restored correctly by browser Back/Forward;
+- column-header sorting with correct `aria-sort` and an accessible name that
+  states the next direction;
+- loading, populated, first-use empty, filtered empty, retryable error,
+  missing/permission, creating, saving, saved, validation failure, permission
+  loss, and optimistic-concurrency conflict states;
+- a dedicated mobile card pattern (not a compressed desktop table) carrying
+  the same authorized data and canonical navigation.
 
 ### Architecture rules
 
-- feature code does not instantiate Tabulator; any future accepted use
-  configures `BaseDataGrid`;
-- API remains authoritative;
+- feature code does not instantiate Tabulator and does not build a second
+  grid abstraction;
+- the API remains authoritative; no new endpoints or response-shape changes
+  without a verified blocking gap;
 - role strings are not interpreted in the client;
-- official issuance remains outside grid editing;
-- filter URL state is owned by the feature/router rather than hidden in Tabulator internals.
+- official issuance, numbering, and other lifecycle actions remain out of
+  scope and outside register editing;
+- filter/sort URL state is owned by the feature through React Router, not a
+  hidden internal state store;
+- the feature composes the UI-3 component library (`RegisterPage` chrome
+  equivalents, `PageHeader`, `RegisterToolbar`, `FilterChip`, `Button`,
+  `Field` and form controls, `RfiStatusBadge`, `AttentionBadge`,
+  `SaveIndicator`, `EmptyState`, `ErrorState`, `PermissionState`,
+  `Skeleton`/`Spinner`) rather than recreating buttons, badges, save
+  indicators, or generic async states locally.
 
 ### Exit gate
 
-Behavioral parity is demonstrated through tests and visual evidence. Cleaner appearance alone is not acceptance. RFI acceptance is against the controlled
-custom-table keyboard contract, not the rejected Tabulator prototype.
+Behavioral parity with the approved interaction model is demonstrated through
+tests and desktop/mobile visual evidence — cleaner appearance alone is not
+acceptance. RFI acceptance is against the approved expandable-editor
+controlled-table contract in `docs/UX_RFI_SPEC.md` §13, never against a
+grid/spreadsheet prototype.
 
 ## 9. UI-6 — Projects and Records registers
 

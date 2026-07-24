@@ -1,8 +1,8 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-4 (React application shell and route parity) implemented on branch `claude/ui-4-react-foundation-ywnpm2`, PR #44 (kept as draft), with a parity/resilience correction pass applied. RFI Slice 1, UI-1, UI-2, and UI-3 are complete and merged (UI-3 PR #43 merged as `cb9f191`).
-**Active branch/PR:** `claude/ui-4-react-foundation-ywnpm2`, PR #44 (draft, not merged). PR #36, PR #41, and PR #43 are merged to `main`.
+**Current phase:** UI-5 (native React RFI register) implemented on branch `claude/ui-5-rfi-register-react`, starting from merged UI-4 (`6976f16`, PR #44). RFI Slice 1, UI-1, UI-2, UI-3, and UI-4 are complete and merged (UI-4 PR #44 merged to `main` as `6976f16`).
+**Active branch/PR:** `claude/ui-5-rfi-register-react` (draft PR to be opened/updated against `main`). PR #36, PR #41, PR #43, and PR #44 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -732,6 +732,258 @@ PR #44 is kept as a draft pending product-owner review of this correction
 pass, ideally against a real Cloudflare Pages preview. UI-5 remains the next
 phase after UI-4 is reviewed and merged.
 
+**Update 2026-07-24: UI-4 (PR #44) is merged to `main` as `6976f16`.** UI-5
+starts from that commit — see §5D below.
+
+## 5D. UI-5 complete — native React RFI register
+
+Branch `claude/ui-5-rfi-register-react`, based on merged UI-4 (`6976f16`).
+Not merged.
+
+### Confirmed starting point
+
+`main` at the start of this phase was `6976f16` ("UI-4: React application
+shell and route parity (#44)"), with a clean working tree. No parallel
+application shell was created; this phase builds entirely inside the existing
+UI-4 `AppLayout`/`routing.ts`/`LegacyFeatureMount` shell.
+
+### Scope delivered
+
+- **Native feature module**, `src/ui/features/rfis/`, separated per the UI-5
+  boundary: `types.ts` (read-model types mirroring the unchanged
+  `GET /api/v2/projects/:projectId/rfis` envelope), `format.ts` (date/status
+  presentation, ported from `public/app-format.js`), `api.ts` (typed
+  fetch/mutate calls, no response-shape changes), `useProjectRfis.ts`
+  (TanStack Query hook mirroring `useProject.ts`'s 403/404→`missing`,
+  retryable-`error` pattern), `urlState.ts` (filter/sort parsing, URL
+  serialization, and the exact sort/filter comparison logic ported from
+  `public/rfis-view.js`), `editableFields.ts` (the seven-field editor
+  configuration and validation), `RfiTable.tsx` (desktop table),
+  `RfiEditorPanel.tsx` (expandable editor), `RfiCards.tsx` (mobile cards),
+  `RfiRegisterFeature.tsx` (top-level states and wiring), and `rfis.css`
+  (feature-local, token-based layout CSS).
+- **Route wiring.** `src/ui/app/AppLayout.tsx` now special-cases
+  `route.id === "project-rfis"` to render `<RfiRegisterFeature>` directly
+  (gated on `project.status === "ready"`, exactly like every other project
+  route) instead of `LegacyFeatureMount`. `rfi-workspace`
+  (`/projects/:projectId/rfis/:rfiId`) is untouched and still resolves through
+  `LegacyFeatureMount` → `public/rfi-workspace-view.js`. `routing.ts`,
+  `featureDescriptor`, and the legacy route table are unchanged — this is the
+  first canonical route whose content the shell renders natively instead of
+  through the compatibility bridge.
+- **Preserved five-column desktop hierarchy**: RFI (official
+  number/"Unnumbered", status as secondary text, legacy reference,
+  issue-repair attention state), Subject (editable-draft button vs.
+  locked-row link, question summary, drawing/spec references), Party, Due
+  (server-computed overdue/due-soon urgency text), Updated. No Action column,
+  no standalone sort dropdown, no RFI-number filter, no whole-row navigation.
+  Column-header sorting matches `SORT_KEYS`/`SORT_HEADERS` from
+  `rfis-view.js` exactly, including the tie-break-by-id and the
+  `~`-sorts-last-for-unnumbered convention.
+- **One expandable draft editor**, keyed by row id so only one is ever open,
+  built from the shared `Field`/`TextInput`/`TextArea`/`Select`/`DateInput`/
+  `ValidationMessage`/`SaveIndicator`/`Button` components: Subject, Party
+  (project-contact `<select>`, value = contact id), Requested Response Date,
+  Question, Contractor Suggestion, Drawing References, Specification
+  References. Local per-field state means no PATCH is issued until a field
+  commits; text/date fields commit on blur, the Party select commits
+  immediately on selection, Enter blurs (and thus commits) a non-textarea
+  control, Enter inserts a newline in a textarea, and an unchanged value never
+  calls the API. Escape blurs the focused control (committing any pending
+  change through the same path) and then closes the editor, returning focus to
+  the Subject trigger button; the Done button does the same. Opening the
+  editor always focuses the Subject field (the editor panel only ever mounts
+  while open, so a mount-effect focus is exactly "just opened"); a 409
+  conflict reloads the row through a `resetSignal` counter that re-derives the
+  panel's displayed values from fresh server data **without** remounting (so
+  focus/composition in an unrelated field is not disturbed) — matching
+  "keep the editor context where practical."
+- **Field-level Saving/Saved/Failed/Conflict states**, keyed per
+  `rfiId:field`. A 403 during a save shows "You no longer have permission to
+  edit this draft." at the affected field. A 409 refetches the register (via
+  `queryClient.refetchQueries`), shows "Changed elsewhere. Latest values
+  loaded; review and retry." at the affected field, and preserves the current
+  URL filters/sort (they live in the URL, untouched by the refetch).
+- **Add RFI** (`capabilities.createRfi`-gated) creates one unnumbered draft
+  with placeholder Subject/Question via the existing create endpoint, appends
+  it to the cached register data, clears incompatible search/status filtering
+  (replacing the URL entry, matching the legacy `syncUrl(false)`), opens its
+  editor, focuses Subject, and announces the new draft is ready to edit. No
+  number is assigned in the browser.
+- **URL-backed search/filter/sort** (`q`, `status`, `responsible`, `due`,
+  `sort`, `direction`) through `useSearchParams`: typing in Search replaces
+  the current history entry; Status/Party/Due changes, header-sort clicks,
+  and Clear All each push a new entry — verified by asserting
+  `window.history.length` deltas in tests, and restoration via browser Back is
+  covered directly.
+- **Mobile cards**, rendered unconditionally alongside the desktop table and
+  toggled by a `max-width: 640px` media query in `rfis.css` (both exist in the
+  DOM simultaneously, exactly like the legacy controller): number/unnumbered
+  identity, `RfiStatusBadge`/`AttentionBadge` (or a plain "Needs issue repair"
+  badge for the legacy-reconciliation state), Subject, question summary,
+  Party, Response Due, Updated, and canonical workspace navigation via
+  `AppLink`.
+- **Required states**: initial loading (`Skeleton`), populated, first-use
+  empty (`EmptyState` variant="first-use", with its own gated Add RFI action),
+  filtered empty (`EmptyState` variant="filtered", with Clear All),
+  permission/missing (`PermissionState`, for a 403/404 on the RFI list itself
+  — distinct from and in addition to the generic project-missing state the
+  UI-4 shell already owns), retryable error (`ErrorState`, with the API
+  request id when available), creating, saving, saved, validation failure,
+  permission loss, and optimistic-concurrency conflict.
+- **Shared BASE component adoption**: `PageHeader` (parented under the
+  shell's `ProjectHeader` `<h1>`, so `asHeading={false}` — the shell already
+  focuses the project-name heading on route change, matching how every other
+  project route behaves today), `RegisterToolbar`, `Field`/`Select` (visually
+  hidden labels for Status/Party/Due), `Button`, `EmptyState`, `ErrorState`,
+  `PermissionState`, `Skeleton`, `SaveIndicator`, `ValidationMessage`,
+  `RfiStatusBadge`, `AttentionBadge`, `Badge` (for the legacy-reconciliation
+  "Needs issue repair" case, which falls outside the stored-status enum). No
+  `FilterChip` was added: the four toolbar controls plus the result count and
+  Clear All already communicate active filtering clearly, and the current
+  register never had a chips row, so adding one was judged to change the
+  established compact layout rather than merely clarify it (`RegisterToolbar`
+  and `FilterChip` remain available if a future phase judges otherwise).
+- **No Tabulator, no `BaseDataGrid`, no `role="grid"`, no cell/row selection
+  state, no arrow-key cell navigation, no Tab save-and-move** — the desktop
+  surface is a native semantic `<table>` per the binding UI-5 decision.
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **430 unit tests** (+35 over the UI-4 baseline of 395: 31
+`rfi-register-react` + 2 `rfi-register-route-integration` + 2
+`rfi-register-tokens`), **119 Worker integration tests**, the Vite production
+build (`public/app/app.js` grows from ~338 kB to ~370 kB, ~114 kB gzip, for
+the new feature — expected one-time cost, no further bundle budget work is in
+this phase's scope), Pages Functions compilation, `npm audit --audit-level=high`
+(0 vulnerabilities), and the secret scan (394 tracked files). `npm run
+lab:build` passes (no shared component was modified; only consumed).
+
+New/changed suites:
+
+- `tests/unit/rfi-register-react.test.tsx` (31 tests, harness in
+  `tests/helpers/rfi-register-harness.tsx`) — five-column hierarchy and no
+  Action column; editable-Subject-button vs. locked-Subject-link; explicit
+  RFI-identity navigation; ordinary cells never navigate; one editor open at a
+  time; focus entering the editor (Subject) and leaving it (Done → trigger,
+  Escape → trigger); every editable field present; changed-only commits with
+  no per-keystroke PATCH; select-commits-on-change with the contact id;
+  date-commits-on-blur; textarea Enter-inserts-newline vs. non-textarea
+  Enter-commits; required-field validation blocking the save; Saving→Saved
+  transition; 403 permission-loss message; 409 conflict reload + message +
+  updated row; Add RFI creating a draft, opening its editor, and focusing
+  Subject; column-header sort + `aria-sort` + direction toggle; the exact four
+  toolbar controls with no sort dropdown; search-replaces/filter-pushes
+  history-length deltas; an in-progress edit preserving URL filters;
+  filtered-empty vs. first-use-empty distinction with Clear All; browser Back
+  restoring a prior filter; loading/first-use-empty/permission-denied/
+  retryable-error-with-retry states; mobile cards rendered alongside the
+  table.
+- `tests/unit/rfi-register-route-integration.test.tsx` (2 tests) — proves
+  `project-rfis` mounts `.rfi-register-page` (the native feature) and never
+  invokes the legacy `rfis` feature factory, while `rfi-workspace` still
+  mounts through `LegacyFeatureMount` (`[data-feature="rfi-workspace"]`,
+  factory called).
+- `tests/unit/rfi-register-tokens.test.ts` (2 tests) — `rfis.css` has no raw
+  colour literals and references only tokens registered in
+  `src/ui/theme/tokens.ts`, mirroring the UI-3 enforcement pattern.
+- `tests/unit/base-component-tokens.test.ts`'s existing
+  "single-source icon and behavior imports" check already covers the new
+  `src/ui/features/rfis/*` files (it walks all of `src/ui`), and continues to
+  pass: no direct `lucide-react` or `radix-ui` import outside their one
+  allowed location.
+- `tests/unit/react-shell-history-parity.test.tsx` — updated, not weakened.
+  Its same-route URL-history-parity proof used "rfis" as one of two example
+  compatibility-mounted controllers; since the RFI register no longer mounts
+  through `LegacyFeatureMount`, every subtest that exercised that path now
+  exercises it through `records` (the other, still-legacy controller that
+  reads filter/sort state from `window.location.search`) instead, and the
+  "destroys the old controller on a genuine path navigation" subtest now
+  transitions `records`→`overview`. The proof itself (remount not recreate,
+  factory/reload called exactly once across query-only navigations, hash-only
+  remounts, destroy on a real path change, Back/Forward across two routes) is
+  unchanged and still fully covered.
+- `tests/unit/rfi-ui.test.ts` (the legacy `rfis-view.js`/
+  `rfi-workspace-view.js` suite) is untouched and still passes — the required
+  rollback coverage.
+
+### Evidence
+
+Desktop (1280×900) and mobile (390×844-requested) captures generated from the
+real shell (`AppLayout`/`RfiRegisterFeature`, mocked session/project/RFI
+fetch) via a dev-only evidence harness
+(`src/ui/app/evidence/harness.tsx` + `vite.evidence.config.ts`, extended for
+UI-5 with RFI fixtures/fetch mocking and a `rfiScenario` query param that
+scripts interactive states — open editor, saving, validation error, conflict —
+through real DOM events, so a single deterministic screenshot suffices) and a
+new capture script, `scripts/capture-ui5-evidence.mjs`, committed at
+`docs/evidence/ui-5/`:
+
+- `rfi-register-desktop-populated.png` — table with an unnumbered due-soon
+  draft, a locked/issued overdue row, and a locked/closed row together.
+- `rfi-register-desktop-editor-open.png` — the expandable editor open with
+  every field, focus ring on Subject.
+- `rfi-register-desktop-validation-error.png` — empty Subject blurred,
+  "Subject is required." shown, no save issued.
+- `rfi-register-desktop-saving.png` — an in-flight "Saving…" indicator
+  (PATCH held open by the harness's `rfiPatchMode=slow`).
+- `rfi-register-desktop-conflict.png` — "Changed elsewhere. Latest values
+  loaded; review and retry." with the row already showing the reloaded
+  server value.
+- `rfi-register-desktop-filtered-empty.png` — a status filter with zero
+  matches, "No RFIs match these filters." plus Clear All.
+- `rfi-register-desktop-first-use-empty.png` — zero RFIs at all, "No RFIs
+  yet."
+- `rfi-register-mobile-cards.png` — dedicated cards, not a compressed table.
+
+**Capture-tooling note:** this environment has no `playwright-core` install
+and no pre-installed Chromium (unlike the Linux sandbox UI-3/UI-4 evidence was
+captured in); the local Windows Chrome install is driven directly through its
+headless CLI (`--headless=new --virtual-time-budget=…`) via `execFile`
+(async — `execFileSync` would block the same process's own local static
+server, a same-process deadlock discovered and fixed during this phase).
+Chrome's `--window-size` did not honor widths requested below roughly 500 CSS
+px on this machine regardless of headless mode (confirmed by an
+`innerWidth` readout injected during debugging); the actual mobile capture
+above is therefore ~500px wide rather than a true 390px phone width. The
+register's toolbar filters were adjusted (see `rfis.css`'s
+`max-width: 640px` block: `flex-wrap`, and each filter field set to
+`flex: 1 1 100%` so the three selects stack full-width) to be robust
+regardless of the exact narrow width, since a native `<select>` will not
+shrink below its longest visible option text's content width (each nested
+flex context imposes its own `min-width: auto` floor). The mobile card layout
+itself — the primary requirement — is confirmed correct at this width; a true
+sub-400px capture could not be produced in this environment and should be
+spot-checked on a real device or a browser-automation tool with reliable
+small-viewport support.
+
+### Known limitations
+
+- The RFI workspace route is unchanged and stays compatibility-mounted
+  through UI-7, per binding scope.
+- No `FilterChip` row was added (see "Shared BASE component adoption" above);
+  revisit only if a later product decision wants active-filter chips.
+- Mobile evidence was captured at ~500px, not a true ~390px phone width, due
+  to a local Chrome headless-CLI limitation in this environment (see above).
+  The responsive CSS is written to be robust at narrower widths, but this was
+  not independently confirmed by a real capture at those widths in this
+  session.
+- No live Cloudflare Pages preview was available in this session (no
+  `wrangler` authentication); the Cloudflare Pages GitHub App integration is
+  expected to auto-deploy a preview once this branch is pushed, as it did for
+  UI-3/UI-4.
+- `public/rfis-view.js`, `public/rfi-workspace-view.js`, and
+  `tests/unit/rfi-ui.test.ts` are retained unchanged as rollback/reference
+  coverage, per binding scope; their removal remains a later cleanup-phase
+  decision, not this phase's.
+
+### Next recommended action
+
+UI-6 (Projects and Records registers) is next, per the standard phase
+sequence — no UI-5 acceptance item is incomplete. Do not merge this PR without
+explicit approval.
+
 ## 6. Phase status
 
 | Phase                        | Status                     | Next gate                                        |
@@ -741,8 +993,8 @@ phase after UI-4 is reviewed and merged.
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
 | UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43) | none                                   |
-| UI-4 — React shell           | **Implemented, correction pass applied; PR #44 kept as draft** (`claude/ui-4-react-foundation-ywnpm2`, not merged) | Product-owner review against a deployed preview, then merge |
-| UI-5 — RFI register          | **Now unblocked**          | Controlled-table parity; no Tabulator dependency |
+| UI-4 — React shell           | Complete; merged (`6976f16`, PR #44) | none                                    |
+| UI-5 — RFI register          | **Implemented; not merged** (`claude/ui-5-rfi-register-react`) | Review and merge, then UI-6 |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
 | UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
 | UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
@@ -764,22 +1016,14 @@ phase after UI-4 is reviewed and merged.
 
 ## 8. Next action
 
-UI-4 (React application shell and route parity) is implemented on
-`claude/ui-4-react-foundation-ywnpm2`, PR #44, and has completed a
-product-owner-requested correction pass (§5C): same-route URL-history parity
-for compatibility-mounted controllers, project-context revalidation on
-meaningful navigation instead of an indefinite cache, and handled
-compatibility-module loading failures with a shared error/retry surface. PR
-#44 is kept as a **draft**; it is not merged. Its exit gate — the shell is
-stable enough that feature migrations no longer need to modify global
-navigation or invent page containers — remains met, now with the additional
-parity/resilience guarantees proven by tests (§5C). The Cloudflare Pages
-GitHub App integration auto-deployed a live preview for this commit
-(`https://ea629704.base-office-forms.pages.dev`, §5C); the product-owner smoke
-checklist in §5C is ready to run against it.
+UI-4 is complete and merged to `main` as `6976f16` (PR #44). UI-5 (native React
+RFI register, §5D) is implemented on `claude/ui-5-rfi-register-react`,
+starting cleanly from that merged commit. `/projects/:projectId/rfis` now
+renders the native `RfiRegisterFeature`; `/projects/:projectId/rfis/:rfiId`
+(the RFI workspace) is unchanged and stays compatibility-mounted through
+UI-7. Full `npm run check` and `npm run lab:build` pass (§5D). No merge
+occurred; a draft PR against `main` is expected next.
 
-UI-5 (RFI register on the controlled custom table — no Tabulator, per Spike 0)
-is the next active phase; its exact prompt is in the handoff. Do not begin UI-5
-before UI-4 is reviewed/merged, and do not merge UI-4 without explicit approval.
-RFI Slice 2A backend architecture may proceed independently once `main` is
-pulled and stable.
+UI-6 (Projects and Records registers) is the next active phase after UI-5 is
+reviewed and merged. RFI Slice 2A backend architecture may proceed
+independently once `main` is pulled and stable.
