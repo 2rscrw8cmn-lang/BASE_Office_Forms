@@ -1,17 +1,16 @@
 /*
- * Native React RFI register: `/projects/:projectId/rfis`. This is a parity
- * migration off the compatibility-mounted `public/rfis-view.js` controller,
- * not a redesign -- the interaction model (one expandable draft editor,
- * changed-only commits, capability-gated editing, URL-backed search/filter/
- * sort) matches the approved model in `docs/UX_RFI_SPEC.md` §13 exactly.
- * The RFI workspace route stays on `LegacyFeatureMount` until UI-7.
+ * Native React RFI register: `/projects/:projectId/rfis`.
+ * Drafts share one responsive Drawer for changed-only field commits, while
+ * issued RFIs remain read-only links to the compatibility workspace until
+ * UI-7. Capability checks and URL-backed query state remain server-aligned.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
+  Drawer,
   EmptyState,
   ErrorState,
   Field,
@@ -26,7 +25,7 @@ import "./rfis.css";
 import { createRfiDraft, updateRfiField, RfiApiError } from "./api";
 import { EDITABLE_FIELDS, validationMessage } from "./editableFields";
 import { RfiCards } from "./RfiCards";
-import type { FieldState } from "./RfiEditorPanel";
+import { RfiEditorPanel, type FieldState } from "./RfiEditorPanel";
 import { RfiTable } from "./RfiTable";
 import {
   applyFilters,
@@ -70,9 +69,11 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
 
   const [editorOpenId, setEditorOpenId] = useState<string | null>(null);
+  const [newDraftId, setNewDraftId] = useState<string | null>(null);
   const [fieldStates, setFieldStates] = useState<FieldStatesByRfi>({});
   const [editorResetSignal, setEditorResetSignal] = useState(0);
   const [creating, setCreating] = useState(false);
+  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const updateFilters = useCallback(
     (patch: Partial<RfiFilters>, push: boolean) => {
@@ -100,36 +101,38 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
     [],
   );
 
-  const focusSubjectTrigger = useCallback((rfiId: string) => {
-    document
-      .querySelector<HTMLElement>(`[data-subject-edit][data-id="${rfiId}"]`)
-      ?.focus();
-  }, []);
-
-  const toggleEditor = useCallback(
-    (id: string) => {
-      if (editorOpenId === id) {
-        setEditorOpenId(null);
-        shell.announce("Editor closed.");
-        focusSubjectTrigger(id);
-        return;
-      }
+  const openEditor = useCallback(
+    (id: string, trigger?: HTMLElement) => {
       if (rfisState.status !== "ready") return;
       const rfi = rfisState.data.rfis.find((item) => item.id === id);
       if (!rfi?.capabilities.updateDraft) return;
+      drawerReturnFocusRef.current =
+        trigger ??
+        document.querySelector<HTMLElement>(
+          `[data-editor-trigger][data-id="${id}"]`,
+        );
       setEditorOpenId(id);
       shell.announce(`Editing ${rfi.subject || "RFI"}.`);
     },
-    [editorOpenId, rfisState, shell, focusSubjectTrigger],
+    [rfisState, shell],
   );
 
   const closeEditor = useCallback(() => {
     if (!editorOpenId) return;
-    const id = editorOpenId;
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement.closest(`[data-editor-drawer="${editorOpenId}"]`)
+    ) {
+      activeElement.blur();
+    }
     setEditorOpenId(null);
+    setNewDraftId(null);
     shell.announce("Editor closed.");
-    focusSubjectTrigger(id);
-  }, [editorOpenId, shell, focusSubjectTrigger]);
+    window.requestAnimationFrame(() => {
+      drawerReturnFocusRef.current?.focus();
+    });
+  }, [editorOpenId, shell]);
 
   const commitField = useCallback(
     async (rfiId: string, field: RfiEditableField, rawValue: string) => {
@@ -218,59 +221,64 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
     [rfisState, projectId, queryClient, shell, setFieldState],
   );
 
-  const handleAddRfi = useCallback(async () => {
-    if (
-      rfisState.status !== "ready" ||
-      !rfisState.data.capabilities.createRfi ||
-      creating
-    ) {
-      return;
-    }
-    setCreating(true);
-    try {
-      const data = await createRfiDraft(projectId, {
-        subject: "Untitled RFI",
-        question: "Describe the question",
-        contractorSuggestion: null,
-        drawingReferences: null,
-        specificationReferences: null,
-        responsiblePartyId: null,
-        submittedBy: null,
-        requestedResponseDate: null,
-        costImpact: null,
-        scheduleImpact: null,
-      });
-      const newItem = {
-        ...data,
-        latestResponse: null,
-        attachmentCount: 0,
-        isOverdue: false,
-        dueSoon: false,
-        capabilities: { updateDraft: true },
-      } as RfiListItem;
-      queryClient.setQueryData<ProjectRfisQueryResult>(
-        projectRfisQueryKey(projectId),
-        (old) => {
-          if (!old || old.kind !== "ready") return old;
-          return {
-            kind: "ready",
-            data: { ...old.data, rfis: [...old.data.rfis, newItem] },
-          };
-        },
-      );
-      updateFilters({ status: "all", q: "" }, false);
-      setCreating(false);
-      setEditorOpenId(newItem.id);
-      shell.announce("New RFI draft added. Its subject is ready to edit.");
-    } catch (error) {
-      setCreating(false);
-      shell.announce(
-        error instanceof Error
-          ? error.message
-          : "The RFI draft could not be added.",
-      );
-    }
-  }, [rfisState, creating, projectId, queryClient, updateFilters, shell]);
+  const handleAddRfi = useCallback(
+    async (trigger?: HTMLElement) => {
+      if (
+        rfisState.status !== "ready" ||
+        !rfisState.data.capabilities.createRfi ||
+        creating
+      ) {
+        return;
+      }
+      drawerReturnFocusRef.current = trigger ?? null;
+      setCreating(true);
+      try {
+        const data = await createRfiDraft(projectId, {
+          subject: "Untitled RFI",
+          question: "Describe the question",
+          contractorSuggestion: null,
+          drawingReferences: null,
+          specificationReferences: null,
+          responsiblePartyId: null,
+          submittedBy: null,
+          requestedResponseDate: null,
+          costImpact: null,
+          scheduleImpact: null,
+        });
+        const newItem = {
+          ...data,
+          latestResponse: null,
+          attachmentCount: 0,
+          isOverdue: false,
+          dueSoon: false,
+          capabilities: { updateDraft: true },
+        } as RfiListItem;
+        queryClient.setQueryData<ProjectRfisQueryResult>(
+          projectRfisQueryKey(projectId),
+          (old) => {
+            if (!old || old.kind !== "ready") return old;
+            return {
+              kind: "ready",
+              data: { ...old.data, rfis: [...old.data.rfis, newItem] },
+            };
+          },
+        );
+        updateFilters({ status: "all", q: "" }, false);
+        setCreating(false);
+        setNewDraftId(newItem.id);
+        setEditorOpenId(newItem.id);
+        shell.announce("New RFI draft added. Its subject is ready to edit.");
+      } catch (error) {
+        setCreating(false);
+        shell.announce(
+          error instanceof Error
+            ? error.message
+            : "The RFI draft could not be added.",
+        );
+      }
+    },
+    [rfisState, creating, projectId, queryClient, updateFilters, shell],
+  );
 
   if (rfisState.status === "loading") {
     return (
@@ -311,6 +319,10 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
   const { rfis, responsibleContacts, capabilities } = rfisState.data;
   const filtered = applyFilters(rfis, filters);
   const active = hasActiveFilters(filters);
+  const draftCount = rfis.filter((rfi) => !rfi.rfiNumber).length;
+  const activeEditorRfi = editorOpenId
+    ? (rfis.find((rfi) => rfi.id === editorOpenId) ?? null)
+    : null;
 
   function handleSort(key: RfiFilters["sort"]) {
     if (filters.sort === key) {
@@ -328,8 +340,9 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
       variant="primary"
       loading={creating}
       data-create-rfi
-      onClick={() => {
-        void handleAddRfi();
+      iconStart="plus"
+      onClick={(event) => {
+        void handleAddRfi(event.currentTarget);
       }}
     >
       Add RFI
@@ -341,12 +354,12 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
       <PageHeader
         title="RFIs"
         asHeading={false}
-        supporting={`${String(rfis.length)} RFI${rfis.length === 1 ? "" : "s"}`}
+        supporting={`${String(rfis.length)} RFI${rfis.length === 1 ? "" : "s"} · ${String(draftCount)} draft${draftCount === 1 ? "" : "s"}`}
         primaryAction={addButton}
       />
       <p className="base-sr-only" id="rfi-register-hint">
-        Click a draft RFI&rsquo;s subject to edit its fields inline. Click a
-        column header to sort.
+        Select an editable draft to open it in the editor drawer. Select an
+        issued RFI to open its workspace. Column headers sort the register.
       </p>
       {rfis.length === 0 ? (
         <EmptyState
@@ -358,8 +371,9 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
               <Button
                 variant="secondary"
                 loading={creating}
-                onClick={() => {
-                  void handleAddRfi();
+                iconStart="plus"
+                onClick={(event) => {
+                  void handleAddRfi(event.currentTarget);
                 }}
               >
                 Add RFI
@@ -375,7 +389,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
               updateFilters({ q: value }, false);
             }}
             searchLabel="Search RFIs"
-            searchPlaceholder="Search RFIs…"
+            searchPlaceholder="Search number, subject, or assignee…"
             filters={
               <>
                 <Field label="Status" hideLabel controlId="rfi-status">
@@ -394,7 +408,11 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                     ))}
                   </Select>
                 </Field>
-                <Field label="Party" hideLabel controlId="rfi-responsible">
+                <Field
+                  label="Assigned to"
+                  hideLabel
+                  controlId="rfi-responsible"
+                >
                   <Select
                     size="compact"
                     value={filters.responsible}
@@ -402,7 +420,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                       updateFilters({ responsible: event.target.value }, true);
                     }}
                   >
-                    <option value="all">All parties</option>
+                    <option value="all">All assignees</option>
                     {responsibleOptions(rfis, responsibleContacts).map(
                       ([value, label]) => (
                         <option key={value} value={value}>
@@ -423,7 +441,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                       );
                     }}
                   >
-                    <option value="all">Any due status</option>
+                    <option value="all">Due date</option>
                     {DUE_OPTIONS.map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
@@ -447,7 +465,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                     );
                   }}
                 >
-                  Clear all
+                  Clear
                 </Button>
               ) : null
             }
@@ -473,7 +491,7 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                     );
                   }}
                 >
-                  Clear all
+                  Clear
                 </Button>
               }
             />
@@ -486,19 +504,42 @@ export function RfiRegisterFeature({ projectId }: { projectId: string }) {
                 filters={filters}
                 onSort={handleSort}
                 editorOpenId={editorOpenId}
-                onToggleEditor={toggleEditor}
-                fieldStatesFor={(id) => fieldStates[id] ?? {}}
-                onCommitField={(id, field, value) => {
-                  void commitField(id, field, value);
-                }}
-                onDoneEditing={closeEditor}
-                editorResetSignal={editorResetSignal}
+                onOpenEditor={openEditor}
               />
-              <RfiCards projectId={projectId} rfis={filtered} />
+              <RfiCards
+                projectId={projectId}
+                rfis={filtered}
+                editorOpenId={editorOpenId}
+                onOpenEditor={openEditor}
+              />
             </>
           )}
         </>
       )}
+      {activeEditorRfi ? (
+        <Drawer
+          open
+          side="right"
+          title={
+            newDraftId === activeEditorRfi.id ? "New RFI" : "Edit RFI draft"
+          }
+          className="rfi-register-drawer"
+          onOpenChange={(open) => {
+            if (!open) closeEditor();
+          }}
+        >
+          <RfiEditorPanel
+            rfi={activeEditorRfi}
+            contacts={responsibleContacts}
+            fieldStates={fieldStates[activeEditorRfi.id] ?? {}}
+            resetSignal={editorResetSignal}
+            onCommit={(field, value) => {
+              void commitField(activeEditorRfi.id, field, value);
+            }}
+            onClose={closeEditor}
+          />
+        </Drawer>
+      ) : null}
     </section>
   );
 }

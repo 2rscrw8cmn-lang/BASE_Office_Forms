@@ -170,17 +170,28 @@ function FormDialogDemo() {
   );
 }
 
-function DrawerDemo() {
+function DrawerDemo({ side = "left" }: { side?: "left" | "right" }) {
   return (
     <Drawer
-      trigger={<Button iconStart="menu">Open menu</Button>}
-      title="Navigation"
+      trigger={
+        <Button iconStart={side === "left" ? "menu" : "pencil"}>
+          {side === "left" ? "Open menu" : "Open side sheet"}
+        </Button>
+      }
+      title={side === "left" ? "Navigation" : "Edit draft"}
+      side={side}
     >
-      <nav>
-        <p>Dashboard</p>
-        <p>Projects</p>
-        <p>Records</p>
-      </nav>
+      {side === "left" ? (
+        <nav>
+          <p>Dashboard</p>
+          <p>Projects</p>
+          <p>Records</p>
+        </nav>
+      ) : (
+        <Field label="Subject">
+          <TextInput value="Lobby ceiling conflict" readOnly />
+        </Field>
+      )}
     </Drawer>
   );
 }
@@ -735,7 +746,10 @@ export const CATALOG: LabEntry[] = [
     name: "Drawer",
     group: "interactive",
     description: "Slide-in panel (mobile navigation, side sheets).",
-    examples: [{ state: "default", render: () => <DrawerDemo /> }],
+    examples: [
+      { state: "default", render: () => <DrawerDemo /> },
+      { state: "selected", render: () => <DrawerDemo side="right" /> },
+    ],
   },
   {
     id: "toast",

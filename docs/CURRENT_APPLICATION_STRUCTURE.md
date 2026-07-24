@@ -60,9 +60,9 @@ Browser
 ├── src/ui/app/renderer-preview.ts             controlled renderer preview adapter
 ├── src/ui/features/rfis/                     (UI-5) native React RFI register feature
 │   ├── RfiRegisterFeature.tsx                top-level states, URL filters, mutations, wiring
-│   ├── RfiTable.tsx                          desktop table (identity/subject/party/due/updated)
-│   ├── RfiEditorPanel.tsx                    the expandable draft editor
-│   ├── RfiCards.tsx                          mobile cards
+│   ├── RfiTable.tsx                          compact desktop table + row/action triggers
+│   ├── RfiEditorPanel.tsx                    shared responsive Drawer form content
+│   ├── RfiCards.tsx                          dedicated mobile cards + action triggers
 │   ├── useProjectRfis.ts                     TanStack Query read-model hook (403/404→missing)
 │   ├── api.ts                                 typed /api/v2 RFI fetch/mutate calls
 │   ├── urlState.ts                            filter/sort URL state + sort/filter logic
@@ -631,30 +631,28 @@ capabilities }`), through a TanStack Query hook (`useProjectRfis.ts`) that
 collapses a 403/404 into a `missing` state and any other failure into a
 retryable `error`, mirroring `useProject.ts`. No response shape changed.
 
-The desktop table preserves the five-column hierarchy — RFI, Subject, Party,
-Due, Updated — with no Action column, no standalone sort dropdown, and no
-whole-row navigation. The RFI column shows the official number or
-"Unnumbered", status as secondary text, an imported legacy reference when
-present, and an issue-repair attention state when the server returns
-`issuanceReconciliationState: "legacy_incomplete"`. The Subject column is an
-editable-draft button (`capabilities.updateDraft === true`) that opens the
-row's expandable editor, or a canonical workspace link for a locked/non-draft
-row; only the RFI identity link and a locked row's Subject actually navigate.
-Column-header sorting (`SORT_HEADERS`/`SORT_KEYS` in `urlState.ts`) and
-`aria-sort` match the retired controller's behavior exactly, including the
-default `number` ascending sort and the tie-break-by-id.
+The compact desktop table renders RFI, Subject, Status, Assigned to, Due,
+Updated, and an accessible visually unlabeled Actions column. Drafts show the
+shared `Draft` badge, never "Unnumbered"; issued rows show their authoritative
+number and canonical workspace link. The row primary area opens an editable
+draft (`capabilities.updateDraft === true`) in the shared Drawer or navigates a
+locked/issued RFI. The action menu is deliberately narrow: `Edit draft` or
+`Open RFI`. Column-header sorting (`SORT_HEADERS`/`SORT_KEYS` in
+`urlState.ts`) and `aria-sort` retain the approved URL-backed behavior,
+including default number ascending and tie-break-by-id.
 
-Exactly one expandable draft editor is open at a time (`RfiEditorPanel.tsx`),
-built from the shared `Field`/`TextInput`/`TextArea`/`Select`/`DateInput`/
-`ValidationMessage`/`SaveIndicator` components: Subject, Party (a
-project-contact `<select>` whose value is the contact id), Requested Response
-Date, Question, Contractor Suggestion, Drawing References, and Specification
-References. Each control keeps local, uncommitted state; text and date
-controls commit on blur, the Party select commits immediately on selection,
-Enter commits a non-textarea control by blurring it, Enter inserts a newline
-in a textarea, and an unchanged value never calls the API. Escape commits any
-pending change through that same blur path and then closes the editor,
-returning focus to the Subject trigger button; the Done button does the same.
+Exactly one responsive Drawer is open at a time. `RfiRegisterFeature.tsx` owns
+its open id and return-focus target; `RfiEditorPanel.tsx` provides the shared
+form content using `Drawer`, `Collapsible`, `Field`, `TextInput`, `TextArea`,
+`Select`, `DateInput`, `ValidationMessage`, `SaveIndicator`, and `Button`.
+Fields are Subject, Assigned to (project-contact id), Response due, Question,
+Contractor recommendation, and Drawing/Specification references under
+Additional information. Each control keeps local uncommitted state; text and
+date controls commit on blur, Assigned to commits on selection, Enter commits
+a non-textarea control by blurring it, Enter inserts a newline in a textarea,
+and an unchanged value never calls the API. Escape blurs the active field
+through the same commit path, closes the Drawer, and returns focus to its row
+trigger; Close uses the same focus-return contract.
 Per-field Saving/Saved/Failed/Conflict feedback comes from
 `RfiRegisterFeature.tsx`'s own commit logic (not a generic form library): a
 `403` shows "You no longer have permission to edit this draft." at the
@@ -666,10 +664,11 @@ other field's in-progress edit are not disturbed) while the current URL
 filters and sort are untouched (they live in the URL, not component state).
 
 The capability-gated Add RFI action (`capabilities.createRfi`) creates one
-unnumbered draft with placeholder Subject/Question through the existing
+draft with placeholder Subject/Question through the existing
 create endpoint, appends it to the cached register data, clears incompatible
 search/status filtering (replacing, not pushing, the URL entry), opens its
-editor, and focuses Subject. No number is ever assigned in the browser.
+`New RFI` Drawer, and focuses Subject. No number is ever assigned in the
+browser.
 
 Search, Status, Party, and Due remain the only toolbar controls (`q`,
 `status`, `responsible`, `due`, `sort`, `direction` in the URL via
@@ -680,20 +679,29 @@ Filtering and sorting run in the browser over the single already-authorized
 list, matching the legacy controller and the binding architecture rule that
 client-side filtering is never an authorization boundary.
 
-Mobile renders a dedicated card list (`RfiCards.tsx`) — number/unnumbered
-identity, `RfiStatusBadge`/`AttentionBadge` (or a plain badge for the
-legacy-reconciliation state), Subject, question summary, Party, Response Due,
-Updated, and canonical workspace navigation — toggled against the desktop
-table by a `max-width: 640px` media query in the feature-local `rfis.css`;
-both exist in the DOM simultaneously, exactly like the retired controller.
+Mobile renders a dedicated two-line card list (`RfiCards.tsx`) — draft badge
+or official number, relative Updated time, Subject, question summary, status,
+Assigned to, Due, and the same action menu/Drawer triggers. It replaces the
+desktop table at `max-width: 760px`. The Drawer is full-screen at that
+breakpoint, stacks paired fields below 460px, uses an internal scroll region,
+and keeps a safe-area-aware sticky footer. At tablet and desktop widths it is
+a right-side panel up to 660px wide.
 
 `rfis.css` is feature-local, token-based CSS (no raw colour literals; every
 colour is a registered `--app-*` token, enforced by
 `tests/unit/rfi-register-tokens.test.ts`) covering only layout the shared
-component library does not already provide — the table/editor/card structure
-and density. Buttons, badges, save indicators, toolbar chrome, and empty/error/
+component library does not already provide — the table/Drawer/card structure
+and density. Buttons, badges, menus, icons, save indicators, toolbar chrome,
+and empty/error/
 permission states come from the UI-3 component library, never recreated
 locally.
+
+The shared z-index tokens now place shell chrome below overlays, Drawers above
+their overlays, and toasts above Drawers (`--app-z-header: 20`,
+`--app-z-overlay: 240`, `--app-z-drawer: 250`, `--app-z-toast: 300`). The UI
+Lab Drawer section includes both left- and right-side examples; the token suite
+guards the layer order so a full-screen mobile Drawer cannot fall beneath the
+shell header or its own scrim.
 
 `public/rfis-view.js` and its existing test coverage
 (`tests/unit/rfi-ui.test.ts`) are retained unchanged as rollback/reference
@@ -893,19 +901,21 @@ published rendering.
 
 ### UI-5 native RFI register tests
 
-`tests/unit/rfi-register-react.test.tsx` (31 tests, harness in
+`tests/unit/rfi-register-react.test.tsx` (33 tests, harness in
 `tests/helpers/rfi-register-harness.tsx` — a real `<BrowserRouter>` +
 `QueryClientProvider` + `ShellProvider` around `RfiRegisterFeature` with a
 fetch mock for the `/api/v2/projects/:id/rfis` read/write endpoints) covers:
-the five-column hierarchy with no Action column; editable-Subject-button vs.
-locked-Subject-link; explicit RFI-identity navigation with ordinary cells
-never navigating; one editor open at a time; focus entering the editor
-(Subject) and returning to the trigger on Done/Escape; every editable field;
+the compact seven-column hierarchy and accessible action menus; draft badges;
+row-primary-area editing vs. canonical issued navigation; one shared Drawer
+open at a time; focus entering at Subject and returning to the row or Add RFI
+trigger on Close/Escape; every editable field and the Additional information
+collapsible;
 changed-only commits with no per-keystroke PATCH; select-commits-on-change
 with the contact id; date-commits-on-blur; textarea Enter-inserts-newline vs.
 non-textarea Enter-commits; required-field validation blocking the save;
 Saving→Saved; 403 permission-loss; 409 conflict reload with the updated row
-and message; Add RFI creating a draft and focusing its Subject; column-header
+and message; Add RFI creating a draft and opening New RFI focused at Subject;
+Escape committing an active field before Drawer close; column-header
 sort with `aria-sort` and direction toggle; the exact four toolbar controls
 with no sort dropdown; search-replaces/filter-pushes history-length deltas;
 an in-progress edit preserving URL filters; filtered-empty vs.
@@ -1191,10 +1201,10 @@ tests/integration/           Worker-runtime, D1, R2 (local/test binding), and AP
 tests/helpers/               reusable D1, route, component-DOM, and RFI-register test harnesses
 migrations/                  existing D1 migrations (additive, plus one safe table rebuild)
 scripts/capture-ui4-evidence.mjs  dev-only Playwright/Chromium screenshot capture for the UI-4 shell
-scripts/capture-ui5-evidence.mjs  dev-only local-Chrome-CLI screenshot capture for the RFI register
+scripts/capture-ui5-evidence.mjs  dev-only Chrome DevTools Protocol evidence capture with exact mobile CSS viewports
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
-docs/evidence/ui-5/          committed native RFI register desktop/mobile captures
+docs/evidence/ui-5/          committed native RFI register desktop/mobile/tablet and Drawer-state captures
 .github/workflows/           pull-request validation
 ```
 

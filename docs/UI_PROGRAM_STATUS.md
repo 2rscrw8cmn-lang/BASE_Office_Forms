@@ -1,8 +1,8 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-5 (native React RFI register) implemented on branch `claude/ui-5-rfi-register-react`, starting from merged UI-4 (`6976f16`, PR #44). RFI Slice 1, UI-1, UI-2, UI-3, and UI-4 are complete and merged (UI-4 PR #44 merged to `main` as `6976f16`).
-**Active branch/PR:** `claude/ui-5-rfi-register-react` (draft PR to be opened/updated against `main`). PR #36, PR #41, PR #43, and PR #44 are merged to `main`.
+**Current phase:** UI-5 (native React RFI register) refined against the approved desktop/mobile mockups on branch `claude/ui-5-rfi-register-react`, starting from merged UI-4 (`6976f16`, PR #44). RFI Slice 1, UI-1, UI-2, UI-3, and UI-4 are complete and merged.
+**Active branch/PR:** `claude/ui-5-rfi-register-react`, draft PR #45 against `main`. PR #36, PR #41, PR #43, and PR #44 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -737,6 +737,54 @@ starts from that commit — see §5D below.
 
 ## 5D. UI-5 complete — native React RFI register
 
+### Authoritative mockup refinement — 2026-07-24
+
+This update supersedes the initial inline-editor and five-column descriptions
+later in this historical section wherever they conflict. The server/API,
+capability, URL-query, changed-only commit, validation, permission-loss, and
+optimistic-concurrency contracts remain unchanged.
+
+- Desktop now uses a compact semantic table with RFI, Subject, Status,
+  Assigned to, Due, Updated, and an accessible visually unlabeled Actions
+  column. Drafts use the shared `Draft` badge and never display "Unnumbered".
+- Mobile uses purpose-built two-line cards with relative Updated time, Subject
+  and question summary, status, Assigned to, Due, and the same action menu.
+- Add RFI and every editable draft use one shared right-side `Drawer`; it is
+  full-screen at 760px and below, stacks paired fields below 460px, scrolls
+  internally, and retains a safe-area-aware sticky Close footer.
+- `RfiEditorPanel.tsx` is Drawer form content, not an inline row. Field order
+  is Subject; Assigned to + Response due; Question; optional Contractor
+  recommendation; collapsed Additional information for Drawing and
+  Specification references.
+- Row primary areas open editable drafts or navigate issued/locked RFIs.
+  Menus expose only `Edit draft` and `Open RFI` as appropriate. Escape first
+  blurs the active control through the existing commit path, then closes and
+  restores focus to the opener.
+- Shared UI-3 `Drawer`, `Collapsible`, fields/inputs, menus, icons, badges,
+  `SaveIndicator`, and state components are reused. Feature code has no direct
+  Radix/Lucide imports and no feature-owned SVG, button, badge, or dialog
+  system.
+- UI Lab now demonstrates both left- and right-side Drawers. Shared layer
+  tokens place overlays at 240, Drawers at 250, and toasts at 300; a regression
+  test prevents a Drawer from falling beneath its scrim or mobile shell.
+- Evidence capture now uses Chrome DevTools Protocol emulation and asserts the
+  requested 390×844 and 430×932 CSS viewports with no horizontal overflow.
+  Desktop populated/new/edit/validation/saving/conflict/empty states, mobile
+  cards/full-screen Drawer/collapsible states, and 768/820 tablet Drawers are
+  committed under `docs/evidence/ui-5/`.
+- Final verification passes format checking, generated Cloudflare types plus
+  TypeScript, ESLint, 442 unit tests, 119 Worker integration tests, production
+  UI/assets build, Pages Functions build, secret scan, UI Lab build, evidence
+  build, and all 14 screenshot captures. `npm run check` reaches the dependency
+  audit and then reports the repository's known two high-severity React Router
+  findings (`GHSA-qwww-vcr4-c8h2`); the offered fix is a breaking
+  `npm audit fix --force` and was deliberately not applied.
+
+The remainder of §5D records the initial implementation and review history. It
+is retained for auditability; this refinement and the current contracts in
+`docs/UX_RFI_SPEC.md`, `docs/UI_IMPLEMENTATION_PLAYBOOK.md`, and
+`docs/CURRENT_APPLICATION_STRUCTURE.md` are authoritative.
+
 Branch `claude/ui-5-rfi-register-react`, based on merged UI-4 (`6976f16`).
 Not merged.
 
@@ -1087,18 +1135,18 @@ explicit approval.
 - The existing Cloudflare development/test dependency audit findings must be
   resolved or formally accepted before a production release; do not use
   `npm audit fix --force` without a review.
-- The migrated RFI's Party value remains unresolved (legacy text only) until
+- A migrated RFI's Assigned to value remains unresolved (legacy text only) until
   manually reconciled to a project contact.
 
 ## 8. Next action
 
 UI-4 is complete and merged to `main` as `6976f16` (PR #44). UI-5 (native React
-RFI register, §5D) is implemented on `claude/ui-5-rfi-register-react`,
-starting cleanly from that merged commit. `/projects/:projectId/rfis` now
-renders the native `RfiRegisterFeature`; `/projects/:projectId/rfis/:rfiId`
-(the RFI workspace) is unchanged and stays compatibility-mounted through
-UI-7. Full `npm run check` and `npm run lab:build` pass (§5D). No merge
-occurred; a draft PR against `main` is expected next.
+RFI register, §5D) is implemented and visually refined on
+`claude/ui-5-rfi-register-react` in draft PR #45. The register route renders
+the native `RfiRegisterFeature`; the RFI workspace remains
+compatibility-mounted through UI-7. Verification and refreshed
+desktop/mobile/tablet evidence are complete with the dependency-audit risk
+recorded in §5D. Nothing is merged.
 
 UI-6 (Projects and Records registers) is the next active phase after UI-5 is
 reviewed and merged. RFI Slice 2A backend architecture may proceed

@@ -1,20 +1,18 @@
 /*
- * The expandable draft editor: Subject, Party, Response due, Question,
- * Contractor suggestion, Drawing references, Specification references. One
- * editor is open at a time (enforced by the parent, which mounts exactly one
- * instance). Controls maintain local, uncommitted values; nothing is sent to
- * the server on every keystroke -- text/date/textarea controls commit on
- * blur, selects commit immediately on selection, Enter commits a non-textarea
- * control (by blurring it), and Enter inside a textarea inserts a newline.
- * Escape commits any pending change through the same blur path and then closes
- * the editor.
+ * Drawer content for an editable RFI draft. Controls keep local, uncommitted
+ * values; text/date/textarea fields commit on blur, the assignee commits on
+ * selection, and unchanged values are discarded by the parent. The surrounding
+ * shared Drawer owns modal behavior, Escape dismissal, and focus containment.
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
+  Badge,
   Button,
+  Collapsible,
   DateInput,
   Field,
+  Icon,
   Select,
   TextArea,
   TextInput,
@@ -54,7 +52,7 @@ export interface RfiEditorPanelProps {
    * without losing focus or remounting. */
   resetSignal: number;
   onCommit: (field: RfiEditableField, rawValue: string) => void;
-  onDone: () => void;
+  onClose: () => void;
 }
 
 export function RfiEditorPanel({
@@ -63,7 +61,7 @@ export function RfiEditorPanel({
   fieldStates,
   resetSignal,
   onCommit,
-  onDone,
+  onClose,
 }: RfiEditorPanelProps) {
   const [values, setValues] = useState<Record<RfiEditableField, string>>(() =>
     initialValues(rfi),
@@ -98,12 +96,7 @@ export function RfiEditorPanel({
     >,
     isTextarea: boolean,
   ) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.blur();
-      onDone();
-    } else if (event.key === "Enter" && !isTextarea && !event.shiftKey) {
+    if (event.key === "Enter" && !isTextarea && !event.shiftKey) {
       event.preventDefault();
       event.currentTarget.blur();
     }
@@ -117,133 +110,279 @@ export function RfiEditorPanel({
     return "idle";
   }
 
+  const saveStates = PANEL_ORDER.map((field) => fieldStates[field]?.status);
+  const aggregateSaveState: SaveState = saveStates.includes("conflict")
+    ? "conflict"
+    : saveStates.includes("failed")
+      ? "failed"
+      : saveStates.includes("saving")
+        ? "saving"
+        : saveStates.includes("saved")
+          ? "saved"
+          : "idle";
+
+  function failureFor(field: RfiEditableField): FieldState | undefined {
+    const state = fieldStates[field];
+    return state?.status === "failed" || state?.status === "conflict"
+      ? state
+      : undefined;
+  }
+
+  function fieldState(field: RfiEditableField) {
+    const failure = failureFor(field);
+    return (
+      <span
+        className="rfi-register-field-state"
+        data-field-state={`${rfi.id}:${field}`}
+      >
+        {failure ? null : <SaveIndicator state={saveStateFor(field)} />}
+      </span>
+    );
+  }
+
   return (
-    <div
+    <form
       className="rfi-register-editor"
-      role="group"
       aria-label={`Edit ${rfi.subject || "this RFI"}`}
       id={`rfi-editor-${rfi.id}`}
-      data-editor-row={rfi.id}
+      data-editor-drawer={rfi.id}
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
+      onKeyDownCapture={(event) => {
+        if (
+          event.key === "Escape" &&
+          event.target instanceof HTMLElement &&
+          event.target.matches("input, textarea, select")
+        ) {
+          event.target.blur();
+        }
+      }}
     >
-      <div className="rfi-register-editor__grid">
-        {PANEL_ORDER.map((field) => {
-          const meta = EDITABLE_FIELDS[field];
-          const controlId = `rfi-edit-${rfi.id}-${field}`;
-          const failure =
-            fieldStates[field]?.status === "failed" ||
-            fieldStates[field]?.status === "conflict"
-              ? fieldStates[field]
-              : undefined;
-          const commonProps = {
-            "data-field-input": true,
-            "data-id": rfi.id,
-            "data-field": field,
-          } as const;
-          return (
-            <Field
-              key={field}
-              label={meta.label}
-              controlId={controlId}
-              required={field === "subject" || field === "question"}
-              error={failure?.message}
-              className={
-                meta.wide ? "rfi-register-editor__field--wide" : undefined
-              }
-            >
-              {meta.type === "contact" ? (
-                <Select
-                  {...commonProps}
-                  value={values.responsiblePartyId}
-                  onChange={(event) => {
-                    setValue("responsiblePartyId", event.target.value);
-                    onCommit("responsiblePartyId", event.target.value);
-                  }}
-                  onKeyDown={(event) => {
-                    handleKeyDown(event, false);
-                  }}
-                >
-                  <option value="">Unassigned</option>
-                  {contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {contact.name}
-                      {contact.companyName ? ` — ${contact.companyName}` : ""}
-                    </option>
-                  ))}
-                </Select>
-              ) : meta.type === "textarea" ? (
-                <TextArea
-                  {...commonProps}
-                  rows={3}
-                  value={values[field]}
-                  onChange={(event) => {
-                    setValue(field, event.target.value);
-                  }}
-                  onBlur={() => {
-                    commit(field);
-                  }}
-                  onKeyDown={(event) => {
-                    handleKeyDown(event, true);
-                  }}
-                />
-              ) : meta.type === "date" ? (
-                <DateInput
-                  {...commonProps}
-                  value={values.requestedResponseDate}
-                  onChange={(event) => {
-                    setValue("requestedResponseDate", event.target.value);
-                  }}
-                  onBlur={() => {
-                    commit("requestedResponseDate");
-                  }}
-                  onKeyDown={(event) => {
-                    handleKeyDown(event, false);
-                  }}
-                />
-              ) : (
-                <TextInput
-                  {...commonProps}
-                  ref={field === "subject" ? subjectRef : undefined}
-                  value={values[field]}
-                  onChange={(event) => {
-                    setValue(field, event.target.value);
-                  }}
-                  onBlur={() => {
-                    commit(field);
-                  }}
-                  onKeyDown={(event) => {
-                    handleKeyDown(event, false);
-                  }}
-                />
-              )}
-              {field === "responsiblePartyId" &&
-              rfi.responsiblePartyLegacyText ? (
-                <p className="rfi-register-legacy-note">
-                  Legacy value “{rfi.responsiblePartyLegacyText}” remains until
-                  a contact is selected.
-                </p>
-              ) : null}
-              <span
-                className="rfi-register-field-state"
-                data-field-state={`${rfi.id}:${field}`}
-              >
-                {failure ? null : <SaveIndicator state={saveStateFor(field)} />}
-              </span>
-            </Field>
-          );
-        })}
+      <div className="rfi-register-editor__summary">
+        <Badge tone="neutral">Draft</Badge>
+        <span aria-hidden="true">·</span>
+        {aggregateSaveState === "idle" ? (
+          <span className="rfi-register-editor__autosaved">
+            <Icon name="check-circle" size={14} />
+            Autosaved just now
+          </span>
+        ) : (
+          <SaveIndicator state={aggregateSaveState} />
+        )}
       </div>
-      <div className="rfi-register-editor__foot">
+
+      <div className="rfi-register-editor__body">
+        <Field
+          label={EDITABLE_FIELDS.subject.label}
+          controlId={`rfi-edit-${rfi.id}-subject`}
+          required
+          error={failureFor("subject")?.message}
+        >
+          <TextInput
+            ref={subjectRef}
+            data-field-input
+            data-id={rfi.id}
+            data-field="subject"
+            placeholder="Brief description of the issue"
+            value={values.subject}
+            onChange={(event) => {
+              setValue("subject", event.target.value);
+            }}
+            onBlur={() => {
+              commit("subject");
+            }}
+            onKeyDown={(event) => {
+              handleKeyDown(event, false);
+            }}
+          />
+          {fieldState("subject")}
+        </Field>
+
+        <div className="rfi-register-editor__paired">
+          <Field
+            label={EDITABLE_FIELDS.responsiblePartyId.label}
+            controlId={`rfi-edit-${rfi.id}-responsiblePartyId`}
+            error={failureFor("responsiblePartyId")?.message}
+          >
+            <Select
+              data-field-input
+              data-id={rfi.id}
+              data-field="responsiblePartyId"
+              value={values.responsiblePartyId}
+              onChange={(event) => {
+                setValue("responsiblePartyId", event.target.value);
+                onCommit("responsiblePartyId", event.target.value);
+              }}
+              onKeyDown={(event) => {
+                handleKeyDown(event, false);
+              }}
+            >
+              <option value="">Select assignee</option>
+              {contacts.map((contact) => (
+                <option key={contact.id} value={contact.id}>
+                  {contact.name}
+                  {contact.companyName ? ` — ${contact.companyName}` : ""}
+                </option>
+              ))}
+            </Select>
+            {rfi.responsiblePartyLegacyText ? (
+              <p className="rfi-register-legacy-note">
+                Legacy value “{rfi.responsiblePartyLegacyText}” remains until a
+                contact is selected.
+              </p>
+            ) : null}
+            {fieldState("responsiblePartyId")}
+          </Field>
+
+          <Field
+            label={EDITABLE_FIELDS.requestedResponseDate.label}
+            controlId={`rfi-edit-${rfi.id}-requestedResponseDate`}
+            error={failureFor("requestedResponseDate")?.message}
+          >
+            <DateInput
+              data-field-input
+              data-id={rfi.id}
+              data-field="requestedResponseDate"
+              value={values.requestedResponseDate}
+              onChange={(event) => {
+                setValue("requestedResponseDate", event.target.value);
+              }}
+              onBlur={() => {
+                commit("requestedResponseDate");
+              }}
+              onKeyDown={(event) => {
+                handleKeyDown(event, false);
+              }}
+            />
+            {fieldState("requestedResponseDate")}
+          </Field>
+        </div>
+
+        <Field
+          label={EDITABLE_FIELDS.question.label}
+          controlId={`rfi-edit-${rfi.id}-question`}
+          required
+          error={failureFor("question")?.message}
+        >
+          <TextArea
+            data-field-input
+            data-id={rfi.id}
+            data-field="question"
+            rows={5}
+            placeholder="Clearly describe the issue, location, and decision needed."
+            value={values.question}
+            onChange={(event) => {
+              setValue("question", event.target.value);
+            }}
+            onBlur={() => {
+              commit("question");
+            }}
+            onKeyDown={(event) => {
+              handleKeyDown(event, true);
+            }}
+          />
+          {fieldState("question")}
+        </Field>
+
+        <Field
+          label={
+            <>
+              {EDITABLE_FIELDS.contractorSuggestion.label}
+              <span className="rfi-register-editor__optional">Optional</span>
+            </>
+          }
+          controlId={`rfi-edit-${rfi.id}-contractorSuggestion`}
+          error={failureFor("contractorSuggestion")?.message}
+        >
+          <TextArea
+            data-field-input
+            data-id={rfi.id}
+            data-field="contractorSuggestion"
+            rows={4}
+            placeholder="Describe the proposed resolution."
+            value={values.contractorSuggestion}
+            onChange={(event) => {
+              setValue("contractorSuggestion", event.target.value);
+            }}
+            onBlur={() => {
+              commit("contractorSuggestion");
+            }}
+            onKeyDown={(event) => {
+              handleKeyDown(event, true);
+            }}
+          />
+          {fieldState("contractorSuggestion")}
+        </Field>
+
+        <Collapsible
+          title="Additional information"
+          meta="References and other details"
+          className="rfi-register-editor__additional"
+        >
+          <div className="rfi-register-editor__paired">
+            <Field
+              label={EDITABLE_FIELDS.drawingReferences.label}
+              controlId={`rfi-edit-${rfi.id}-drawingReferences`}
+              error={failureFor("drawingReferences")?.message}
+            >
+              <TextInput
+                data-field-input
+                data-id={rfi.id}
+                data-field="drawingReferences"
+                placeholder="e.g., A5.2, Detail 3"
+                value={values.drawingReferences}
+                onChange={(event) => {
+                  setValue("drawingReferences", event.target.value);
+                }}
+                onBlur={() => {
+                  commit("drawingReferences");
+                }}
+                onKeyDown={(event) => {
+                  handleKeyDown(event, false);
+                }}
+              />
+              {fieldState("drawingReferences")}
+            </Field>
+
+            <Field
+              label={EDITABLE_FIELDS.specificationReferences.label}
+              controlId={`rfi-edit-${rfi.id}-specificationReferences`}
+              error={failureFor("specificationReferences")?.message}
+            >
+              <TextInput
+                data-field-input
+                data-id={rfi.id}
+                data-field="specificationReferences"
+                placeholder="e.g., 08 71 00"
+                value={values.specificationReferences}
+                onChange={(event) => {
+                  setValue("specificationReferences", event.target.value);
+                }}
+                onBlur={() => {
+                  commit("specificationReferences");
+                }}
+                onKeyDown={(event) => {
+                  handleKeyDown(event, false);
+                }}
+              />
+              {fieldState("specificationReferences")}
+            </Field>
+          </div>
+        </Collapsible>
+      </div>
+
+      <footer className="rfi-register-editor__foot">
         <Button
           variant="secondary"
-          size="compact"
           type="button"
-          data-editor-done
+          data-editor-close
           data-id={rfi.id}
-          onClick={onDone}
+          onClick={onClose}
         >
-          Done
+          Close
         </Button>
-      </div>
-    </div>
+      </footer>
+    </form>
   );
 }

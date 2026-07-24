@@ -1,5 +1,5 @@
 /*
- * Configuration and validation for the expandable draft editor's structured
+ * Configuration and validation for the drawer draft editor's structured
  * fields. Mirrors `public/rfis-view.js`'s `EDITABLE_FIELDS`/`PANEL_ORDER`
  * exactly: same fields, same order, same "wide" (full editor width) markers,
  * same validation rules (Subject and Question required; response date must be
@@ -18,11 +18,11 @@ export interface EditableFieldMeta {
 
 export const EDITABLE_FIELDS: Record<RfiEditableField, EditableFieldMeta> = {
   subject: { label: "Subject", type: "text", wide: true },
-  responsiblePartyId: { label: "Party", type: "contact" },
+  responsiblePartyId: { label: "Assigned to", type: "contact" },
   requestedResponseDate: { label: "Response due", type: "date" },
   question: { label: "Question", type: "textarea", wide: true },
   contractorSuggestion: {
-    label: "Contractor suggestion",
+    label: "Contractor recommendation",
     type: "textarea",
     wide: true,
   },

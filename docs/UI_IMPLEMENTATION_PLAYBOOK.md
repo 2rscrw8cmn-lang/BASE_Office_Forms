@@ -302,8 +302,9 @@ The shell is stable enough that feature migrations no longer need to modify glob
 Migrate `/projects/:projectId/rfis` from the compatibility-mounted
 `public/rfis-view.js` controller to a native React feature inside the UI-4
 shell, using a native semantic `<table>` on desktop and a dedicated card
-pattern on mobile. This is a parity migration and shared-component adoption
-phase, not a redesign of the RFI interaction model.
+pattern on mobile. Draft editing uses the shared responsive Drawer so desktop
+and mobile share one form contract without turning the register into a
+spreadsheet.
 
 Do not adopt Tabulator for this route: Spike 0 rejected it because its
 keyboard behavior regressed against the approved model. Do not make
@@ -316,17 +317,18 @@ compatibility-mounted through `LegacyFeatureMount` until UI-7.
 
 ### Approved interaction model (binding)
 
-The register preserves the model approved in `docs/UX_RFI_SPEC.md` §13 and
-implemented by `public/rfis-view.js`:
+The register preserves the server, query-state, and changed-only commit
+contracts approved in `docs/UX_RFI_SPEC.md` §13 while applying the approved
+UI-5 visual refinement:
 
-- one expandable draft editor beneath the selected row, not a grid cell
-  editor;
+- one shared right-side Drawer for Add RFI and draft editing; it becomes
+  full-screen on mobile and never renders as an inline table row;
 - ordinary cursor/text selection inside the editor's controls;
 - no cell/row selection state, no arrow-key cell navigation, no Tab
   save-and-move, and no `role="grid"` semantics;
 - Escape commits any pending change through the same blur path already used
-  for that control, then closes the editor and returns focus to the Subject
-  trigger — never a silent rollback of an already-typed value;
+  for that control, then closes the Drawer and returns focus to its opener —
+  never a silent rollback of an already-typed value;
 - per-field Saving/Saved/Failed/Conflict feedback, not a whole-row or
   whole-grid save state;
 - capability-gated direct editing (`row.capabilities.updateDraft`), never a
@@ -334,28 +336,25 @@ implemented by `public/rfis-view.js`:
 
 ### Required behavior
 
-- the preserved five-column desktop hierarchy: RFI, Subject, Party, Due,
-  Updated — no Action column, no standalone sort dropdown, no
-  redundant status/question columns;
-- the RFI identity column as an explicit link to the canonical workspace
-  route (official number, "Unnumbered" for a draft, status as secondary
-  text, imported legacy reference when present, issue-repair attention state
-  when returned by the server); the database UUID is never shown;
-- an editable draft's Subject as a button that opens the row's expandable
-  editor; a locked/non-editable RFI's Subject as a canonical workspace link;
-  ordinary Party/Due/Updated cells never navigate;
-- the expandable editor covering Subject, Responsible Party, Requested
-  Response Date, Question, Contractor Suggestion, Drawing References, and
-  Specification References, built from the shared `Field`/`TextInput`/
-  `TextArea`/`Select`/`DateInput`/`ValidationMessage`/`SaveIndicator`/`Button`
-  components;
+- the compact desktop hierarchy: RFI, Subject, Status, Assigned to, Due,
+  Updated, and an accessible visually unlabeled Actions column;
+- draft identity is the shared `Draft` badge and never "Unnumbered"; issued
+  RFIs retain their authoritative number and canonical workspace link; the
+  database UUID is never shown;
+- the row primary area opens an editable draft in the Drawer or navigates an
+  issued/locked RFI to its canonical workspace; the action menu exposes only
+  `Edit draft` or `Open RFI` as appropriate;
+- the shared Drawer covers Subject, Assigned to, Response due, Question,
+  Contractor recommendation, and a shared `Collapsible` for Drawing and
+  Specification references, built from the UI-3 `Drawer`, `Collapsible`,
+  `Field`, inputs, `ValidationMessage`, `SaveIndicator`, and `Button`;
 - changed-only commits: text/date controls commit on blur, selects commit on
   selection, Enter commits a non-textarea control by blurring it, Enter in a
   textarea inserts a newline, unchanged values never call the API;
 - contact selection by project-contact ID, with the unresolved-legacy-text
   handling preserved;
-- capability-gated Add RFI that creates one unnumbered draft, clears
-  incompatible search/status filtering, opens the new draft's editor, and
+- capability-gated Add RFI that creates one draft, clears incompatible
+  search/status filtering, opens the new draft's Drawer, and
   focuses Subject;
 - URL-backed `q`, `status`, `responsible`, `due`, `sort`, `direction` query
   parameters with the existing replace-on-search / push-on-filter-or-sort
@@ -388,11 +387,10 @@ implemented by `public/rfis-view.js`:
 
 ### Exit gate
 
-Behavioral parity with the approved interaction model is demonstrated through
-tests and desktop/mobile visual evidence — cleaner appearance alone is not
-acceptance. RFI acceptance is against the approved expandable-editor
-controlled-table contract in `docs/UX_RFI_SPEC.md` §13, never against a
-grid/spreadsheet prototype.
+Behavioral parity and the refined responsive composition are demonstrated
+through tests and desktop/mobile/tablet visual evidence. Acceptance is against
+the compact semantic-table, dedicated-card, and shared-Drawer contract in
+`docs/UX_RFI_SPEC.md` §13, never against a grid/spreadsheet prototype.
 
 ## 9. UI-6 — Projects and Records registers
 

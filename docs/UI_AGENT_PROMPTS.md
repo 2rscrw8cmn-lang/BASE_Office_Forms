@@ -135,28 +135,29 @@ Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, route docs, local
 Implement UI-5 from docs/UI_IMPLEMENTATION_PLAYBOOK.md: migrate
 /projects/:projectId/rfis from the compatibility-mounted public/rfis-view.js
 controller to a native React feature inside the UI-4 shell. This is a parity
-migration and shared-component adoption phase, not a redesign — preserve the
-approved interaction model in docs/UX_RFI_SPEC.md §13 exactly: a native
-semantic <table> (no role="grid", no cell/row selection, no arrow-key cell
-navigation, no Tab save-and-move) with one expandable draft editor beneath the
-selected row, ordinary text selection inside its controls, and a dedicated
-mobile card pattern. Do not adopt Tabulator or make BaseDataGrid a
-prerequisite. The RFI workspace route stays on LegacyFeatureMount until UI-7.
+migration and shared-component adoption phase. Preserve the approved API,
+authorization, URL-state, changed-only commit, validation, and conflict
+contracts in docs/UX_RFI_SPEC.md §13. Render a compact semantic desktop table
+(no role="grid", cell selection, arrow-cell navigation, or Tab save-and-move),
+dedicated mobile cards, and one shared right-side Drawer that becomes
+full-screen on mobile. Do not render an inline editor row. Do not adopt
+Tabulator or make BaseDataGrid a prerequisite. The RFI workspace route stays
+on LegacyFeatureMount until UI-7.
 
-Preserve exactly: the five-column desktop hierarchy (RFI, Subject, Party, Due,
-Updated) with no Action column; the RFI identity link and editable-Subject-
-button-versus-locked-Subject-link distinction; the seven-field expandable
-editor (Subject, Responsible Party, Requested Response Date, Question,
-Contractor Suggestion, Drawing References, Specification References) built
-from the shared Field/TextInput/TextArea/Select/DateInput/ValidationMessage/
-SaveIndicator/Button components; changed-only commits (blur for text/date,
-selection for selects, Enter-blurs-non-textarea, Enter-inserts-newline-in-
-textarea); Escape-commits-then-closes-and-returns-focus; per-field Saving/
-Saved/Failed/Conflict states; project-contact-ID selection; capability-gated
-Add RFI that opens the new draft's editor focused on Subject; URL-backed q/
-status/responsible/due/sort/direction with the existing replace-on-search/
-push-on-filter-or-sort history behavior; column-header sorting with correct
-aria-sort; and all required loading/empty/error/permission/conflict states.
+Preserve exactly: columns RFI, Subject, Status, Assigned to, Due, Updated, and
+an accessible visually unlabeled Actions column; Draft badges instead of
+"Unnumbered"; row-primary-area open/navigation; Edit draft/Open RFI menus; and
+the shared Drawer fields Subject, Assigned to, Response due, Question,
+Contractor recommendation, plus collapsed Additional information for drawing
+and specification references. Use shared Drawer/Collapsible/Field/input/
+ValidationMessage/SaveIndicator/Button components. Keep changed-only commits
+(blur for text/date, selection for selects, Enter-blurs-non-textarea,
+Enter-inserts-newline-in-textarea), Escape-commits-then-closes-and-returns-
+focus, per-field Saving/Saved/Failed/Conflict states, contact-ID selection,
+capability-gated Add RFI opening the new draft Drawer focused on Subject,
+URL-backed q/status/responsible/due/sort/direction with the existing history
+behavior, column-header `aria-sort`, and all loading/empty/error/permission/
+conflict states.
 
 Do not enable incomplete official issuance or infer permissions client-side. The API remains authoritative and its response shapes do not change without a verified blocking gap.
 

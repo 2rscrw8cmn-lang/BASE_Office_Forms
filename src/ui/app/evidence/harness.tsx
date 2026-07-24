@@ -371,6 +371,14 @@ async function waitForSelector(
 
 async function runRfiScenario() {
   if (rfiScenario === "none") return;
+  if (rfiScenario === "new-draft") {
+    const add = (await waitForSelector(
+      "[data-create-rfi]",
+    )) as HTMLButtonElement;
+    add.click();
+    await waitForSelector('[data-editor-drawer="rfi-new"]');
+    return;
+  }
   await waitForSelector('[data-subject-edit][data-id="rfi-1"]');
   document
     .querySelector<HTMLButtonElement>('[data-subject-edit][data-id="rfi-1"]')
@@ -379,7 +387,18 @@ async function runRfiScenario() {
     '[data-field-input][data-id="rfi-1"][data-field="subject"]',
   );
 
-  if (rfiScenario === "editor-open") return;
+  if (rfiScenario === "editor-open" || rfiScenario === "additional-collapsed") {
+    return;
+  }
+
+  if (rfiScenario === "additional-expanded") {
+    const additional = [...document.querySelectorAll("button")].find((button) =>
+      button.textContent.includes("Additional information"),
+    );
+    additional?.click();
+    await waitForSelector('.base-collapsible[data-state="open"]');
+    return;
+  }
 
   if (rfiScenario === "validation-error") {
     const subject = (await waitForSelector(

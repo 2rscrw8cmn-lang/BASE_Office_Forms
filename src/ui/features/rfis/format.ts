@@ -91,7 +91,7 @@ export function rfiDueUrgencyText(
   const dayDiff = calendarDayDiff(now, due);
   if (isOverdue) {
     const days = Math.max(1, -dayDiff);
-    return `Overdue by ${String(days)} day${days === 1 ? "" : "s"}`;
+    return `${String(days)} day${days === 1 ? "" : "s"} overdue`;
   }
   if (dayDiff === 0) return "Due today";
   if (dayDiff > 0)

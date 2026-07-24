@@ -42,7 +42,8 @@ Tabulator behavior spike
 → application/document CSS separation + React/Vite foundation
 → BASE components and UI Lab
 → React shell and route parity
-→ RFI register as a native React feature using a controlled semantic table
+→ RFI register as a native React feature using a compact semantic table,
+  dedicated mobile cards, and a shared responsive draft Drawer
 → Projects and Records registers
 → RFI/Record/Revision workspaces
 → Dashboard/forms/Team/Administration

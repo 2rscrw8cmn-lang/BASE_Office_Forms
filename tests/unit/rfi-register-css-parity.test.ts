@@ -1,77 +1,77 @@
 /*
- * Asserts the native register's feature-local CSS lines up with the
- * approved desktop/mobile behavior on `main` (`public/app-shell.css`'s
- * `.rfi-*` rules) rather than diverging into a reinterpreted layout: the
- * table/cards breakpoint, the editor's two-column collapse, the Subject
- * column's default ink color with accent-on-hover/expand, single-line
- * truncation for Subject/Question, ellipsis truncation for references, and
- * the plain (non-italic, non-monospace) "Unnumbered" draft treatment.
+ * Structural CSS assertions for the approved compact register + shared Drawer
+ * refinement. These prevent a return to the expandable table-row editor or a
+ * horizontally squeezed mobile table.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync("src/ui/features/rfis/rfis.css", "utf8");
 
-describe("RFI register CSS — approved responsive breakpoints", () => {
-  it("switches the table to cards at 760px, matching current main", () => {
+describe("RFI register CSS — approved responsive behavior", () => {
+  it("switches the semantic table to dedicated cards at 760px", () => {
     expect(css).toMatch(/@media \(max-width: 760px\)/);
-    expect(css).not.toMatch(/@media \(max-width: 640px\)/);
+    expect(css).toMatch(/\.rfi-register-table-wrap\s*\{\s*display:\s*none;/);
+    expect(css).toMatch(/\.rfi-register-cards\s*\{\s*display:\s*flex;/);
   });
 
-  it("collapses the editor to one column at 900px, matching current main", () => {
+  it("makes the shared Drawer full-width on mobile and stacks paired fields at 460px", () => {
     expect(css).toMatch(
-      /@media \(max-width: 900px\)\s*\{\s*\.rfi-register-editor__grid\s*\{\s*grid-template-columns:\s*1fr;/,
+      /@media \(max-width: 760px\)[\s\S]*\.rfi-register-drawer\s*\{[^}]*width:\s*100vw;/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 460px\)[\s\S]*\.rfi-register-editor__paired\s*\{[^}]*grid-template-columns:\s*1fr;/,
+    );
+  });
+
+  it("keeps a bounded 660px desktop Drawer with a safe-area-aware footer", () => {
+    expect(css).toMatch(
+      /\.rfi-register-drawer\s*\{[^}]*width:\s*min\(660px,\s*calc\(100vw - 56px\)\)/,
+    );
+    expect(css).toMatch(
+      /\.rfi-register-editor__foot\s*\{[^}]*env\(safe-area-inset-bottom\)/,
     );
   });
 });
 
-describe("RFI register CSS — table visual hierarchy", () => {
-  it("keeps Subject ink-colored by default and accented only on hover/expand", () => {
+describe("RFI register CSS — compact hierarchy", () => {
+  it("uses compact rows and explicit Status, Assigned-to, Due, Updated, and actions widths", () => {
     expect(css).toMatch(
-      /\.rfi-register-subject-open\s*\{[^}]*color:\s*var\(--app-text-primary\)/,
+      /\.rfi-register-table tbody th,\s*\n\.rfi-register-table tbody td\s*\{[^}]*height:\s*60px;/,
     );
     expect(css).toMatch(
-      /\.rfi-register-subject-open:hover,\s*\n\s*\.rfi-register-subject-open\[aria-expanded="true"\],\s*\n\s*\.rfi-register-subject-link:hover\s*\{[^}]*color:\s*var\(--app-accent\)/,
-    );
-  });
-
-  it("clamps Subject and Question summary to a single line", () => {
-    expect(css).toMatch(
-      /\.rfi-register-subject-open-text,\s*\n\s*\.rfi-register-subject-link\s*\{[^}]*-webkit-line-clamp:\s*1/,
+      /\.rfi-register-table thead th:nth-child\(3\)\s*\{\s*width:\s*112px;/,
     );
     expect(css).toMatch(
-      /\.rfi-register-subject-secondary\s*\{[^}]*-webkit-line-clamp:\s*1/,
+      /\.rfi-register-table thead th:nth-child\(4\)\s*\{\s*width:\s*154px;/,
+    );
+    expect(css).toMatch(
+      /\.rfi-register-table thead th:nth-child\(7\)\s*\{\s*width:\s*48px;/,
     );
   });
 
-  it("truncates drawing/spec references with an ellipsis", () => {
+  it("truncates desktop summaries and clamps mobile questions to two lines", () => {
     expect(css).toMatch(
-      /\.rfi-register-subject-meta\s*\{[^}]*text-overflow:\s*ellipsis/,
+      /\.rfi-register-subject-open-text,[\s\S]*?text-overflow:\s*ellipsis;/,
+    );
+    expect(css).toMatch(
+      /\.rfi-register-card-question\s*\{[^}]*-webkit-line-clamp:\s*2;/,
     );
   });
 
-  it("uses established compact widths for Party, Due, and Updated", () => {
+  it("styles selected rows/cards and preserves comfortable mobile action targets", () => {
     expect(css).toMatch(
-      /\.rfi-register-table thead th:nth-child\(3\)\s*\{\s*width:\s*168px;/,
+      /\.rfi-register-row:hover,\s*\n\.rfi-register-row\.is-selected/,
     );
     expect(css).toMatch(
-      /\.rfi-register-table thead th:nth-child\(4\)\s*\{\s*width:\s*118px;/,
+      /\.rfi-register-card \.base-icon-btn\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/,
     );
-    expect(css).toMatch(
-      /\.rfi-register-table thead th:nth-child\(5\)\s*\{\s*width:\s*90px;/,
-    );
-    expect(css).toMatch(
-      /\.rfi-register-cell-responsible\s*\{\s*width:\s*168px;/,
-    );
-    expect(css).toMatch(/\.rfi-register-cell-due\s*\{\s*width:\s*118px;/);
-    expect(css).toMatch(/\.rfi-register-cell-updated\s*\{\s*width:\s*90px;/);
   });
 
-  it("renders the Unnumbered draft label in the quieter sans-serif treatment, not italic mono", () => {
-    const match = /\.rfi-register-id-number--draft\s*\{([^}]*)\}/.exec(css);
-    expect(match).not.toBeNull();
-    const body = match?.[1] ?? "";
-    expect(body).toMatch(/font-family:\s*var\(--app-font-sans\)/);
-    expect(body).not.toMatch(/italic/);
+  it("contains no obsolete inline editor-row or reference-summary selectors", () => {
+    expect(css).not.toContain("rfi-register-editor-row");
+    expect(css).not.toContain("rfi-register-editor__grid");
+    expect(css).not.toContain("rfi-register-subject-meta");
+    expect(css).not.toContain("rfi-register-id-number--draft");
   });
 });

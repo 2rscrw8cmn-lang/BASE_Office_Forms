@@ -1,29 +1,25 @@
 /*
- * The desktop RFI register: a native semantic <table> with the five preserved
- * columns (RFI, Subject, Party, Due, Updated). No Action column, no whole-row
- * navigation, no grid/cell-selection semantics -- per Spike 0 and the UI-5
- * binding decision, this is a controlled table, not a data grid. Only the RFI
- * identity link and (for locked rows) the Subject link navigate; an editable
- * draft's Subject is a button that opens the row's expandable editor instead.
+ * Compact desktop RFI register. It remains a native semantic table, while
+ * editable drafts open in the shared Drawer owned by RfiRegisterFeature.
  */
 
-import { Fragment } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { AppLink } from "../../app/AppLink";
+import { useShell } from "../../app/ShellContext";
+import {
+  Badge,
+  DropdownMenu,
+  IconButton,
+  RfiStatusBadge,
+} from "../../components";
 import {
   formatDate,
   formatRelativeUpdated,
   formatShortDate,
   rfiDueUrgencyText,
-  rfiStatusLabel,
 } from "./format";
-import { SORT_HEADERS, SORT_KEYS, type RfiFilters } from "./urlState";
-import type { FieldState } from "./RfiEditorPanel";
-import { RfiEditorPanel } from "./RfiEditorPanel";
-import type {
-  ResponsibleContactOption,
-  RfiEditableField,
-  RfiListItem,
-} from "./types";
+import { SORT_KEYS, type RfiFilters } from "./urlState";
+import type { ResponsibleContactOption, RfiListItem } from "./types";
 
 function truncate(value: string | null | undefined, max = 140): string {
   const text = (value || "").trim();
@@ -41,15 +37,7 @@ export interface RfiTableProps {
   filters: RfiFilters;
   onSort: (key: RfiFilters["sort"]) => void;
   editorOpenId: string | null;
-  onToggleEditor: (id: string) => void;
-  fieldStatesFor: (id: string) => Partial<Record<RfiEditableField, FieldState>>;
-  onCommitField: (
-    id: string,
-    field: RfiEditableField,
-    rawValue: string,
-  ) => void;
-  onDoneEditing: () => void;
-  editorResetSignal: number;
+  onOpenEditor: (id: string, trigger?: HTMLElement) => void;
 }
 
 function SortHeader({
@@ -76,7 +64,7 @@ function SortHeader({
     : SORT_KEYS[sortKey].defaultDir === "asc"
       ? "ascending"
       : "descending";
-  const arrow = filters.direction === "asc" ? "↑" : "↓";
+
   return (
     <th scope="col" aria-sort={ariaSort}>
       <button
@@ -90,91 +78,88 @@ function SortHeader({
       >
         {label}
         {active ? (
-          <>
-            {" "}
-            <span className="rfi-register-sort-arrow" aria-hidden="true">
-              {arrow}
-            </span>
-          </>
+          <span className="rfi-register-sort-arrow" aria-hidden="true">
+            {filters.direction === "asc" ? "↑" : "↓"}
+          </span>
         ) : null}
       </button>
     </th>
   );
 }
 
-function IdentityCell({ rfi }: { rfi: RfiListItem }) {
-  const isLegacyIncomplete =
+function IdentityCell({ rfi, href }: { rfi: RfiListItem; href: string }) {
+  const legacyIncomplete =
     rfi.issuanceReconciliationState === "legacy_incomplete";
-  const numberText = rfi.rfiNumber || "Unnumbered";
-  const statusText = isLegacyIncomplete
-    ? "Needs issue repair"
-    : rfiStatusLabel(rfi.status);
+
+  if (!rfi.rfiNumber) {
+    return (
+      <span className="rfi-register-identity">
+        <Badge tone="neutral">Draft</Badge>
+        {rfi.legacyReference ? (
+          <span className="rfi-register-id-legacy">
+            Legacy {rfi.legacyReference}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
   return (
-    <>
-      <span
-        className={`rfi-register-id-number${rfi.rfiNumber ? "" : " rfi-register-id-number--draft"}`}
+    <span className="rfi-register-identity">
+      <AppLink
+        className="rfi-register-id-link"
+        href={href}
+        aria-label={`Open RFI ${rfi.rfiNumber}`}
       >
-        {numberText}
-      </span>
-      <span
-        className={`rfi-register-id-status${isLegacyIncomplete ? " is-attention" : ""}`}
-      >
-        {statusText}
-      </span>
+        {legacyIncomplete ? `Reserved ${rfi.rfiNumber}` : rfi.rfiNumber}
+      </AppLink>
       {rfi.legacyReference ? (
         <span className="rfi-register-id-legacy">
           Legacy {rfi.legacyReference}
         </span>
       ) : null}
-    </>
+    </span>
   );
 }
 
 function SubjectCell({
   rfi,
   href,
-  editorOpenId,
-  onToggleEditor,
+  open,
+  onOpenEditor,
 }: {
   rfi: RfiListItem;
   href: string;
-  editorOpenId: string | null;
-  onToggleEditor: (id: string) => void;
+  open: boolean;
+  onOpenEditor: (id: string, trigger?: HTMLElement) => void;
 }) {
-  const editable = rfi.capabilities.updateDraft;
-  const questionPreview = truncate(rfi.question, 90);
-  const refs = [rfi.drawingReferences, rfi.specificationReferences]
-    .filter(Boolean)
-    .join(" · ");
+  const subject = rfi.subject || "Untitled RFI";
+  const questionPreview = truncate(rfi.question, 100);
   return (
-    <td
-      className="rfi-register-cell-subject"
-      data-subject-cell
-      data-id={rfi.id}
-    >
-      {editable ? (
+    <td className="rfi-register-cell-subject">
+      {rfi.capabilities.updateDraft ? (
         <button
           type="button"
           className="rfi-register-subject-open"
           data-subject-edit
+          data-editor-trigger
           data-id={rfi.id}
-          aria-expanded={editorOpenId === rfi.id}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           aria-controls={`rfi-editor-${rfi.id}`}
-          onClick={() => {
-            onToggleEditor(rfi.id);
+          onClick={(event) => {
+            onOpenEditor(rfi.id, event.currentTarget);
           }}
         >
-          <span className="rfi-register-subject-open-text">
-            {rfi.subject || "Untitled RFI"}
-          </span>
+          <span className="rfi-register-subject-open-text">{subject}</span>
         </button>
       ) : (
         <AppLink
           className="rfi-register-subject-link"
           href={href}
-          title={rfi.subject || ""}
+          title={subject}
         >
-          {rfi.subject || "Untitled RFI"}
+          {subject}
         </AppLink>
       )}
       {questionPreview ? (
@@ -182,7 +167,18 @@ function SubjectCell({
           {questionPreview}
         </span>
       ) : null}
-      {refs ? <span className="rfi-register-subject-meta">{refs}</span> : null}
+    </td>
+  );
+}
+
+function StatusCell({ rfi }: { rfi: RfiListItem }) {
+  return (
+    <td className="rfi-register-cell-status">
+      {rfi.issuanceReconciliationState === "legacy_incomplete" ? (
+        <Badge tone="warning">Needs issue repair</Badge>
+      ) : (
+        <RfiStatusBadge status={rfi.status} />
+      )}
     </td>
   );
 }
@@ -198,7 +194,7 @@ function ResponsibleCell({
     return (
       <td className="rfi-register-cell-responsible">
         <span className="rfi-register-cell-text">
-          {rfi.responsiblePartyLegacyText}{" "}
+          {rfi.responsiblePartyLegacyText}
           <span className="rfi-register-responsible-legacy">(unresolved)</span>
         </span>
       </td>
@@ -227,8 +223,13 @@ function ResponsibleCell({
 }
 
 function DueCell({ rfi }: { rfi: RfiListItem }) {
-  const dateText = formatShortDate(rfi.requestedResponseDate) || "—";
-  const urgency = rfiDueUrgencyText(rfi.requestedResponseDate, rfi.isOverdue);
+  const hasDate = Boolean(rfi.requestedResponseDate);
+  const dateText = hasDate
+    ? formatShortDate(rfi.requestedResponseDate)
+    : "No due date";
+  const urgency = hasDate
+    ? rfiDueUrgencyText(rfi.requestedResponseDate, rfi.isOverdue)
+    : "";
   const tone = rfi.isOverdue
     ? " is-overdue"
     : rfi.dueSoon
@@ -246,6 +247,18 @@ function DueCell({ rfi }: { rfi: RfiListItem }) {
   );
 }
 
+function fullUpdatedLabel(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function isNestedInteractive(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest("a, button, input, select, textarea") !== null
+  );
+}
+
 export function RfiTable({
   projectId,
   rfis,
@@ -253,93 +266,153 @@ export function RfiTable({
   filters,
   onSort,
   editorOpenId,
-  onToggleEditor,
-  fieldStatesFor,
-  onCommitField,
-  onDoneEditing,
-  editorResetSignal,
+  onOpenEditor,
 }: RfiTableProps) {
+  const shell = useShell();
+
+  function activateRow(
+    rfi: RfiListItem,
+    row: HTMLElement,
+    event: MouseEvent<HTMLTableRowElement> | KeyboardEvent<HTMLTableRowElement>,
+  ) {
+    if (isNestedInteractive(event.target)) return;
+    if (rfi.capabilities.updateDraft) {
+      onOpenEditor(rfi.id, row);
+    } else {
+      shell.navigate(rfiWorkspaceHref(projectId, rfi.id));
+    }
+  }
+
   return (
     <div
       className="rfi-register-table-wrap"
       role="region"
-      aria-label="Project RFI working register"
+      aria-label="Project RFI register"
       tabIndex={0}
     >
       <table
         className="rfi-register-table"
         aria-describedby="rfi-register-hint"
       >
-        <caption className="base-sr-only">
-          Editable project RFI register
-        </caption>
+        <caption className="base-sr-only">Project RFI register</caption>
         <thead>
           <tr>
-            {SORT_HEADERS.map(([key, label]) => (
-              <SortHeader
-                key={key}
-                sortKey={key}
-                label={label}
-                filters={filters}
-                onSort={onSort}
-              />
-            ))}
+            <SortHeader
+              sortKey="number"
+              label="RFI"
+              filters={filters}
+              onSort={onSort}
+            />
+            <SortHeader
+              sortKey="subject"
+              label="Subject"
+              filters={filters}
+              onSort={onSort}
+            />
+            <th scope="col">Status</th>
+            <SortHeader
+              sortKey="responsible"
+              label="Assigned to"
+              filters={filters}
+              onSort={onSort}
+            />
+            <SortHeader
+              sortKey="due"
+              label="Due"
+              filters={filters}
+              onSort={onSort}
+            />
+            <SortHeader
+              sortKey="updated"
+              label="Updated"
+              filters={filters}
+              onSort={onSort}
+            />
+            <th scope="col">
+              <span className="base-sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {rfis.map((rfi) => {
-            const editable = rfi.capabilities.updateDraft;
             const href = rfiWorkspaceHref(projectId, rfi.id);
             const open = editorOpenId === rfi.id;
+            const subject = rfi.subject || "Untitled RFI";
             return (
-              <Fragment key={rfi.id}>
-                <tr
-                  className={`rfi-register-row${editable ? "" : " is-locked"}`}
-                  data-rfi-row={rfi.id}
-                >
-                  <th scope="row" className="rfi-register-cell-id">
-                    <AppLink
-                      className="rfi-register-id-link"
-                      href={href}
-                      aria-label={`Open RFI ${rfi.rfiNumber || "Unnumbered"}`}
-                    >
-                      <IdentityCell rfi={rfi} />
-                    </AppLink>
-                  </th>
-                  <SubjectCell
-                    rfi={rfi}
-                    href={href}
-                    editorOpenId={editorOpenId}
-                    onToggleEditor={onToggleEditor}
-                  />
-                  <ResponsibleCell rfi={rfi} contacts={contacts} />
-                  <DueCell rfi={rfi} />
-                  <td className="rfi-register-cell-updated">
-                    <span
-                      className="rfi-register-updated-text"
-                      title={formatDate(rfi.updatedAt) || ""}
-                    >
-                      {formatRelativeUpdated(rfi.updatedAt) || "—"}
-                    </span>
-                  </td>
-                </tr>
-                {editable && open ? (
-                  <tr className="rfi-register-editor-row">
-                    <td colSpan={5}>
-                      <RfiEditorPanel
-                        rfi={rfi}
-                        contacts={contacts}
-                        fieldStates={fieldStatesFor(rfi.id)}
-                        resetSignal={editorResetSignal}
-                        onCommit={(field, value) => {
-                          onCommitField(rfi.id, field, value);
-                        }}
-                        onDone={onDoneEditing}
+              <tr
+                key={rfi.id}
+                className={`rfi-register-row${open ? " is-selected" : ""}`}
+                data-rfi-row={rfi.id}
+                tabIndex={0}
+                aria-label={`${rfi.capabilities.updateDraft ? "Edit" : "Open"} ${subject}`}
+                onClick={(event) => {
+                  activateRow(rfi, event.currentTarget, event);
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.target === event.currentTarget &&
+                    (event.key === "Enter" || event.key === " ")
+                  ) {
+                    event.preventDefault();
+                    activateRow(rfi, event.currentTarget, event);
+                  }
+                }}
+              >
+                <th scope="row" className="rfi-register-cell-id">
+                  <IdentityCell rfi={rfi} href={href} />
+                </th>
+                <SubjectCell
+                  rfi={rfi}
+                  href={href}
+                  open={open}
+                  onOpenEditor={onOpenEditor}
+                />
+                <StatusCell rfi={rfi} />
+                <ResponsibleCell rfi={rfi} contacts={contacts} />
+                <DueCell rfi={rfi} />
+                <td className="rfi-register-cell-updated">
+                  <span
+                    className="rfi-register-updated-text"
+                    title={fullUpdatedLabel(rfi.updatedAt)}
+                    aria-label={`Updated ${fullUpdatedLabel(rfi.updatedAt)}`}
+                  >
+                    {formatRelativeUpdated(rfi.updatedAt) ||
+                      formatDate(rfi.updatedAt) ||
+                      "—"}
+                  </span>
+                </td>
+                <td className="rfi-register-cell-actions">
+                  <DropdownMenu
+                    trigger={
+                      <IconButton
+                        icon="more"
+                        label={`Actions for ${subject}`}
+                        size="compact"
+                        data-rfi-actions={rfi.id}
                       />
-                    </td>
-                  </tr>
-                ) : null}
-              </Fragment>
+                    }
+                    items={[
+                      rfi.capabilities.updateDraft
+                        ? {
+                            id: "edit",
+                            label: "Edit draft",
+                            icon: "pencil",
+                            onSelect: () => {
+                              onOpenEditor(rfi.id);
+                            },
+                          }
+                        : {
+                            id: "open",
+                            label: "Open RFI",
+                            icon: "file-text",
+                            onSelect: () => {
+                              shell.navigate(href);
+                            },
+                          },
+                    ]}
+                  />
+                </td>
+              </tr>
             );
           })}
         </tbody>

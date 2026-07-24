@@ -1,9 +1,7 @@
 /*
- * Feature-local layout for the native RFI register (UI-5). Structural/layout
- * rules only -- buttons, badges, save indicators, filter/toolbar chrome, and
- * async states come from the shared BASE component library
- * (`src/ui/components`), never recreated here. Every colour is a registered
- * `--app-*` token; there are no raw colour literals.
+ * Feature layout for the native RFI register. Shared controls, badges, menus,
+ * overlays, form fields, save indicators, and focus treatments remain owned by
+ * src/ui/components. Every color below comes from the application token set.
  */
 
 .rfi-register-page {
@@ -13,7 +11,7 @@
   padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
 }
 
-/* ---- Desktop table ---- */
+/* ---------------------------------------------------------------- table */
 
 .rfi-register-table-wrap {
   overflow-x: auto;
@@ -24,47 +22,55 @@
 
 .rfi-register-table {
   width: 100%;
+  min-width: 840px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--app-text-sm);
 }
 
 .rfi-register-table thead th {
-  text-align: left;
   padding: var(--app-space-2) var(--app-space-3);
   border-bottom: var(--app-border-width) solid var(--app-border-subtle);
   background: var(--app-surface-sunken);
+  color: var(--app-text-primary);
+  text-align: left;
   white-space: nowrap;
 }
 
-/* RFI · Subject · Party · Due · Updated. Subject is the only column left
- * unconstrained so it absorbs whatever width the other four don't need. */
 .rfi-register-table thead th:nth-child(1) {
-  width: 128px;
+  width: 104px;
 }
 
 .rfi-register-table thead th:nth-child(3) {
-  width: 168px;
+  width: 112px;
 }
 
 .rfi-register-table thead th:nth-child(4) {
-  width: 118px;
+  width: 154px;
 }
 
 .rfi-register-table thead th:nth-child(5) {
-  width: 90px;
+  width: 130px;
+}
+
+.rfi-register-table thead th:nth-child(6) {
+  width: 96px;
+}
+
+.rfi-register-table thead th:nth-child(7) {
+  width: 48px;
 }
 
 .rfi-register-sort-header {
   display: inline-flex;
   align-items: center;
   gap: var(--app-space-1);
-  border: none;
-  background: none;
   padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
   font-weight: var(--app-weight-medium);
-  color: var(--app-text-primary);
   cursor: pointer;
 }
 
@@ -79,86 +85,95 @@
 }
 
 .rfi-register-sort-arrow {
+  color: var(--app-accent);
   font-size: var(--app-text-xs);
 }
 
 .rfi-register-table tbody th,
 .rfi-register-table tbody td {
+  height: 60px;
   padding: var(--app-space-2) var(--app-space-3);
   border-bottom: var(--app-border-width) solid var(--app-border-subtle);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
-.rfi-register-row.is-locked {
+.rfi-register-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.rfi-register-row {
   background: var(--app-surface);
+  cursor: pointer;
 }
 
-.rfi-register-row:hover {
+.rfi-register-row:hover,
+.rfi-register-row.is-selected {
   background: var(--app-surface-hover);
 }
 
-.rfi-register-cell-id {
-  width: 128px;
-  white-space: nowrap;
+.rfi-register-row:focus-visible {
+  outline: var(--app-focus-width) solid var(--app-focus-ring);
+  outline-offset: calc(-1 * var(--app-focus-width));
+}
+
+.rfi-register-cell-id,
+.rfi-register-cell-status,
+.rfi-register-cell-responsible,
+.rfi-register-cell-due,
+.rfi-register-cell-updated,
+.rfi-register-cell-actions {
+  overflow: hidden;
+}
+
+.rfi-register-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .rfi-register-id-link {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  color: var(--app-accent);
+  font-family: var(--app-font-mono);
+  font-weight: var(--app-weight-semibold);
   text-decoration: none;
-  color: inherit;
+  white-space: nowrap;
 }
 
-.rfi-register-id-link:focus-visible {
+.rfi-register-id-link:hover {
+  text-decoration: underline;
+}
+
+.rfi-register-id-link:focus-visible,
+.rfi-register-subject-open:focus-visible,
+.rfi-register-subject-link:focus-visible {
   outline: var(--app-focus-width) solid var(--app-focus-ring);
   outline-offset: var(--app-focus-offset);
 }
 
-.rfi-register-id-number {
-  font-family: var(--app-font-mono);
-  font-weight: var(--app-weight-semibold);
-  color: var(--app-text-primary);
-}
-
-.rfi-register-id-number--draft {
-  color: var(--app-text-muted);
-  font-family: var(--app-font-sans);
-  font-weight: var(--app-weight-medium);
-}
-
-.rfi-register-id-status {
-  font-size: var(--app-text-xs);
-  color: var(--app-text-muted);
-}
-
-.rfi-register-id-status.is-attention {
-  color: var(--app-warning);
-  font-weight: var(--app-weight-medium);
-}
-
 .rfi-register-id-legacy {
-  font-size: var(--app-text-2xs);
+  overflow: hidden;
+  max-width: 100%;
   color: var(--app-text-muted);
+  font-size: var(--app-text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rfi-register-cell-subject {
   width: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .rfi-register-subject-open {
   display: block;
+  overflow: hidden;
   width: 100%;
-  max-width: 100%;
-  border: none;
-  background: none;
   padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-text-primary);
   font: inherit;
   font-weight: var(--app-weight-semibold);
-  color: var(--app-text-primary);
   text-align: left;
   cursor: pointer;
 }
@@ -170,54 +185,30 @@
   text-decoration: underline;
 }
 
-.rfi-register-subject-open:focus-visible,
-.rfi-register-subject-link:focus-visible {
-  outline: var(--app-focus-width) solid var(--app-focus-ring);
-  outline-offset: var(--app-focus-offset);
-}
-
 .rfi-register-subject-open-text,
-.rfi-register-subject-link {
-  display: -webkit-box;
-  max-width: 100%;
+.rfi-register-subject-link,
+.rfi-register-subject-secondary {
+  display: block;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rfi-register-subject-link {
-  font-weight: var(--app-weight-semibold);
   color: var(--app-text-primary);
+  font-weight: var(--app-weight-semibold);
   text-decoration: none;
 }
 
 .rfi-register-subject-secondary {
-  display: -webkit-box;
-  max-width: 100%;
-  overflow: hidden;
+  margin-top: 2px;
   color: var(--app-text-muted);
   font-size: var(--app-text-xs);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-
-.rfi-register-subject-meta {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--app-text-muted);
-  font-size: var(--app-text-2xs);
-  font-family: var(--app-font-mono);
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .rfi-register-cell-text {
   color: var(--app-text-primary);
-}
-
-.rfi-register-cell-responsible {
-  width: 168px;
 }
 
 .rfi-register-responsible-empty {
@@ -227,23 +218,22 @@
 .rfi-register-responsible-company,
 .rfi-register-responsible-legacy {
   display: block;
-  font-size: var(--app-text-xs);
+  overflow: hidden;
   color: var(--app-text-muted);
-}
-
-.rfi-register-cell-due {
-  width: 118px;
+  font-size: var(--app-text-xs);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rfi-register-due-date {
+.rfi-register-due-date,
+.rfi-register-due-urgency {
   display: block;
+  white-space: nowrap;
 }
 
 .rfi-register-due-urgency {
-  display: block;
-  font-size: var(--app-text-xs);
   color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
 }
 
 .rfi-register-due-urgency.is-overdue {
@@ -255,82 +245,184 @@
   color: var(--app-warning);
 }
 
-.rfi-register-cell-updated {
-  width: 90px;
+.rfi-register-updated-text {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
   white-space: nowrap;
 }
 
-.rfi-register-updated-text {
+.rfi-register-cell-actions {
+  padding-right: var(--app-space-2);
+  padding-left: var(--app-space-1);
+  text-align: right;
+}
+
+/* --------------------------------------------------------------- drawer */
+
+.rfi-register-drawer {
+  width: min(660px, calc(100vw - 56px));
+  max-width: 100vw;
+}
+
+.rfi-register-drawer .base-drawer__header {
+  flex: 0 0 auto;
+  padding: var(--app-space-4) var(--app-space-5);
+}
+
+.rfi-register-drawer .base-drawer__title {
+  font-size: var(--app-text-lg);
+}
+
+.rfi-register-drawer .base-drawer__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.rfi-register-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.rfi-register-editor__summary {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--app-space-2);
+  padding: 0 var(--app-space-5) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
   color: var(--app-text-muted);
   font-size: var(--app-text-xs);
 }
 
-/* ---- Expandable draft editor ---- */
-
-.rfi-register-editor {
-  padding: var(--app-space-4);
-  background: var(--app-surface-sunken);
-  border-radius: var(--app-radius-md);
+.rfi-register-editor__autosaved {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-1);
+  color: var(--app-success);
 }
 
-.rfi-register-editor__grid {
+.rfi-register-editor__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  min-height: 0;
+  padding: var(--app-space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rfi-register-editor__paired {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--app-space-4);
 }
 
-.rfi-register-editor__field--wide {
-  grid-column: 1 / -1;
+.rfi-register-editor__optional {
+  float: right;
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+  font-weight: var(--app-weight-regular);
+}
+
+.rfi-register-editor__additional {
+  margin-top: var(--app-space-1);
+}
+
+.rfi-register-editor__additional .rfi-register-editor__paired {
+  padding-top: var(--app-space-2);
 }
 
 .rfi-register-legacy-note {
   margin: var(--app-space-1) 0 0;
-  font-size: var(--app-text-xs);
   color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
 }
 
 .rfi-register-field-state {
   display: block;
-  margin-top: var(--app-space-1);
   min-height: 1.2em;
+  margin-top: var(--app-space-1);
 }
 
 .rfi-register-editor__foot {
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
-  margin-top: var(--app-space-4);
+  padding: var(--app-space-3) var(--app-space-5)
+    calc(var(--app-space-3) + env(safe-area-inset-bottom));
+  border-top: var(--app-border-width) solid var(--app-border-subtle);
+  background: var(--app-surface);
 }
 
-@media (max-width: 900px) {
-  .rfi-register-editor__grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ---- Mobile cards ---- */
+/* ---------------------------------------------------------- mobile cards */
 
 .rfi-register-cards {
   display: none;
-  list-style: none;
-  margin: 0;
-  padding: 0;
   flex-direction: column;
   gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .rfi-register-card {
+  padding: var(--app-space-3);
   border: var(--app-border-width) solid var(--app-border-subtle);
   border-radius: var(--app-radius-md);
   background: var(--app-surface);
-  padding: var(--app-space-3);
+}
+
+.rfi-register-card.is-selected {
+  border-color: var(--app-accent);
+  background: var(--app-surface-hover);
+}
+
+.rfi-register-card-top {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  gap: var(--app-space-2);
+}
+
+.rfi-register-card-identity {
+  min-width: 0;
+}
+
+.rfi-register-card-number {
+  color: var(--app-accent);
+  font-family: var(--app-font-mono);
+  font-weight: var(--app-weight-semibold);
+}
+
+.rfi-register-card-updated {
+  margin-left: auto;
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+  white-space: nowrap;
 }
 
 .rfi-register-card-main {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 72px;
   gap: var(--app-space-1);
-  text-decoration: none;
+  padding: var(--app-space-2) 0;
+  border: 0;
+  background: transparent;
   color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .rfi-register-card-main:focus-visible {
@@ -338,51 +430,57 @@
   outline-offset: var(--app-focus-offset);
 }
 
-.rfi-register-card-top {
-  display: flex;
-  align-items: center;
-  gap: var(--app-space-2);
-  flex-wrap: wrap;
-}
-
-.rfi-register-card-number {
-  font-family: var(--app-font-mono);
+.rfi-register-card-subject {
+  color: var(--app-text-primary);
   font-weight: var(--app-weight-semibold);
 }
 
-.rfi-register-card-number.is-draft {
-  color: var(--app-text-muted);
-  font-style: italic;
-}
-
-.rfi-register-card-subject {
-  font-weight: var(--app-weight-medium);
-}
-
 .rfi-register-card-question {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--app-text-muted);
   font-size: var(--app-text-sm);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rfi-register-card-status {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  margin-top: var(--app-space-1);
 }
 
 .rfi-register-card-facts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--app-space-2);
-  margin: var(--app-space-3) 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-3);
   padding-top: var(--app-space-2);
   border-top: var(--app-border-width) solid var(--app-border-subtle);
 }
 
-.rfi-register-card-facts dt {
-  font-size: var(--app-text-2xs);
-  color: var(--app-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+.rfi-register-card-facts > span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--app-space-2);
+  color: var(--app-text-primary);
+  font-size: var(--app-text-sm);
 }
 
-.rfi-register-card-facts dd {
-  margin: 0;
-  font-size: var(--app-text-sm);
+.rfi-register-card-facts > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rfi-register-card-facts svg {
+  flex: 0 0 auto;
+  color: var(--app-text-muted);
+}
+
+.rfi-register-card-facts .is-overdue {
+  color: var(--app-danger);
 }
 
 @media (max-width: 760px) {
@@ -394,27 +492,63 @@
     display: flex;
   }
 
-  /* The shared RegisterToolbar's filter group does not wrap internally, and a
-   * native <select> will not shrink below the width its longest visible
-   * option text needs (flex items default to min-width:auto). Stacking each
-   * filter full-width avoids relying on exactly how much three selects can
-   * compress into a narrow row, which varies by device and font metrics.
-   * Scoped to this feature so the shared component is unchanged. */
   .rfi-register-page .base-toolbar__filters {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
   }
 
-  .rfi-register-page .base-toolbar__filters .base-field {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-
-  .rfi-register-page .base-toolbar__filters .base-select {
-    min-width: 0;
-  }
-
+  .rfi-register-page .base-toolbar__filters .base-field,
+  .rfi-register-page .base-toolbar__filters .base-select,
   .rfi-register-page .base-toolbar__filters .base-select__control {
     min-width: 0;
     width: 100%;
+  }
+
+  .rfi-register-page .base-toolbar__filters .base-select__control {
+    padding-right: var(--app-space-6);
+    padding-left: var(--app-space-2);
+    font-size: var(--app-text-xs);
+  }
+
+  .rfi-register-drawer {
+    width: 100vw;
+    border-left: 0;
+  }
+
+  .rfi-register-card .base-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 460px) {
+  .rfi-register-page {
+    padding-right: var(--app-space-3);
+    padding-left: var(--app-space-3);
+  }
+
+  .rfi-register-editor__paired {
+    grid-template-columns: 1fr;
+  }
+
+  .rfi-register-drawer .base-drawer__header {
+    padding-right: var(--app-space-4);
+    padding-left: var(--app-space-4);
+  }
+
+  .rfi-register-editor__summary {
+    padding-right: var(--app-space-4);
+    padding-left: var(--app-space-4);
+  }
+
+  .rfi-register-editor__body {
+    padding: var(--app-space-4);
+    scroll-padding-bottom: 88px;
+  }
+
+  .rfi-register-editor__foot {
+    padding-right: var(--app-space-4);
+    padding-left: var(--app-space-4);
   }
 }

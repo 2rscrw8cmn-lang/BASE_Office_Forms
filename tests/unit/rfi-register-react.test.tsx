@@ -16,6 +16,15 @@ async function openEditor() {
   return trigger;
 }
 
+async function expandAdditionalInformation() {
+  const trigger = screen.getByRole("button", {
+    name: /Additional information/,
+  });
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    await userEvent.click(trigger);
+  }
+}
+
 /** Throwing DOM lookup so tests never rely on non-null assertions. */
 function fieldInput(id: string, field: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(
@@ -26,7 +35,7 @@ function fieldInput(id: string, field: string): HTMLElement {
 }
 
 describe("native RFI register — layout", () => {
-  it("renders the five-column desktop hierarchy with no Action column", async () => {
+  it("renders the approved desktop hierarchy with a visually unlabeled actions column", async () => {
     installRfiFetch({
       rows: [
         rfi({
@@ -41,19 +50,30 @@ describe("native RFI register — layout", () => {
     const headers = screen
       .getAllByRole("columnheader")
       .map((th) => th.textContent.trim());
-    expect(headers).toEqual(["RFI ↑", "Subject", "Party", "Due", "Updated"]);
-    expect(screen.queryByText("Action")).toBeNull();
+    expect(headers).toEqual([
+      "RFI↑",
+      "Subject",
+      "Status",
+      "Assigned to",
+      "Due",
+      "Updated",
+      "Actions",
+    ]);
+    expect(screen.getByText("Actions")).toHaveClass("base-sr-only");
   });
 
-  it("shows Unnumbered with a Draft status line for unissued rows", async () => {
-    installRfiFetch({ rows: [rfi()] });
+  it("shows Draft instead of Unnumbered and uses one No due date line", async () => {
+    installRfiFetch({
+      rows: [rfi({ requestedResponseDate: null, dueSoon: false })],
+    });
     renderRfiRegister();
     await screen.findByRole("table");
-    expect(screen.getAllByText("Unnumbered").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Unnumbered/)).toBeNull();
     expect(screen.getAllByText("Draft").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No due date").length).toBeGreaterThan(0);
   });
 
-  it("keeps mobile cards alongside the desktop table", async () => {
+  it("keeps dedicated mobile cards with Assigned-to and Due facts", async () => {
     installRfiFetch({ rows: [rfi()] });
     renderRfiRegister();
     await screen.findByRole("table");
@@ -62,6 +82,10 @@ describe("native RFI register — layout", () => {
     expect(
       within(list as HTMLElement).getByText("Door clearance"),
     ).toBeInTheDocument();
+    expect(
+      within(list as HTMLElement).getByText(/Assigned to:/),
+    ).toBeInTheDocument();
+    expect(within(list as HTMLElement).getByText(/Due:/)).toBeInTheDocument();
   });
 });
 
@@ -95,11 +119,19 @@ describe("native RFI register — identity and subject navigation", () => {
     ).toBeNull();
   });
 
-  it("the RFI identity link navigates to the canonical workspace route", async () => {
-    installRfiFetch({ rows: [rfi()] });
+  it("an issued RFI identity link navigates to the canonical workspace route", async () => {
+    installRfiFetch({
+      rows: [
+        rfi({
+          rfiNumber: "RFI-014",
+          status: "open",
+          capabilities: { updateDraft: false },
+        }),
+      ],
+    });
     renderRfiRegister();
     await screen.findByRole("table");
-    const link = screen.getByRole("link", { name: /Open RFI Unnumbered/ });
+    const link = screen.getByRole("link", { name: "Open RFI RFI-014" });
     expect(link).toHaveAttribute("href", "/projects/project-1/rfis/rfi-1");
     await userEvent.click(link);
     await waitFor(() => {
@@ -107,20 +139,21 @@ describe("native RFI register — identity and subject navigation", () => {
     });
   });
 
-  it("ordinary data cells never navigate", async () => {
+  it("clicking a draft row's primary area opens the Drawer", async () => {
     installRfiFetch({ rows: [rfi()] });
     renderRfiRegister();
     await screen.findByRole("table");
-    const before = window.location.pathname;
     const partyCell = document.querySelector(".rfi-register-cell-responsible");
     expect(partyCell).not.toBeNull();
     fireEvent.click(partyCell as HTMLElement);
-    expect(window.location.pathname).toBe(before);
+    expect(
+      await screen.findByRole("dialog", { name: "Edit RFI draft" }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("native RFI register — expandable editor", () => {
-  it("opens one editor with every editable field and closes any other open editor", async () => {
+  it("opens one Drawer with every editable field and keeps references in the shared Collapsible", async () => {
     installRfiFetch({
       rows: [rfi({ id: "rfi-1" }), rfi({ id: "rfi-2", subject: "Second RFI" })],
     });
@@ -135,19 +168,26 @@ describe("native RFI register — expandable editor", () => {
       "requestedResponseDate",
       "question",
       "contractorSuggestion",
-      "drawingReferences",
-      "specificationReferences",
     ]) {
       expect(fieldInput("rfi-1", field)).not.toBeNull();
     }
-    expect(document.querySelector('[data-editor-row="rfi-1"]')).not.toBeNull();
-
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(
+      document.querySelector('[data-field="drawingReferences"]'),
+    ).toBeNull();
+    await expandAdditionalInformation();
+    expect(fieldInput("rfi-1", "drawingReferences")).not.toBeNull();
+    expect(fieldInput("rfi-1", "specificationReferences")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await userEvent.click(screen.getByRole("button", { name: "Second RFI" }));
-    expect(document.querySelector('[data-editor-row="rfi-1"]')).toBeNull();
-    expect(document.querySelector('[data-editor-row="rfi-2"]')).not.toBeNull();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(document.querySelector('[data-editor-drawer="rfi-1"]')).toBeNull();
+    expect(
+      document.querySelector('[data-editor-drawer="rfi-2"]'),
+    ).not.toBeNull();
   });
 
-  it("focuses the Subject field on open and returns focus to the trigger on Done", async () => {
+  it("focuses Subject on open and returns focus to the trigger on Close", async () => {
     installRfiFetch({ rows: [rfi()] });
     renderRfiRegister();
     await screen.findByRole("table");
@@ -157,22 +197,31 @@ describe("native RFI register — expandable editor", () => {
     });
     await userEvent.click(
       document.querySelector(
-        '[data-editor-done][data-id="rfi-1"]',
+        '[data-editor-close][data-id="rfi-1"]',
       ) as HTMLElement,
     );
-    expect(document.querySelector('[data-editor-row="rfi-1"]')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    await waitFor(() => {
+      expect(document.querySelector('[data-editor-drawer="rfi-1"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
   });
 
   it("closes the editor on Escape from a field and returns focus to the trigger", async () => {
-    installRfiFetch({ rows: [rfi()] });
+    const { calls } = installRfiFetch({ rows: [rfi()] });
     renderRfiRegister();
     await screen.findByRole("table");
     const trigger = await openEditor();
     const input = fieldInput("rfi-1", "subject");
+    fireEvent.change(input, { target: { value: "Committed before close" } });
     fireEvent.keyDown(input, { key: "Escape" });
-    expect(document.querySelector('[data-editor-row="rfi-1"]')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    await waitFor(() => {
+      expect(document.querySelector('[data-editor-drawer="rfi-1"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({
+      subject: "Committed before close",
+      lockVersion: 1,
+    });
   });
 });
 
@@ -270,6 +319,7 @@ describe("native RFI register — commit behavior", () => {
     renderRfiRegister();
     await screen.findByRole("table");
     await openEditor();
+    await expandAdditionalInformation();
     const input = fieldInput("rfi-1", "drawingReferences") as HTMLInputElement;
     input.focus();
     fireEvent.change(input, { target: { value: "A-701" } });
@@ -311,7 +361,7 @@ describe("native RFI register — commit behavior", () => {
     fireEvent.change(input, { target: { value: "Updated clearance" } });
     fireEvent.blur(input);
     await waitFor(() => {
-      expect(screen.getByText("Saved")).toBeInTheDocument();
+      expect(screen.getAllByText("Saved").length).toBeGreaterThan(0);
     });
   });
 
@@ -327,6 +377,7 @@ describe("native RFI register — commit behavior", () => {
     renderRfiRegister();
     await screen.findByRole("table");
     await openEditor();
+    await expandAdditionalInformation();
     const input = fieldInput("rfi-1", "drawingReferences") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "A-701" } });
     fireEvent.blur(input);
@@ -368,12 +419,10 @@ describe("native RFI register — commit behavior", () => {
         ),
       ).toBeInTheDocument();
     });
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Changed by another editor" }),
-      ).toBeInTheDocument();
-    });
     const conflictedInput = fieldInput("rfi-1", "subject") as HTMLInputElement;
+    await waitFor(() => {
+      expect(conflictedInput.value).toBe("Changed by another editor");
+    });
     expect(conflictedInput).toHaveAttribute("aria-invalid", "true");
     const describedBy = conflictedInput.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
@@ -392,11 +441,16 @@ describe("native RFI register — Add RFI", () => {
     await userEvent.click(button);
     await waitFor(() => {
       expect(
-        document.querySelector('[data-editor-row="rfi-new"]'),
+        document.querySelector('[data-editor-drawer="rfi-new"]'),
       ).not.toBeNull();
     });
     await waitFor(() => {
       expect(document.activeElement).toBe(fieldInput("rfi-new", "subject"));
+    });
+    expect(screen.getByRole("dialog", { name: "New RFI" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(button);
     });
   });
 });
@@ -464,7 +518,9 @@ describe("native RFI register — search, filters, and URL state", () => {
     expect(
       screen.getByRole("combobox", { name: "Status" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Party" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Assigned to" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Due" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /sort/i })).toBeNull();
   });
@@ -505,12 +561,12 @@ describe("native RFI register — search, filters, and URL state", () => {
     fireEvent.change(input, { target: { value: "Filtered edit" } });
     fireEvent.blur(input);
     await waitFor(() => {
-      expect(screen.getByText("Saved")).toBeInTheDocument();
+      expect(screen.getAllByText("Saved").length).toBeGreaterThan(0);
     });
     expect(window.location.search).toContain("status=draft");
   });
 
-  it("shows a filtered-empty state with Clear all, distinct from first-use empty", async () => {
+  it("shows a filtered-empty state with Clear, distinct from first-use empty", async () => {
     installRfiFetch({ rows: [rfi({ status: "draft" })] });
     renderRfiRegister();
     await screen.findByRole("table");
@@ -522,13 +578,11 @@ describe("native RFI register — search, filters, and URL state", () => {
       ).toBeInTheDocument();
     });
     expect(screen.queryByRole("table")).toBeNull();
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Clear all" })[0],
-    );
+    await userEvent.click(screen.getAllByRole("button", { name: "Clear" })[0]);
     await screen.findByRole("table");
   });
 
-  it("preserves an existing URL hash through search, filter, sort, and Clear all", async () => {
+  it("preserves an existing URL hash through search, filter, sort, and Clear", async () => {
     installRfiFetch({
       rows: [
         rfi({ status: "draft" }),
@@ -564,9 +618,7 @@ describe("native RFI register — search, filters, and URL state", () => {
     });
     expect(window.location.hash).toBe("#register-notes");
 
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Clear all" })[0],
-    );
+    await userEvent.click(screen.getAllByRole("button", { name: "Clear" })[0]);
     await waitFor(() => {
       expect(window.location.search).not.toContain("status=");
     });
