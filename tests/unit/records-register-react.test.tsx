@@ -475,10 +475,12 @@ describe("Document Register — search, filters, sort, and history", () => {
     await waitForTable();
 
     expect(
-      (screen.getByLabelText("Document type") as unknown as HTMLSelectElement).value,
+      (screen.getByLabelText("Document type") as unknown as HTMLSelectElement)
+        .value,
     ).toBe("drawing");
     expect(
-      (screen.getByLabelText("Sort documents") as unknown as HTMLSelectElement).value,
+      (screen.getByLabelText("Sort documents") as unknown as HTMLSelectElement)
+        .value,
     ).toBe("title");
 
     await user.selectOptions(screen.getByLabelText("Document type"), "all");
@@ -492,7 +494,8 @@ describe("Document Register — search, filters, sort, and history", () => {
     });
     await waitFor(() => {
       expect(
-        (screen.getByLabelText("Document type") as unknown as HTMLSelectElement).value,
+        (screen.getByLabelText("Document type") as unknown as HTMLSelectElement)
+          .value,
       ).toBe("drawing");
     });
   });
@@ -523,7 +526,9 @@ describe("Document Register — search, filters, sort, and history", () => {
     await waitFor(() => {
       expect(currentSearch()).not.toContain("type=nonexistent");
     });
-    const select = screen.getByLabelText("Document type") as unknown as HTMLSelectElement;
+    const select = screen.getByLabelText(
+      "Document type",
+    ) as unknown as HTMLSelectElement;
     expect(select.value).toBe("all");
     expect(
       [...select.querySelectorAll("option")].map((option) =>
@@ -532,7 +537,8 @@ describe("Document Register — search, filters, sort, and history", () => {
     ).not.toContain("nonexistent");
     // An unknown sort key falls back to the preserved default.
     expect(
-      (screen.getByLabelText("Sort documents") as unknown as HTMLSelectElement).value,
+      (screen.getByLabelText("Sort documents") as unknown as HTMLSelectElement)
+        .value,
     ).toBe("created");
   });
 
@@ -883,7 +889,9 @@ describe("Add Document — staged creation, recovery, and success", () => {
     await user.type(screen.getByLabelText(/^Title/), "New Framing Plan");
     if (mode === "upload") {
       await user.upload(
-        document.querySelector("[data-document-file]") as unknown as HTMLInputElement,
+        document.querySelector(
+          "[data-document-file]",
+        ) as unknown as HTMLInputElement,
         new File(["content"], "framing.pdf", { type: "application/pdf" }),
       );
     }
