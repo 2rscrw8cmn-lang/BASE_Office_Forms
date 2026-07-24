@@ -6,8 +6,24 @@
  * request id when available, and no project values are ever invented. The
  * query is enabled only once the session is ready, so no project request is
  * issued before authentication resolves.
+ *
+ * Authorization is never trusted indefinitely. `revalidationKey` (supplied by
+ * the caller as the current route's normalized pathname) identifies a
+ * "meaningful" route navigation. Every time it changes, this hook forces a
+ * brand-new query — not a background refetch that keeps showing the previous
+ * `ready` result while revalidating — so a project the caller has returned to
+ * (e.g. via browser Back/Forward) is shown as `loading` again, and the
+ * destination feature cannot mount, until the server has re-confirmed access.
+ * A 403/404 discovered on that revalidation replaces any previously cached
+ * `ready` identity with the generic `missing` state. Changing only the query
+ * string or hash on the same route (an ordinary controller rerender, or a
+ * legacy feature's own filter/sort URL update) does not change
+ * `revalidationKey` and therefore does not force a new request — the server
+ * remains the sole authority for the decision itself, this only controls how
+ * long the client is willing to describe an old answer as still current.
  */
 
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ProjectData, ProjectState } from "./types";
 
@@ -56,12 +72,32 @@ export type ProjectResultState = ProjectState & { retry: () => void };
 export function useProject(
   projectId: string | undefined,
   enabled: boolean,
+  revalidationKey: string,
 ): ProjectResultState {
+  // Adjusting state in response to a changed prop during render (React's
+  // documented pattern for resetting state when an input changes) rather than
+  // in an effect: this must take effect before the query below runs for this
+  // render, so a revalidation never briefly serves the previous epoch's cached
+  // `ready` data.
+  const [epoch, setEpoch] = useState(0);
+  const previousKeyRef = useRef(revalidationKey);
+  if (previousKeyRef.current !== revalidationKey) {
+    previousKeyRef.current = revalidationKey;
+    // Only a route that actually has a project needs revalidation; entering a
+    // non-project route (and its eventual return) is handled by `enabled`
+    // going false/true, not by burning an epoch no query will use.
+    if (projectId) {
+      setEpoch((value) => value + 1);
+    }
+  }
+
   const query = useQuery({
-    queryKey: ["project", projectId],
+    queryKey: ["project", projectId, epoch],
     queryFn: () => fetchProject(projectId ?? ""),
     enabled: enabled && Boolean(projectId),
     retry: false,
+    // Infinite within one epoch: an epoch bump (a meaningful navigation) is
+    // the only thing that should ever ask the server again for this decision.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });

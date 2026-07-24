@@ -1,9 +1,42 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-4 (React application shell and route parity) implemented on branch `claude/ui-4-react-foundation-ywnpm2`, ready for product-owner review. RFI Slice 1, UI-1, UI-2, and UI-3 are complete and merged (UI-3 PR #43 merged as `cb9f191`).
-**Active branch:** `claude/ui-4-react-foundation-ywnpm2` (not merged). PR #36, PR #41, and PR #43 are merged to `main`.
+**Current phase:** UI-4 (React application shell and route parity) implemented on branch `claude/ui-4-react-foundation-ywnpm2`, PR #44 (kept as draft), with a parity/resilience correction pass applied. RFI Slice 1, UI-1, UI-2, and UI-3 are complete and merged (UI-3 PR #43 merged as `cb9f191`).
+**Active branch/PR:** `claude/ui-4-react-foundation-ywnpm2`, PR #44 (draft, not merged). PR #36, PR #41, and PR #43 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+
+> **2026-07-24 UI-4 correction pass (PR #44):**
+> A product-owner review of PR #44 found three gaps against the legacy shell's
+> exact behavior, all fixed on the same branch: (1) `LegacyFeatureMount` did not
+> remount an already-mounted compatibility controller when only the query
+> string or hash changed through React Router, so legacy controllers that read
+> filter/sort state from `window.location.search` inside their own `mount()`
+> (`records-view.js`, `rfis-view.js`) never saw the new URL on a same-route
+> navigation or browser Back/Forward; (2) `useProject`'s `staleTime: Infinity`
+> cached a project's authorization decision indefinitely, so returning to a
+> previously visited project (e.g. via Back) could keep showing a stale `ready`
+> project instead of re-confirming access with the server; (3) a
+> `getApiClient()`/`loadFeatureFactory()` import failure left an empty feature
+> area with no way to recover, and `featureRuntime.ts` permanently cached a
+> rejected `apiClientPromise`, wedging every future caller after one transient
+> failure. All three are fixed — see §"UI-4 correction pass" below for the full
+> breakdown. Full `npm run check` passes (Prettier, Cloudflare types,
+> TypeScript, ESLint, **395 unit tests**, **119 Worker integration tests**, the
+> production build, Pages Functions build, `npm audit --audit-level=high` clean,
+> and the secret scan); `npm run lab:build` passes. The correction pass adds 16
+> tests across four new suites (6 history-parity + 5 project-revalidation + 4
+> resilience + 1 featureRuntime-caching). No merge occurred; PR #44 stays draft.
+>
+> **Cloudflare Pages preview:** this session's environment has no Cloudflare
+> authentication (`wrangler whoami` reports unauthenticated, and there is no
+> `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment), and the
+> repository's only GitHub Actions workflow (`.github/workflows/ci.yml`) runs
+> the local validation gate — it does not deploy a Cloudflare Pages preview.
+> No preview deployment could be produced from this session; a session with
+> Cloudflare credentials (or the product owner, following `LOCAL_DEVELOPMENT.md`)
+> must run `npm run deploy:dry-run`/`wrangler pages deploy` to produce one. See
+> §"UI-4 correction pass" for the exact commit SHA and what to check once a
+> preview exists.
 
 > **2026-07-24 UI-4 implementation:**
 > The React application shell now owns global composition — navigation, the
@@ -520,6 +553,172 @@ UI-5 (RFI register on the controlled custom table — no Tabulator) is next. The
 exact UI-5 prompt is in the final handoff. Do not merge UI-4 without explicit
 approval.
 
+## 5C. UI-4 correction pass — parity and resilience fixes (PR #44)
+
+Branch `claude/ui-4-react-foundation-ywnpm2`, PR #44 (kept as draft). Not
+merged.
+
+### 1. Same-route URL-history parity for compatibility-mounted controllers
+
+Some legacy controllers (`records-view.js`, `rfis-view.js`) store filter/sort
+state through `window.history.pushState`/`replaceState` issued directly
+(bypassing the router) and reread it from `window.location.search` inside
+their own `mount()` — see `rfis-view.js`'s `readFiltersFromUrl()`. Because
+`LegacyFeatureMount`'s creation effect only ran when the feature descriptor's
+key changed, a query/hash-only navigation to the *same* route (a genuine React
+Router navigation, or browser Back/Forward — the only two things that actually
+move `window.location` when a `<BrowserRouter>` is in use, since raw
+`pushState` calls made directly by a feature bypass the router entirely and
+never fire `popstate`) never told the existing controller to reread the URL.
+
+Fixed: `LegacyFeatureMount` now accepts a `locationKey` prop (`AppLayout`
+supplies `${route.pathname}${location.search}${location.hash}`). A second
+effect, independent of the creation effect, remounts the *existing* controller
+(`controller.mount(container)`) whenever `locationKey` changes while the
+descriptor stays the same — no new factory call, no new `reload()`. A ref
+tracks the location a freshly created controller "started" at, so the first
+location a new controller sees is never treated as a change requiring an extra
+remount. `tests/unit/react-shell-history-parity.test.tsx` (6 tests, using a
+`<BrowserRouter>`-based harness — see below) proves: status=open →
+status=draft → Back restores status=open by remounting the same controller;
+sort/filter query state round-trips through Back; a hash-only navigation
+remounts; the controller factory and `reload()` are each called exactly once
+across several query-only navigations; a genuine path navigation still
+destroys the old controller; and browser Back/Forward across two different
+feature routes still works.
+
+**Test harness note:** `tests/helpers/react-shell-harness.tsx` renders the real
+shell inside a `<BrowserRouter>` (not `<MemoryRouter>`), seeding
+`window.history` before each render. A `MemoryRouter` keeps its location
+entirely decoupled from `window.location`, which the legacy controllers under
+test read directly — only a router that actually drives `window.history`, as
+`BrowserRouter` does and as happy-dom's `history`/`popstate` support, lets
+those reads observe the harness's navigations. Back/Forward are exercised
+through `useNavigate()`'s `navigate(-1)`/`navigate(1)`, the standard way to
+drive a router's own history stack in tests.
+
+### 2. Project-context authorization is no longer cached indefinitely
+
+`useProject` used `staleTime: Infinity` keyed only by `["project", projectId]`,
+so once a project was fetched successfully, TanStack Query never asked the
+server again for that decision — returning to a previously visited project
+(e.g. via Back) could keep presenting a stale `ready` result instead of
+re-confirming access.
+
+Fixed: `useProject` now accepts a `revalidationKey` (the route's normalized
+pathname, supplied by `AppLayout`). Using React's documented "adjust state
+during render in response to a changed prop" pattern, an `epoch` counter is
+bumped exactly when `revalidationKey` changes for a route that has a
+`projectId` — deliberately *not* on query/hash-only changes on the same route,
+and not on ordinary rerenders, since neither is a route transition worth
+distrusting existing authorization over. The epoch is part of the query key
+(`["project", projectId, epoch]`), so a bump is a *brand-new* query — no stale
+`ready` data lingers while the fresh answer is pending — and `AppLayout`
+already only mounts the destination feature once `project.status === "ready"`,
+so no feature request can begin before the revalidated project confirms
+access. `tests/unit/react-shell-project-revalidation.test.tsx` (5 tests)
+proves: navigating between two routes in the same project issues a fresh
+project request each time (matching the legacy shell's unconditional
+per-navigate reload); a query-only navigation on the same route does not;
+returning to a project that has since become 403 shows the generic **Project
+not found** state and mounts no feature (only one "overview" factory call
+total, from the original successful visit); a failed revalidation recovers via
+retry; and the destination feature's factory is not invoked until a deferred
+revalidation resolves.
+
+### 3. Compatibility-module loading failures are now handled
+
+If `shell.runtime.getApiClient()` or `loadFeatureFactory()` rejected (e.g. a
+transient failure serving a `public/*-view.js` module), `LegacyFeatureMount`
+left an empty `.feature-view` with no error and no way to recover, and
+`featureRuntime.ts`'s `loadApiClient()` permanently cached the rejected
+`apiClientPromise` — every future call, for the rest of the page's lifetime,
+awaited that same rejection.
+
+Fixed: `LegacyFeatureMount` now catches the `Promise.all([getApiClient(),
+loadFeatureFactory()])` rejection and renders a shared, accessible error
+surface (`role="alert"`, a heading, and a "Try again" button) instead of an
+empty area; clicking Try again bumps a nonce that reruns the creation effect
+from scratch. `featureRuntime.ts`'s `loadApiClient()` now resets
+`apiClientPromise` to `null` in its catch handler, so a rejection is never
+permanently cached — the next call always starts a genuinely fresh import.
+The effect's existing `active` guard already ensured no controller is created
+after the component unmounts (navigating away while loading); this pass adds a
+test proving it explicitly. Every current legacy controller catches its own
+load errors internally and never rejects `reload()` (see e.g. `rfis-view.js`'s
+try/catch), so the `.catch()` on `controller.reload()` is a documented,
+deliberate defensive guard against an unhandled rejection, not a UI path of its
+own. `tests/unit/react-shell-resilience.test.tsx` (4 tests) proves: a feature
+factory rejection shows the error surface and recovers on retry; an API-client
+rejection does the same; navigating away during loading never mounts the
+abandoned feature; and the error/retry surface has accessible labels/status.
+`tests/unit/feature-runtime-resilience.test.ts` (1 test) proves
+`apiClientPromise` specifically is never permanently cached: two sequential
+calls to `defaultShellRuntime.getApiClient()` after the first rejects return
+genuinely different promise objects (this test is deterministic without any
+mocking, since an absolute `"/app-api.js"` specifier reliably fails to resolve
+under Node/Vitest, giving a guaranteed rejection to test the cache-reset
+behavior against).
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **395 unit tests** (+16 over the UI-4 baseline of 379: 6
+history-parity + 5 project-revalidation + 4 resilience + 1
+featureRuntime-caching), **119 Worker integration tests**, the Vite production
+build, static-asset verification, Pages Functions compilation, `npm audit
+--audit-level=high` (0 vulnerabilities), and the secret scan. `npm run
+lab:build` passes.
+
+### Cloudflare Pages preview
+
+Not produced from this session: there is no Cloudflare authentication
+available (`wrangler whoami` reports unauthenticated; no
+`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment), and the
+repository's CI (`.github/workflows/ci.yml`) runs only the local validation
+gate — it has no Cloudflare Pages deploy step. Producing a preview requires a
+session with Cloudflare credentials (or the product owner) to run `npm run
+deploy:dry-run` and then `wrangler pages deploy public --project-name
+base-office-forms`, per `LOCAL_DEVELOPMENT.md`. The commit to deploy from is
+the head of `claude/ui-4-react-foundation-ywnpm2` after this correction pass.
+
+### Product-owner authenticated smoke checklist (once a preview exists)
+
+- Session/shell: sidebar navigation, account summary, Dashboard loads.
+- Project context: open a project, confirm Overview → Documents → Issuances →
+  RFIs → Team tabs each load and keep the correct tab highlighted, including
+  from a record/revision detail descendant route.
+- **Same-route URL-history parity:** on the RFI register or Documents
+  register, change a filter (e.g. status), use the browser Back button, and
+  confirm the previous filter's rows reappear without a full page reload.
+- **Project revalidation:** open a project, navigate to a different project
+  route (e.g. Overview → Documents), and confirm no visible regression (a
+  brief "Loading project…" header flash is expected and correct — it reflects
+  the project access being re-confirmed with the server on every route
+  change).
+- **Resilience:** with dev tools open, throttle/block network briefly while
+  navigating to a not-yet-loaded route to confirm the "This section could not
+  be loaded" / "Try again" surface appears and recovers once the network
+  returns (rather than a blank area).
+- Mobile drawer: open/close, Escape, and link selection all behave as before.
+- Browser Back/Forward across at least two different feature routes.
+- Direct URL refresh on a nested project route.
+
+### Known limitations (unchanged from UI-4, still applicable)
+
+- Feature screens still run through their existing `public/*-view.js`
+  controllers; migrating them to React is UI-5+.
+- No pixel-baseline visual-regression harness yet — that remains UI-10.
+- No authenticated browser smoke was performed in this session (no Cloudflare
+  Access session or deployed preview available); the checklist above is
+  prepared for whoever deploys the preview.
+
+### Next recommended action
+
+PR #44 is kept as a draft pending product-owner review of this correction
+pass, ideally against a real Cloudflare Pages preview. UI-5 remains the next
+phase after UI-4 is reviewed and merged.
+
 ## 6. Phase status
 
 | Phase                        | Status                     | Next gate                                        |
@@ -529,7 +728,7 @@ approval.
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
 | UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43) | none                                   |
-| UI-4 — React shell           | **Implemented; ready for product-owner review** (`claude/ui-4-react-foundation-ywnpm2`, not merged) | Review and merge |
+| UI-4 — React shell           | **Implemented, correction pass applied; PR #44 kept as draft** (`claude/ui-4-react-foundation-ywnpm2`, not merged) | Product-owner review against a deployed preview, then merge |
 | UI-5 — RFI register          | **Now unblocked**          | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
 | UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
@@ -553,13 +752,17 @@ approval.
 ## 8. Next action
 
 UI-4 (React application shell and route parity) is implemented on
-`claude/ui-4-react-foundation-ywnpm2` and is ready for product-owner review
-(not merged). Its exit gate — the shell is stable enough that feature migrations
-no longer need to modify global navigation or invent page containers — is met:
-the React shell owns navigation, the drawer, project context/tabs, page
-containers, routing, focus, and announcements, and mounts the not-yet-migrated
-feature screens unchanged through the compatibility bridge, with route parity
-proven by the routing-parity test and desktop/mobile evidence.
+`claude/ui-4-react-foundation-ywnpm2`, PR #44, and has completed a
+product-owner-requested correction pass (§5C): same-route URL-history parity
+for compatibility-mounted controllers, project-context revalidation on
+meaningful navigation instead of an indefinite cache, and handled
+compatibility-module loading failures with a shared error/retry surface. PR
+#44 is kept as a **draft**; it is not merged. Its exit gate — the shell is
+stable enough that feature migrations no longer need to modify global
+navigation or invent page containers — remains met, now with the additional
+parity/resilience guarantees proven by tests (§5C). No Cloudflare Pages preview
+could be deployed from this session (no Cloudflare credentials available); the
+product-owner smoke checklist in §5C is prepared for whoever deploys one.
 
 UI-5 (RFI register on the controlled custom table — no Tabulator, per Spike 0)
 is the next active phase; its exact prompt is in the handoff. Do not begin UI-5

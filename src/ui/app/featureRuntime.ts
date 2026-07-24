@@ -53,12 +53,21 @@ let apiClientPromise: Promise<LegacyApiClient> | null = null;
 // bundle them; the results are narrowed through explicit module shapes.
 async function loadApiClient(): Promise<LegacyApiClient> {
   apiClientPromise ??= (async () => {
-    const specifier = "/app-api.js";
-    const module = (await import(/* @vite-ignore */ specifier)) as ApiModule;
-    if (!module.createApiClient) {
-      throw new Error("app-api.js did not export createApiClient.");
+    try {
+      const specifier = "/app-api.js";
+      const module = (await import(/* @vite-ignore */ specifier)) as ApiModule;
+      if (!module.createApiClient) {
+        throw new Error("app-api.js did not export createApiClient.");
+      }
+      return module.createApiClient({ fetch: window.fetch.bind(window) });
+    } catch (error) {
+      // Do not permanently cache a rejected promise: a transient import
+      // failure (e.g. a flaky network fetch of the served module) should not
+      // wedge every future caller for the rest of the page's lifetime. The
+      // next call starts a fresh import.
+      apiClientPromise = null;
+      throw error;
     }
-    return module.createApiClient({ fetch: window.fetch.bind(window) });
   })();
   return apiClientPromise;
 }

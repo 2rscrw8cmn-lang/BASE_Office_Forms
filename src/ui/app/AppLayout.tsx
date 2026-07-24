@@ -72,7 +72,18 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
 
   const projectId = redirectTo ? undefined : route.params.projectId;
   const sessionReady = session.status === "ready";
-  const project = useProject(projectId, sessionReady);
+  // Project-context revalidation is keyed on the route's normalized pathname
+  // only (not search/hash): a "meaningful" navigation between routes always
+  // re-confirms authorization (matching the legacy shell's unconditional
+  // per-navigate project reload), while a query/hash-only change on the same
+  // route is not, by itself, a reason to distrust the already-confirmed
+  // project. See useProject.ts.
+  const project = useProject(projectId, sessionReady, route.pathname);
+  // Same-route URL-history parity for compatibility-mounted feature
+  // controllers: includes search/hash so LegacyFeatureMount can tell a legacy
+  // controller (e.g. records-view.js, rfis-view.js) to reread URL-derived
+  // filter/sort state without recreating it. See LegacyFeatureMount.tsx.
+  const locationKey = `${route.pathname}${location.search}${location.hash}`;
 
   // Refs the bridge and focus manager read without re-subscribing.
   const mainRef = useRef<HTMLElement>(null);
@@ -269,6 +280,7 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
         <LegacyFeatureMount
           key="dashboard"
           descriptor={{ key: "dashboard", kind: "dashboard" }}
+          locationKey={locationKey}
         />
       );
     }
@@ -279,6 +291,7 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
         <LegacyFeatureMount
           key="projects"
           descriptor={{ key: "projects", kind: "projects" }}
+          locationKey={locationKey}
         />
       );
     }
@@ -313,7 +326,11 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
         content = <LoadingState label="Loading project" />;
       } else if (descriptor) {
         content = (
-          <LegacyFeatureMount key={descriptor.key} descriptor={descriptor} />
+          <LegacyFeatureMount
+            key={descriptor.key}
+            descriptor={descriptor}
+            locationKey={locationKey}
+          />
         );
       } else {
         content = <PlaceholderRoute route={route} />;

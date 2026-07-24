@@ -43,9 +43,14 @@ Browser
 ├── src/ui/app/AppLayout.tsx                  the application shell (nav, drawer, chrome, focus)
 ├── src/ui/app/routing.ts                     typed route map (parity-tested vs app-routing.js)
 ├── src/ui/app/useSession.ts                  session context (TanStack Query)
-├── src/ui/app/useProject.ts                  project context (TanStack Query; 403/404→missing)
+├── src/ui/app/useProject.ts                  project context (TanStack Query; 403/404→missing;
+│                                                revalidates on route-pathname change, never cached
+│                                                indefinitely -- see "UI-4 correction pass" below)
 ├── src/ui/app/LegacyFeatureMount.tsx         compatibility mount for public/*-view.js controllers
+│                                                (same-route remount on query/hash change; load-failure
+│                                                error + retry surface -- see "UI-4 correction pass")
 ├── src/ui/app/featureRuntime.ts              default runtime that loads the served feature modules
+│                                                (never permanently caches a rejected import promise)
 ├── src/ui/app/ErrorBoundary.tsx              application error boundary
 ├── src/ui/app/ShellContext.tsx               bridge context (navigate, announce, getSession)
 ├── src/ui/app/Navigation.tsx, ProjectChrome.tsx, RouteStates.tsx, AppLink.tsx, ShellIcon.tsx
@@ -157,6 +162,24 @@ component is keyed by a stable per-descriptor key, so a change of route or of
 project/record/revision/rfi identity fully tears the old controller down and
 creates a new one. A feature controller mounts only after the project context has
 resolved, so a project the user cannot access never triggers a feature request.
+
+`LegacyFeatureMount` also takes a `locationKey`
+(`${route.pathname}${location.search}${location.hash}`, supplied by
+`AppLayout`) so a query/hash-only navigation to the *same* route — a genuine
+React Router navigation, or browser Back/Forward — remounts the *existing*
+controller (`controller.mount(container)` again, no new factory call, no new
+`reload()`) so a legacy controller that reads filter/sort state from
+`window.location.search` inside its own `mount()` (`records-view.js`,
+`rfis-view.js`'s `readFiltersFromUrl()`) sees the new URL. A feature's own
+internal `history.pushState` calls (bypassing the router) still behave exactly
+as before and do not trigger this remount, since they never change
+`location`. If `getApiClient()`/`loadFeatureFactory()` rejects (e.g. a
+transient failure importing a served module), `LegacyFeatureMount` shows a
+shared, accessible error surface (`role="alert"`, a heading, and a "Try
+again" button that recreates the controller from scratch) instead of an empty
+area; `featureRuntime.ts`'s `loadApiClient()` never permanently caches a
+rejected promise, so a retry after a transient failure always attempts a
+genuinely fresh import.
 
 `public/app-shell.js` (the UI-2 vanilla shell) and `LegacyApplicationHost.tsx`
 (the UI-2 compatibility host) remain in the tree but are no longer mounted; they
@@ -382,6 +405,19 @@ only a factual project-ID loading context. A successful response supplies the
 real project number, name, and status. A 403 or 404 becomes the same generic
 **Project not found** surface; other failures use the shared retryable error state
 and include the API request ID when available. No project values are invented.
+
+Project authorization is never cached indefinitely. `useProject` (TanStack
+Query) is keyed by `["project", projectId, epoch]`, where `epoch` increments
+whenever the route's normalized pathname changes for a route that has a
+project (a query/hash-only change on the same route does not bump it, and
+neither does an ordinary rerender) — matching the legacy shell's own
+unconditional per-navigate project reload. An epoch bump is a brand-new query,
+not a background refetch, so no stale `ready` project is ever shown while the
+server re-confirms access; the destination feature (mounted only once
+`project.status === "ready"`) cannot begin its own request until that
+revalidation resolves. Returning to a project whose access has since changed
+to 403/404 replaces any previously cached identity with the same generic
+**Project not found** state and mounts no feature.
 
 Overview, Records, Issuances, RFIs, and Team are link-based project tabs.
 Record/revision/issue descendants keep Records selected; issuance detail and
@@ -665,6 +701,38 @@ resolves) and session-error recovery on retry; the unknown-route not-found
 surface; heading focus and the route announcement after navigation; and the
 mobile drawer (open with focus in the drawer, Escape close with focus
 restoration, body scroll lock, and close-and-navigate on a drawer link).
+
+Four suites added in the UI-4 correction pass exercise the React shell through
+a real `<BrowserRouter>` harness (`tests/helpers/react-shell-harness.tsx` —
+deliberately not `<MemoryRouter>`, since the legacy controllers under test read
+`window.location` directly, which only a router driving the real
+`window.history` can keep in sync with in a test; Back/Forward are driven
+through `useNavigate()`'s `navigate(-1)`/`navigate(1)`):
+
+- `tests/unit/react-shell-history-parity.test.tsx` (6 tests) — same-route
+  URL-history parity: status=open → status=draft → Back remounts the same
+  controller (no new factory call, no new `reload()`); sort/filter query state
+  round-trips through Back; a hash-only navigation remounts; the factory and
+  `reload()` are each called exactly once across several query-only
+  navigations; a genuine path navigation still destroys the old controller;
+  browser Back/Forward across two different feature routes still works.
+- `tests/unit/react-shell-project-revalidation.test.tsx` (5 tests) — project
+  authorization is revalidated on a route-to-route navigation within the same
+  project, not on a query-only navigation; a project that has become 403 since
+  it was last visited shows the generic not-found state and mounts no feature;
+  a failed revalidation recovers via retry; and no feature request begins
+  before a pending revalidation resolves.
+- `tests/unit/react-shell-resilience.test.tsx` (4 tests) — a feature-factory or
+  API-client import rejection shows the shared error+retry surface and
+  recovers on retry; navigating away while a feature is loading never mounts
+  the abandoned controller; the error/retry surface has accessible
+  labels/status (`role="alert"`, an accessible "Try again" button).
+- `tests/unit/feature-runtime-resilience.test.ts` (1 test) — proves
+  `featureRuntime.ts`'s `apiClientPromise` is never permanently cached after a
+  rejection (two sequential calls to `defaultShellRuntime.getApiClient()`
+  after the first rejects return different promise objects), deterministically
+  and without mocking, since an absolute `"/app-api.js"` import specifier
+  reliably fails to resolve under Node/Vitest.
 
 The UI-2 vanilla shell modules retain their own coverage as the rollback path:
 `tests/unit/app-routing.test.ts` covers legacy route resolution, nested-tab
