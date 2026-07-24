@@ -1,9 +1,67 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-24
-**Current phase:** UI-3 (BASE component library + UI Lab) implemented on branch `claude/base-components-ui-lab-5l05ux`, PR #43 (draft), ready for final product-owner review after a foundation review pass. RFI Slice 1, UI-1, and UI-2 are complete.
-**Active PR:** PR #43 on `claude/base-components-ui-lab-5l05ux` (draft, not merged). PR #36 and PR #41 are merged.
+**Current phase:** UI-4 (React application shell and route parity) implemented on branch `claude/ui-4-react-foundation-ywnpm2`, PR #44 (kept as draft), with a parity/resilience correction pass applied. RFI Slice 1, UI-1, UI-2, and UI-3 are complete and merged (UI-3 PR #43 merged as `cb9f191`).
+**Active branch/PR:** `claude/ui-4-react-foundation-ywnpm2`, PR #44 (draft, not merged). PR #36, PR #41, and PR #43 are merged to `main`.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+
+> **2026-07-24 UI-4 correction pass (PR #44):**
+> A product-owner review of PR #44 found three gaps against the legacy shell's
+> exact behavior, all fixed on the same branch: (1) `LegacyFeatureMount` did not
+> remount an already-mounted compatibility controller when only the query
+> string or hash changed through React Router, so legacy controllers that read
+> filter/sort state from `window.location.search` inside their own `mount()`
+> (`records-view.js`, `rfis-view.js`) never saw the new URL on a same-route
+> navigation or browser Back/Forward; (2) `useProject`'s `staleTime: Infinity`
+> cached a project's authorization decision indefinitely, so returning to a
+> previously visited project (e.g. via Back) could keep showing a stale `ready`
+> project instead of re-confirming access with the server; (3) a
+> `getApiClient()`/`loadFeatureFactory()` import failure left an empty feature
+> area with no way to recover, and `featureRuntime.ts` permanently cached a
+> rejected `apiClientPromise`, wedging every future caller after one transient
+> failure. All three are fixed — see §"UI-4 correction pass" below for the full
+> breakdown. Full `npm run check` passes (Prettier, Cloudflare types,
+> TypeScript, ESLint, **395 unit tests**, **119 Worker integration tests**, the
+> production build, Pages Functions build, `npm audit --audit-level=high` clean,
+> and the secret scan); `npm run lab:build` passes. The correction pass adds 16
+> tests across four new suites (6 history-parity + 5 project-revalidation + 4
+> resilience + 1 featureRuntime-caching). No merge occurred; PR #44 stays draft.
+>
+> **Cloudflare Pages preview:** this session has no local Cloudflare
+> credentials (`wrangler whoami` reports unauthenticated), but the
+> repository's Cloudflare Pages GitHub App integration deployed a preview
+> automatically on push, independent of local wrangler auth. For commit
+> `74ba530` (this correction pass): preview URL
+> `https://ea629704.base-office-forms.pages.dev`, branch preview URL
+> `https://claude-ui-4-react-foundation.base-office-forms.pages.dev`, GitHub
+> check `Cloudflare Pages` — success. An unauthenticated fetch of the preview
+> root returns HTTP 403, the expected, correct Cloudflare Access behavior for
+> an unauthenticated visitor; this session has no authenticated Access
+> session or browser, so no authenticated smoke test could be performed here.
+> See §"UI-4 correction pass" for the product-owner smoke checklist to run
+> against that preview.
+
+> **2026-07-24 UI-4 implementation:**
+> The React application shell now owns global composition — navigation, the
+> mobile drawer, session/organization and project context, React Router, the
+> TanStack Query provider, the toast provider, an error boundary, route
+> loading/not-found states, project tabs, page containers, focus management, and
+> route announcements. Feature screens not yet migrated (Dashboard, Projects,
+> Overview, Records, Record/Revision detail, RFIs, RFI workspace) mount unchanged
+> through a compatibility bridge that loads their existing `public/*-view.js`
+> controllers. Every canonical URL, the `/`→`/dashboard` and
+> `/projects/:id`→overview redirects (query/hash preserved), browser
+> back/forward, safe 403/404 handling, descendant project-tab selection, the
+> drawer focus trap/restoration, session-first loading, and server-derived
+> authorization are preserved and proven by tests. Route parity is enforced by a
+> test that resolves every canonical URL through both the new typed route map and
+> the legacy table. Full `npm run check` passes (Prettier, Cloudflare types,
+> TypeScript, ESLint, **379 unit tests**, **119 Worker integration tests**, the
+> production build, Pages Functions build, `npm audit --audit-level=high` clean,
+> and the secret scan). The UI-4 suites add 43 tests (28 routing-parity + 15
+> shell). Desktop, mobile, and mobile-drawer shell captures are
+> committed under `docs/evidence/ui-4/`. No merge occurred. See §"UI-4 complete"
+> below.
 
 > **2026-07-24 UI-3 foundation-review fixes (PR #43):**
 > A foundation review of PR #43 found five issues, all addressed on the same
@@ -399,12 +457,280 @@ calculated attention conditions rendering with distinct tones.
 
 ### Next recommended action
 
-UI-3 is ready for final product-owner review on PR #43 (draft, not merged).
-Once approved and merged, UI-4 (React application shell and route parity) is
-next: compose `AppShell`, `ProjectTabs`, navigation, TanStack Query, toast, and
-error-boundary providers around the shared components, preserving canonical
-URLs and `/api/v2`. RFI Slice 2 issuance UI is now unblocked for its component
-needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
+UI-3 is complete and merged (PR #43 → `cb9f191`). UI-4 is implemented (see
+below); UI-5 is next.
+
+## 5B. UI-4 complete — React application shell and route parity
+
+Branch `claude/ui-4-react-foundation-ywnpm2`. Not merged.
+
+### Scope delivered
+
+- **React composition root.** `src/ui/app/App.tsx` composes the TanStack Query
+  provider, the UI-3 `ToastProvider`, a React Router `BrowserRouter`, and the
+  application `ErrorBoundary` around `AppLayout`. A single catch-all route hands
+  every location to the shell.
+- **Typed route map.** `src/ui/app/routing.ts` is a faithful port of
+  `public/app-routing.js` (route table, `resolveRoute`, `normalizePathname`,
+  `isApplicationPath`, `canViewAdministration`, `PROJECT_TABS`, `projectTabHref`,
+  and a `featureDescriptor` map). `tests/unit/react-shell-routing.test.ts`
+  resolves every canonical URL through both modules and asserts identical
+  results, so the React map cannot drift from the legacy source of truth.
+- **The shell (`AppLayout`).** Global sidebar navigation, the mobile off-canvas
+  drawer (focus trap, background `inert`, body scroll lock, Escape/backdrop/close
+  dismissal, focus restoration, close-on-viewport-change and close-on-navigate),
+  the project context header and tabs (descendant routes keep their parent tab
+  selected), route loading/session-error/generic-error/not-found/placeholder
+  surfaces, page-heading focus management, and the `#route-announcer` live
+  region. It reproduces the legacy DOM structure and class names so
+  `public/app-shell.css` styles it unchanged.
+- **Session and project context on TanStack Query.** `useSession` and
+  `useProject` re-check the server per request and never cache an authorization
+  decision. A 403 or 404 project collapses to the same generic **Project not
+  found** surface; other failures are retryable and carry the API request id.
+  Session-first is preserved: no feature or project request is issued before the
+  session resolves, and a feature controller mounts only after the project
+  context is `ready`.
+- **Compatibility mount.** `LegacyFeatureMount` + `featureRuntime.ts` load and
+  drive the existing `public/*-view.js` controllers unchanged (create → reload →
+  mount into a React-owned container, with `requestRender`, `navigate`,
+  `announce`, and `getSession` bridged). No feature workflow is redesigned.
+- **Rollback path retained.** `public/app-shell.js` and
+  `LegacyApplicationHost.tsx` remain in the tree but are not mounted; reverting
+  `main.tsx` to render `LegacyApplicationHost` restores the UI-2 vanilla shell.
+
+### Scope decision (documented)
+
+UI-4 keeps the established sidebar chrome via `app-shell.css` rather than
+adopting the UI-3 `AppShell`/`ProjectTabs` *visual* primitives, which imply a
+top-navigation paradigm shift. Because the feature screens are not yet migrated,
+that swap would be a redesign that risks the not-yet-migrated feature layout,
+not a parity migration. The shared components are composed where additive
+(`ToastProvider`, error boundary). The visual primitives are adopted as feature
+screens migrate (UI-6+). This is a deliberate deviation from the earlier
+"compose `AppShell`/`ProjectTabs`" phrasing, made in service of the binding
+route/visual-parity requirement.
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **379 unit tests**, **119 Worker integration tests**, the Vite
+production build, static-asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan. New
+suites: `react-shell-routing` (28 parity/normalization/admin/tab/descriptor
+cases) and `react-shell` (15 cases: redirects preserving query/hash, active
+nav + admin gating, unauthorized `/admin` and 403/404 project not-found, real
+project identity + descendant tab, retryable project error, session-first
+loading + session-error recovery, unknown-route not-found, heading focus +
+announcement, and the mobile drawer focus trap/restoration/close-and-navigate).
+The UI-2 legacy-shell suites (`app-routing`, `app-shell`, `records-ui`, etc.)
+remain green as rollback coverage.
+
+### Evidence
+
+Committed captures under `docs/evidence/ui-4/`, generated from the real shell
+(mocked runtime) with the pre-installed Chromium via
+`scripts/capture-ui4-evidence.mjs`: `shell-desktop.png` (sidebar nav, account
+summary, project header, Documents tab active, compatibility mount),
+`shell-mobile.png`, `shell-mobile-drawer.png` (open drawer with focus on the
+close button and dimmed backdrop), and `shell-dashboard-desktop.png`.
+
+### Known limitations
+
+- Feature screens still run through their existing `public/*-view.js`
+  controllers (the compatibility path). Migrating them to React is UI-5+.
+- The shipped `public/app/app.js` grows to ~338 kB (~106 kB gzip) and
+  `app.css` to ~30 kB (~5 kB gzip) because UI-4 mounts the React shell, router,
+  query client, and the UI-3 component stylesheet that UI-3 built but did not
+  ship. Expected one-time foundation cost; a bundle/perf budget is UI-10 scope.
+- Screenshots are captured against a mocked session/project (no authenticated
+  Cloudflare Access session is available in this environment). The chrome is
+  real React output; the feature content area shows a representative placeholder.
+- No pixel-baseline visual-regression harness yet — that remains UI-10.
+- `AppShell`/`ProjectTabs` visual primitives are intentionally not yet adopted
+  (see the scope decision above).
+
+### Next recommended action
+
+UI-5 (RFI register on the controlled custom table — no Tabulator) is next. The
+exact UI-5 prompt is in the final handoff. Do not merge UI-4 without explicit
+approval.
+
+## 5C. UI-4 correction pass — parity and resilience fixes (PR #44)
+
+Branch `claude/ui-4-react-foundation-ywnpm2`, PR #44 (kept as draft). Not
+merged.
+
+### 1. Same-route URL-history parity for compatibility-mounted controllers
+
+Some legacy controllers (`records-view.js`, `rfis-view.js`) store filter/sort
+state through `window.history.pushState`/`replaceState` issued directly
+(bypassing the router) and reread it from `window.location.search` inside
+their own `mount()` — see `rfis-view.js`'s `readFiltersFromUrl()`. Because
+`LegacyFeatureMount`'s creation effect only ran when the feature descriptor's
+key changed, a query/hash-only navigation to the *same* route (a genuine React
+Router navigation, or browser Back/Forward — the only two things that actually
+move `window.location` when a `<BrowserRouter>` is in use, since raw
+`pushState` calls made directly by a feature bypass the router entirely and
+never fire `popstate`) never told the existing controller to reread the URL.
+
+Fixed: `LegacyFeatureMount` now accepts a `locationKey` prop (`AppLayout`
+supplies `${route.pathname}${location.search}${location.hash}`). A second
+effect, independent of the creation effect, remounts the *existing* controller
+(`controller.mount(container)`) whenever `locationKey` changes while the
+descriptor stays the same — no new factory call, no new `reload()`. A ref
+tracks the location a freshly created controller "started" at, so the first
+location a new controller sees is never treated as a change requiring an extra
+remount. `tests/unit/react-shell-history-parity.test.tsx` (6 tests, using a
+`<BrowserRouter>`-based harness — see below) proves: status=open →
+status=draft → Back restores status=open by remounting the same controller;
+sort/filter query state round-trips through Back; a hash-only navigation
+remounts; the controller factory and `reload()` are each called exactly once
+across several query-only navigations; a genuine path navigation still
+destroys the old controller; and browser Back/Forward across two different
+feature routes still works.
+
+**Test harness note:** `tests/helpers/react-shell-harness.tsx` renders the real
+shell inside a `<BrowserRouter>` (not `<MemoryRouter>`), seeding
+`window.history` before each render. A `MemoryRouter` keeps its location
+entirely decoupled from `window.location`, which the legacy controllers under
+test read directly — only a router that actually drives `window.history`, as
+`BrowserRouter` does and as happy-dom's `history`/`popstate` support, lets
+those reads observe the harness's navigations. Back/Forward are exercised
+through `useNavigate()`'s `navigate(-1)`/`navigate(1)`, the standard way to
+drive a router's own history stack in tests.
+
+### 2. Project-context authorization is no longer cached indefinitely
+
+`useProject` used `staleTime: Infinity` keyed only by `["project", projectId]`,
+so once a project was fetched successfully, TanStack Query never asked the
+server again for that decision — returning to a previously visited project
+(e.g. via Back) could keep presenting a stale `ready` result instead of
+re-confirming access.
+
+Fixed: `useProject` now accepts a `revalidationKey` (the route's normalized
+pathname, supplied by `AppLayout`). Using React's documented "adjust state
+during render in response to a changed prop" pattern, an `epoch` counter is
+bumped exactly when `revalidationKey` changes for a route that has a
+`projectId` — deliberately *not* on query/hash-only changes on the same route,
+and not on ordinary rerenders, since neither is a route transition worth
+distrusting existing authorization over. The epoch is part of the query key
+(`["project", projectId, epoch]`), so a bump is a *brand-new* query — no stale
+`ready` data lingers while the fresh answer is pending — and `AppLayout`
+already only mounts the destination feature once `project.status === "ready"`,
+so no feature request can begin before the revalidated project confirms
+access. `tests/unit/react-shell-project-revalidation.test.tsx` (5 tests)
+proves: navigating between two routes in the same project issues a fresh
+project request each time (matching the legacy shell's unconditional
+per-navigate reload); a query-only navigation on the same route does not;
+returning to a project that has since become 403 shows the generic **Project
+not found** state and mounts no feature (only one "overview" factory call
+total, from the original successful visit); a failed revalidation recovers via
+retry; and the destination feature's factory is not invoked until a deferred
+revalidation resolves.
+
+### 3. Compatibility-module loading failures are now handled
+
+If `shell.runtime.getApiClient()` or `loadFeatureFactory()` rejected (e.g. a
+transient failure serving a `public/*-view.js` module), `LegacyFeatureMount`
+left an empty `.feature-view` with no error and no way to recover, and
+`featureRuntime.ts`'s `loadApiClient()` permanently cached the rejected
+`apiClientPromise` — every future call, for the rest of the page's lifetime,
+awaited that same rejection.
+
+Fixed: `LegacyFeatureMount` now catches the `Promise.all([getApiClient(),
+loadFeatureFactory()])` rejection and renders a shared, accessible error
+surface (`role="alert"`, a heading, and a "Try again" button) instead of an
+empty area; clicking Try again bumps a nonce that reruns the creation effect
+from scratch. `featureRuntime.ts`'s `loadApiClient()` now resets
+`apiClientPromise` to `null` in its catch handler, so a rejection is never
+permanently cached — the next call always starts a genuinely fresh import.
+The effect's existing `active` guard already ensured no controller is created
+after the component unmounts (navigating away while loading); this pass adds a
+test proving it explicitly. Every current legacy controller catches its own
+load errors internally and never rejects `reload()` (see e.g. `rfis-view.js`'s
+try/catch), so the `.catch()` on `controller.reload()` is a documented,
+deliberate defensive guard against an unhandled rejection, not a UI path of its
+own. `tests/unit/react-shell-resilience.test.tsx` (4 tests) proves: a feature
+factory rejection shows the error surface and recovers on retry; an API-client
+rejection does the same; navigating away during loading never mounts the
+abandoned feature; and the error/retry surface has accessible labels/status.
+`tests/unit/feature-runtime-resilience.test.ts` (1 test) proves
+`apiClientPromise` specifically is never permanently cached: two sequential
+calls to `defaultShellRuntime.getApiClient()` after the first rejects return
+genuinely different promise objects (this test is deterministic without any
+mocking, since an absolute `"/app-api.js"` specifier reliably fails to resolve
+under Node/Vitest, giving a guaranteed rejection to test the cache-reset
+behavior against).
+
+### Tests and checks
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **395 unit tests** (+16 over the UI-4 baseline of 379: 6
+history-parity + 5 project-revalidation + 4 resilience + 1
+featureRuntime-caching), **119 Worker integration tests**, the Vite production
+build, static-asset verification, Pages Functions compilation, `npm audit
+--audit-level=high` (0 vulnerabilities), and the secret scan. `npm run
+lab:build` passes.
+
+### Cloudflare Pages preview
+
+This session has no local Cloudflare credentials (`wrangler whoami` reports
+unauthenticated; no `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the
+environment, and `.github/workflows/ci.yml` itself has no deploy step), but
+the repository's **Cloudflare Pages GitHub App integration** deploys a
+preview automatically on every push, independent of local wrangler auth —
+confirmed via the PR's `Cloudflare Pages` check run and the
+`cloudflare-workers-and-pages[bot]` comment on PR #44:
+
+- **Commit:** `74ba530f63e6847f107e8f9dee7f87dedce586c2` (this correction pass)
+- **Preview URL:** `https://ea629704.base-office-forms.pages.dev`
+- **Branch preview URL:** `https://claude-ui-4-react-foundation.base-office-forms.pages.dev`
+- **Deploy status:** success (GitHub check `Cloudflare Pages`, completed)
+
+An unauthenticated fetch of the preview root (`WebFetch`) returned HTTP 403 —
+the expected, correct Cloudflare Access behavior for a visitor without a
+session, not a deploy defect. This session has no authenticated Cloudflare
+Access session or interactive browser, so no authenticated smoke test could
+be performed here; the checklist below is prepared for whoever has one.
+
+### Product-owner authenticated smoke checklist (against the preview above)
+
+- Session/shell: sidebar navigation, account summary, Dashboard loads.
+- Project context: open a project, confirm Overview → Documents → Issuances →
+  RFIs → Team tabs each load and keep the correct tab highlighted, including
+  from a record/revision detail descendant route.
+- **Same-route URL-history parity:** on the RFI register or Documents
+  register, change a filter (e.g. status), use the browser Back button, and
+  confirm the previous filter's rows reappear without a full page reload.
+- **Project revalidation:** open a project, navigate to a different project
+  route (e.g. Overview → Documents), and confirm no visible regression (a
+  brief "Loading project…" header flash is expected and correct — it reflects
+  the project access being re-confirmed with the server on every route
+  change).
+- **Resilience:** with dev tools open, throttle/block network briefly while
+  navigating to a not-yet-loaded route to confirm the "This section could not
+  be loaded" / "Try again" surface appears and recovers once the network
+  returns (rather than a blank area).
+- Mobile drawer: open/close, Escape, and link selection all behave as before.
+- Browser Back/Forward across at least two different feature routes.
+- Direct URL refresh on a nested project route.
+
+### Known limitations (unchanged from UI-4, still applicable)
+
+- Feature screens still run through their existing `public/*-view.js`
+  controllers; migrating them to React is UI-5+.
+- No pixel-baseline visual-regression harness yet — that remains UI-10.
+- No authenticated browser smoke was performed in this session (no Cloudflare
+  Access session or interactive browser available in this environment, though
+  a live preview exists — see above); the checklist above is prepared for
+  whoever has an authenticated Access session.
+
+### Next recommended action
+
+PR #44 is kept as a draft pending product-owner review of this correction
+pass, ideally against a real Cloudflare Pages preview. UI-5 remains the next
+phase after UI-4 is reviewed and merged.
 
 ## 6. Phase status
 
@@ -414,9 +740,9 @@ needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
 | UI-1 — Audit and decisions   | Complete                   | Binding documents and ADRs recorded              |
 | UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`) | none                                            |
 | RFI Slice 1                  | Complete; merged and closed out in production | none                            |
-| UI-3 — Components + UI Lab   | **Implemented; ready for final product-owner review** (PR #43, draft, `claude/base-components-ui-lab-5l05ux`) | Review and merge |
-| UI-4 — React shell           | **Now unblocked**          | Compose shared components into the shell         |
-| UI-5 — RFI register          | Not started                | Controlled-table parity; no Tabulator dependency |
+| UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43) | none                                   |
+| UI-4 — React shell           | **Implemented, correction pass applied; PR #44 kept as draft** (`claude/ui-4-react-foundation-ywnpm2`, not merged) | Product-owner review against a deployed preview, then merge |
+| UI-5 — RFI register          | **Now unblocked**          | Controlled-table parity; no Tabulator dependency |
 | UI-6 — Projects + Records    | Not started                | Shared register contract                         |
 | UI-7 — Detail workspaces     | Not started                | Shared workspace contract                        |
 | UI-8 — Dashboard/forms/admin | Not started                | Shared shell/forms/registers stable              |
@@ -438,13 +764,22 @@ needs. Do not begin UI-4 or RFI Slice 2 before PR #43 merges.
 
 ## 8. Next action
 
-UI-3 (Components + UI Lab) is implemented on
-`claude/base-components-ui-lab-5l05ux` (PR #43, draft) and, after the
-2026-07-24 foundation-review fixes (§5A), is ready for final product-owner
-review and merge; the exit gate — a feature team can build a standard register
-or detail workspace without new global visual CSS — is met by the shared
-component set, the single tokenized stylesheet, and the token-enforcement
-test. UI-4 and RFI Slice 2 do not begin before PR #43 merges. Once merged,
-UI-4 (React shell and route parity) is the next active phase and composes
-these components; RFI Slice 2A backend architecture may proceed independently
-once `main` is pulled and stable.
+UI-4 (React application shell and route parity) is implemented on
+`claude/ui-4-react-foundation-ywnpm2`, PR #44, and has completed a
+product-owner-requested correction pass (§5C): same-route URL-history parity
+for compatibility-mounted controllers, project-context revalidation on
+meaningful navigation instead of an indefinite cache, and handled
+compatibility-module loading failures with a shared error/retry surface. PR
+#44 is kept as a **draft**; it is not merged. Its exit gate — the shell is
+stable enough that feature migrations no longer need to modify global
+navigation or invent page containers — remains met, now with the additional
+parity/resilience guarantees proven by tests (§5C). The Cloudflare Pages
+GitHub App integration auto-deployed a live preview for this commit
+(`https://ea629704.base-office-forms.pages.dev`, §5C); the product-owner smoke
+checklist in §5C is ready to run against it.
+
+UI-5 (RFI register on the controlled custom table — no Tabulator, per Spike 0)
+is the next active phase; its exact prompt is in the handoff. Do not begin UI-5
+before UI-4 is reviewed/merged, and do not merge UI-4 without explicit approval.
+RFI Slice 2A backend architecture may proceed independently once `main` is
+pulled and stable.

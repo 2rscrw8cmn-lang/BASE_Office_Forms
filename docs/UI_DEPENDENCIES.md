@@ -1,7 +1,40 @@
 # UI Dependency and License Record
 
-**Updated:** 2026-07-23  
-**Scope:** UI-2 React/Vite compatibility foundation and UI-3 component library
+**Updated:** 2026-07-24  
+**Scope:** UI-2 React/Vite compatibility foundation, UI-3 component library, and
+UI-4 React application shell
+
+## UI-4 React application shell
+
+UI-4 moves global application composition into React and introduces two runtime
+dependencies: a router and a server-state cache. Both are named as the approved
+direction in `APP_UI_FOUNDATION.md` §10. They are MIT-licensed, actively
+maintained, and add no domain logic, permissions, or official workflow authority
+to the browser — routing and query state only. With UI-4 the component library
+(Radix/Lucide from UI-3) and these two packages are now part of the shipped
+`public/app/app.js` bundle for the first time (UI-3 built the library but did not
+mount it).
+
+| Package                   | Version | License | Purpose                                                                                          | Bundle/runtime impact                                                                                                                                                          | Replacement strategy                                                                                                                    |
+| ------------------------- | ------: | ------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `react-router-dom`        | 7.18.1  | MIT     | Client route map, history/back-forward, redirects, and links for the authenticated application. | Bundled into `public/app/app.js`. The app uses a single catch-all route that delegates matching to the typed `routing.ts`, so router coupling is thin.                        | Route matching lives in `src/ui/app/routing.ts` (framework-agnostic); the router can be swapped without rewriting the route table.     |
+| `@tanstack/react-query`   | 5.101.4 | MIT     | Session and project server-state caching, request de-duplication, and explicit retry.            | Bundled into `public/app/app.js`. Used only for `GET /api/v2/session` and `GET /api/v2/projects/:id`; queries are `retry: false` so no denied call is silently re-attempted. | Query hooks (`useSession`, `useProject`) wrap plain `fetch`; they can be reimplemented without TanStack if needed.                     |
+| `playwright-core` (evidence only) | latest | Apache-2.0 | Drives the pre-installed Chromium to capture the UI-4 desktop/mobile evidence screenshots. | Not a project dependency: installed transiently with `--no-save`, never added to `package.json`/`package-lock.json`, never bundled. | Remove entirely; screenshots are a one-time capture through `scripts/capture-ui4-evidence.mjs`. |
+
+Notes:
+
+- Adding these packages keeps `npm audit --audit-level=high` at zero
+  vulnerabilities; the Miniflare `sharp` override is unchanged.
+- Shipped bundle impact: `public/app/app.js` grows to ~338 kB (~106 kB gzip) and
+  `public/app/app.css` to ~30 kB (~5 kB gzip), because UI-4 mounts the React
+  shell, the router, the query client, and the UI-3 component stylesheet that
+  UI-3 built but did not ship. This is the expected one-time foundation cost.
+- The evidence harness (`vite.evidence.config.ts`, `src/ui/app/evidence/`) reuses
+  the pinned Vite/React toolchain and emits only to the gitignored
+  `dist/ui-4-evidence/`; it adds no dependency and is never in the production
+  build.
+
+## UI-3 component library and UI Lab
 
 ## UI-3 component library and UI Lab
 

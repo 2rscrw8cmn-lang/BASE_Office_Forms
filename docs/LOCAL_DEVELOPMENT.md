@@ -46,6 +46,30 @@ with `npm run dev:ui` to rebuild `public/app/` on source changes; refresh the
 Pages origin after each rebuild. The Pages runtime remains the deployment
 truth, not the standalone Vite server.
 
+As of UI-4, `public/app/app.js` is the React application shell (routing,
+navigation, drawer, session/project context, project tabs, focus, and
+announcements), built from `src/ui/app/`. Feature screens not yet migrated to
+React are served as before from `public/*-view.js` and mounted unchanged through
+a compatibility bridge (`LegacyFeatureMount` + `featureRuntime.ts`), which loads
+them at runtime via `import("/…-view.js")` — so those modules must stay served
+from `public/` (they are intentionally not bundled). Route matching lives in
+`src/ui/app/routing.ts` and is kept identical to the legacy
+`public/app-routing.js` table by `tests/unit/react-shell-routing.test.ts`.
+
+The shell requires an authenticated Cloudflare Access session (`GET
+/api/v2/session`) and, on project routes, `GET /api/v2/projects/:id`. To review
+the shell chrome without an Access session, build the dev-only evidence harness
+(`npx vite build --config vite.evidence.config.ts`, output in the gitignored
+`dist/ui-4-evidence/`) or capture screenshots with
+`node scripts/capture-ui4-evidence.mjs` (uses the pre-installed Chromium). The
+harness renders the real shell with a mocked session/project fetch and a stub
+feature runtime; it is never part of the production build.
+
+**Rollback:** the UI-2 vanilla shell (`public/app-shell.js`) and its host
+(`src/ui/app/LegacyApplicationHost.tsx`) are retained but not mounted. To fall
+back, revert `src/ui/app/main.tsx` to render `LegacyApplicationHost` instead of
+`App` and rebuild `public/app/`.
+
 Wrangler prints the local origin. Verify the new platform route at:
 
 ```text
