@@ -27,16 +27,19 @@
 > tests across four new suites (6 history-parity + 5 project-revalidation + 4
 > resilience + 1 featureRuntime-caching). No merge occurred; PR #44 stays draft.
 >
-> **Cloudflare Pages preview:** this session's environment has no Cloudflare
-> authentication (`wrangler whoami` reports unauthenticated, and there is no
-> `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment), and the
-> repository's only GitHub Actions workflow (`.github/workflows/ci.yml`) runs
-> the local validation gate — it does not deploy a Cloudflare Pages preview.
-> No preview deployment could be produced from this session; a session with
-> Cloudflare credentials (or the product owner, following `LOCAL_DEVELOPMENT.md`)
-> must run `npm run deploy:dry-run`/`wrangler pages deploy` to produce one. See
-> §"UI-4 correction pass" for the exact commit SHA and what to check once a
-> preview exists.
+> **Cloudflare Pages preview:** this session has no local Cloudflare
+> credentials (`wrangler whoami` reports unauthenticated), but the
+> repository's Cloudflare Pages GitHub App integration deployed a preview
+> automatically on push, independent of local wrangler auth. For commit
+> `74ba530` (this correction pass): preview URL
+> `https://ea629704.base-office-forms.pages.dev`, branch preview URL
+> `https://claude-ui-4-react-foundation.base-office-forms.pages.dev`, GitHub
+> check `Cloudflare Pages` — success. An unauthenticated fetch of the preview
+> root returns HTTP 403, the expected, correct Cloudflare Access behavior for
+> an unauthenticated visitor; this session has no authenticated Access
+> session or browser, so no authenticated smoke test could be performed here.
+> See §"UI-4 correction pass" for the product-owner smoke checklist to run
+> against that preview.
 
 > **2026-07-24 UI-4 implementation:**
 > The React application shell now owns global composition — navigation, the
@@ -672,17 +675,26 @@ lab:build` passes.
 
 ### Cloudflare Pages preview
 
-Not produced from this session: there is no Cloudflare authentication
-available (`wrangler whoami` reports unauthenticated; no
-`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment), and the
-repository's CI (`.github/workflows/ci.yml`) runs only the local validation
-gate — it has no Cloudflare Pages deploy step. Producing a preview requires a
-session with Cloudflare credentials (or the product owner) to run `npm run
-deploy:dry-run` and then `wrangler pages deploy public --project-name
-base-office-forms`, per `LOCAL_DEVELOPMENT.md`. The commit to deploy from is
-the head of `claude/ui-4-react-foundation-ywnpm2` after this correction pass.
+This session has no local Cloudflare credentials (`wrangler whoami` reports
+unauthenticated; no `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the
+environment, and `.github/workflows/ci.yml` itself has no deploy step), but
+the repository's **Cloudflare Pages GitHub App integration** deploys a
+preview automatically on every push, independent of local wrangler auth —
+confirmed via the PR's `Cloudflare Pages` check run and the
+`cloudflare-workers-and-pages[bot]` comment on PR #44:
 
-### Product-owner authenticated smoke checklist (once a preview exists)
+- **Commit:** `74ba530f63e6847f107e8f9dee7f87dedce586c2` (this correction pass)
+- **Preview URL:** `https://ea629704.base-office-forms.pages.dev`
+- **Branch preview URL:** `https://claude-ui-4-react-foundation.base-office-forms.pages.dev`
+- **Deploy status:** success (GitHub check `Cloudflare Pages`, completed)
+
+An unauthenticated fetch of the preview root (`WebFetch`) returned HTTP 403 —
+the expected, correct Cloudflare Access behavior for a visitor without a
+session, not a deploy defect. This session has no authenticated Cloudflare
+Access session or interactive browser, so no authenticated smoke test could
+be performed here; the checklist below is prepared for whoever has one.
+
+### Product-owner authenticated smoke checklist (against the preview above)
 
 - Session/shell: sidebar navigation, account summary, Dashboard loads.
 - Project context: open a project, confirm Overview → Documents → Issuances →
@@ -710,8 +722,9 @@ the head of `claude/ui-4-react-foundation-ywnpm2` after this correction pass.
   controllers; migrating them to React is UI-5+.
 - No pixel-baseline visual-regression harness yet — that remains UI-10.
 - No authenticated browser smoke was performed in this session (no Cloudflare
-  Access session or deployed preview available); the checklist above is
-  prepared for whoever deploys the preview.
+  Access session or interactive browser available in this environment, though
+  a live preview exists — see above); the checklist above is prepared for
+  whoever has an authenticated Access session.
 
 ### Next recommended action
 
@@ -760,9 +773,10 @@ compatibility-module loading failures with a shared error/retry surface. PR
 #44 is kept as a **draft**; it is not merged. Its exit gate — the shell is
 stable enough that feature migrations no longer need to modify global
 navigation or invent page containers — remains met, now with the additional
-parity/resilience guarantees proven by tests (§5C). No Cloudflare Pages preview
-could be deployed from this session (no Cloudflare credentials available); the
-product-owner smoke checklist in §5C is prepared for whoever deploys one.
+parity/resilience guarantees proven by tests (§5C). The Cloudflare Pages
+GitHub App integration auto-deployed a live preview for this commit
+(`https://ea629704.base-office-forms.pages.dev`, §5C); the product-owner smoke
+checklist in §5C is ready to run against it.
 
 UI-5 (RFI register on the controlled custom table — no Tabulator, per Spike 0)
 is the next active phase; its exact prompt is in the handoff. Do not begin UI-5
