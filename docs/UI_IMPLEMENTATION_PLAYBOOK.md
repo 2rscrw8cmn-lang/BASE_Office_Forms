@@ -26,7 +26,7 @@ UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
 UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45]
 UI-6A    Projects register + Create Project workflow          [implemented: PR #46, open]
-UI-6B    Document Register + Add Document workflow            [implemented: stacked on UI-6A]
+UI-6B    Document Register + Add Document workflow            [implemented: PR #47, stacked on UI-6A]
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls

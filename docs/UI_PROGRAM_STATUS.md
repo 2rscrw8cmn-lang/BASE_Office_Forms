@@ -2,7 +2,7 @@
 
 **Status date:** 2026-07-24
 **Current phase:** UI-6B (native React Document Register) is implemented on `claude/ui-6b-document-register-evonty`, stacked on the still-unmerged UI-6A branch.
-**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`. **UI-6A (PR #46) is open, not merged**, so UI-6B branches from `agent/ui-6a-projects-register-react` rather than from `main`; see §5F "Branch stacking" for why and what that means for review order.
+**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR #47 against `main`. PR #36, PR #41, PR #43, PR #44, and PR #45 are merged to `main`. **UI-6A (PR #46) is open, not merged**, so UI-6B branches from `agent/ui-6a-projects-register-react` rather than from `main`; see §5F "Branch stacking" for why and what that means for review order.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -1407,7 +1407,7 @@ Detail Workspaces** only after UI-6B is merged.
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
 | UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
 | UI-6A — Projects register           | **Implemented; draft PR #46 open, NOT merged** (`agent/ui-6a-projects-register-react`) | Review and merge before UI-6B merges |
-| UI-6B — Document Register           | **Implemented; draft PR** (`claude/ui-6b-document-register-evonty`, stacked on UI-6A) | Merge UI-6A, then review and merge UI-6B |
+| UI-6B — Document Register           | **Implemented; draft PR #47** (`claude/ui-6b-document-register-evonty`, stacked on UI-6A) | Merge UI-6A, then review and merge UI-6B |
 | UI-7 — Detail workspaces            | Not started — **the exact next phase**                         | Review and merge UI-6B first        |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
@@ -1430,11 +1430,12 @@ Detail Workspaces** only after UI-6B is merged.
 
 UI-5 is complete and merged to `main` as `86b11e1` (PR #45). UI-6A is
 implemented on `agent/ui-6a-projects-register-react` (PR #46) and is **still
-open**. UI-6B is implemented on `claude/ui-6b-document-register-evonty`,
-stacked on the UI-6A branch because UI-6A had not merged when UI-6B began.
+open**. UI-6B is implemented on `claude/ui-6b-document-register-evonty`
+(draft PR #47), stacked on the UI-6A branch because UI-6A had not merged when
+UI-6B began.
 
 Merge order is therefore: review and merge UI-6A (PR #46), then review and
-merge UI-6B. Only after UI-6B is reviewed and merged should **UI-7 Detail
+merge UI-6B (PR #47). Only after UI-6B is reviewed and merged should **UI-7 Detail
 Workspaces** begin — the Record, Revision, and RFI detail routes are the exact
 next phase, and they remain compatibility-mounted until then. RFI Slice 2A
 backend architecture may proceed independently once `main` is pulled and

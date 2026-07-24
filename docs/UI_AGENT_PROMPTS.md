@@ -199,8 +199,8 @@ UI_PROGRAM_STATUS.md, API/security/UX/testing docs, and the PR body.
 
 ## Prompt UI-6B — Document Register
 
-**Status: implemented** on `claude/ui-6b-document-register-evonty`, stacked on
-the still-open UI-6A branch (PR #46). See `docs/UI_PROGRAM_STATUS.md` §5F. The
+**Status: implemented** on `claude/ui-6b-document-register-evonty` (draft PR
+#47), stacked on the still-open UI-6A branch (PR #46). See `docs/UI_PROGRAM_STATUS.md` §5F. The
 prompt below is retained as the phase's specification of record.
 
 ```text
