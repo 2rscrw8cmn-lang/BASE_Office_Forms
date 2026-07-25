@@ -227,6 +227,30 @@ function DrawerDemo({
   );
 }
 
+/**
+ * The detail Drawer configured for a staged workflow (UI-6B Add Document):
+ * an explicit initial-focus target so the first field takes focus instead of
+ * the close button, and a close label that names the workflow rather than the
+ * navigation menu.
+ */
+function DrawerWorkflowDemo() {
+  const initialFocusRef = useRef<HTMLInputElement>(null);
+  return (
+    <Drawer
+      trigger={<Button iconStart="plus">Open workflow Drawer</Button>}
+      title="Add document"
+      side="right"
+      size="detail"
+      closeLabel="Close add document"
+      initialFocusRef={initialFocusRef}
+    >
+      <Field label="Title">
+        <TextInput ref={initialFocusRef} defaultValue="" />
+      </Field>
+    </Drawer>
+  );
+}
+
 function PopoverDemo() {
   return (
     <Popover trigger={<Button iconStart="filter">Filters</Button>}>
@@ -787,6 +811,7 @@ export const CATALOG: LabEntry[] = [
         state: "selected",
         render: () => <DrawerDemo side="right" size="detail" />,
       },
+      { state: "focus", render: () => <DrawerWorkflowDemo /> },
     ],
   },
   {

@@ -25,8 +25,8 @@ UI-2     Application/document CSS separation + React/Vite foundation [complete: 
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
 UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45]
-UI-6A    Projects register + Create Project workflow
-UI-6B    Document Register + Add Document workflow (after UI-6A review/merge)
+UI-6A    Projects register + Create Project workflow          [implemented: PR #46, open]
+UI-6B    Document Register + Add Document workflow            [implemented: PR #47, stacked on UI-6A]
 UI-7     RFI, Record, and Revision workspaces
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
@@ -440,9 +440,26 @@ capability/create coverage, and deterministic desktop/mobile evidence.
 - native semantic desktop table and dedicated mobile cards;
 - no Tabulator or `BaseDataGrid`.
 
-UI-6B starts only after UI-6A is reviewed and merged. It migrates only the
-Document Register and Add Document workflow; it does not reopen Projects,
-begin detail workspaces, or broaden into later phases.
+UI-6B migrates only the Document Register and Add Document workflow; it does
+not reopen Projects, begin detail workspaces, or broaden into later phases.
+
+**Delivered.** `/projects/:projectId/records` is native React and Add Document
+is a staged workflow in the shared `Drawer size="detail"`. Record and Revision
+detail routes remain compatibility-mounted until UI-7. The register uses the
+existing `GET /api/v2/projects/:projectId/records` response unchanged,
+including its server-derived `capabilities.createRecord`.
+
+**Branch stacking.** UI-6B was specified to start from a `main` containing
+UI-6A, but UI-6A's PR #46 was still open when UI-6B began, and UI-6A modifies
+ten files UI-6B must also modify. UI-6B therefore branches from
+`agent/ui-6a-projects-register-react`. Merge UI-6A first, then UI-6B. See
+`docs/UI_PROGRAM_STATUS.md` §5F.
+
+**Add Document staging is the reusable lesson.** A multi-step server workflow
+records which stages have been confirmed and retries only the failed remainder,
+rather than restarting and duplicating server state. A partial failure must say
+what does exist, show the request ID, and link to it. Later phases with staged
+server work (publishing, issuance) should follow this shape.
 
 ### Exit gate
 

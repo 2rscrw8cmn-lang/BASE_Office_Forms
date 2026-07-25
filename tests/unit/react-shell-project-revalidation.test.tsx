@@ -85,8 +85,8 @@ describe("Project-context authorization caching and revalidation", () => {
     await screen.findByText("FEATURE:overview");
     expect(projectCallCount).toBe(1);
 
-    shell.goTo("/projects/p1/records");
-    await screen.findByText("FEATURE:records");
+    shell.goTo("/projects/p1/records/r1");
+    await screen.findByText("FEATURE:record-detail");
     expect(projectCallCount).toBe(2);
   });
 
@@ -101,13 +101,13 @@ describe("Project-context authorization caching and revalidation", () => {
     });
     const { runtime } = makeRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records?status=open",
+      "/projects/p1/records/r1?status=open",
       runtime,
     );
-    await screen.findByText("FEATURE:records");
+    await screen.findByText("FEATURE:record-detail");
     expect(projectCallCount).toBe(1);
 
-    shell.goTo("/projects/p1/records?status=closed");
+    shell.goTo("/projects/p1/records/r1?status=closed");
     await waitFor(() => {
       expect(el(".feature-view")).toBeInTheDocument();
     });
@@ -160,12 +160,12 @@ describe("Project-context authorization caching and revalidation", () => {
     const shell = renderShellWithNavigation("/projects/p1/overview", runtime);
     await screen.findByText("FEATURE:overview");
 
-    shell.goTo("/projects/p1/records");
+    shell.goTo("/projects/p1/records/r1");
     await screen.findByRole("heading", { name: "Project context unavailable" });
     expect(screen.getByText("req-99")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByText("FEATURE:records");
+    await screen.findByText("FEATURE:record-detail");
   });
 
   it("does not begin the destination feature's request before the revalidated project is ready", async () => {
@@ -195,16 +195,16 @@ describe("Project-context authorization caching and revalidation", () => {
     await screen.findByText("FEATURE:overview");
     expect(factoryCalls).toEqual(["overview"]);
 
-    shell.goTo("/projects/p1/records");
+    shell.goTo("/projects/p1/records/r1");
     await waitFor(() => {
       expect(document.querySelector(".route-loading")).toBeInTheDocument();
     });
-    // The project revalidation is still pending: no "records" feature request
+    // The project revalidation is still pending: no "record-detail" feature request
     // has begun.
     expect(factoryCalls).toEqual(["overview"]);
 
     pendingProjectResolve.current?.(READY_PROJECT("p1"));
-    await screen.findByText("FEATURE:records");
-    expect(factoryCalls).toEqual(["overview", "records"]);
+    await screen.findByText("FEATURE:record-detail");
+    expect(factoryCalls).toEqual(["overview", "record-detail"]);
   });
 });

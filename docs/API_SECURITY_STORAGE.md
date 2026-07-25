@@ -72,6 +72,27 @@ Transitions include:
 - record-review
 - create-resubmission
 
+`GET /api/v2/projects/:projectId/records` is unchanged by UI-6B. It already
+returns `capabilities.createRecord` and per-record `capabilities`
+(`update`, `archive`) inside `data`, all derived server-side from the record
+policy through `ProjectService.resolveRecordAccess`. Project access and tenant
+scoping are resolved before any record data is read, so an inaccessible or
+cross-tenant project yields the generic not-found result and no rows.
+
+The native Document Register requests the full authorized set once with
+`includeArchived=true` and then searches, filters, sorts, and toggles archived
+visibility entirely in the browser. That is presentation over an
+already-authorized response and is never an authorization boundary — the
+browser cannot widen what the server returned. The Add document action is
+presented only when `capabilities.createRecord` is true; browser code never
+infers this from a membership role string, and `POST` remains independently
+enforced server-side.
+
+Record creation, draft revision creation, and file upload each keep their own
+server-side authorization. The Add Document workflow only sequences those three
+calls; a partial failure leaves the already-created, already-authorized
+entities in place and retries only the remaining stage.
+
 ### Files
 
 - `POST /api/v2/files/uploads`

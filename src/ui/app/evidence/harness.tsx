@@ -35,6 +35,14 @@ const rfiScenario = params.get("rfiScenario") ?? "none";
 // screenshots remain deterministic without placing demo markup in production.
 const projectFixture = params.get("projectFixture") ?? "populated";
 const projectScenario = params.get("projectScenario") ?? "none";
+// UI-6B evidence mounts the real native Document Register at
+// `/projects/:projectId/records`. Fixture selects the authorized server
+// response; scenario drives the Add Document Drawer and the mobile filter
+// disclosure through real DOM events, so captures stay deterministic without
+// any static demo markup.
+const recordFixture = params.get("recordFixture") ?? "populated";
+const recordScenario = params.get("recordScenario") ?? "none";
+const recordCreateMode = params.get("recordCreateMode") ?? "success";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -96,6 +104,133 @@ const projectRows = [
     updatedAt: "2026-07-10T14:45:00Z",
   }),
 ];
+
+function recordRow(overrides: Record<string, unknown>) {
+  return {
+    id: "record-x",
+    projectId: "p1",
+    recordNumber: null,
+    title: "Untitled document",
+    recordType: "document",
+    discipline: null,
+    status: "active",
+    currentRevision: null,
+    hasDraftRevision: false,
+    draftRevisionId: null,
+    fileCount: 0,
+    createdAt: "2026-07-01T09:00:00Z",
+    updatedAt: "2026-07-20T09:00:00Z",
+    capabilities: { update: true, archive: true },
+    ...overrides,
+  };
+}
+
+function currentRevision(overrides: Record<string, unknown>) {
+  return {
+    id: "revision-x",
+    revisionNumber: 1,
+    revisionLabel: null,
+    status: "published",
+    title: "Untitled revision",
+    ...overrides,
+  };
+}
+
+const recordRows = [
+  recordRow({
+    id: "record-1",
+    recordNumber: "A-101",
+    title: "Level 2 Framing Plan",
+    recordType: "drawing",
+    discipline: "structural",
+    currentRevision: currentRevision({
+      id: "revision-1",
+      revisionNumber: 3,
+      revisionLabel: "C",
+      status: "published",
+    }),
+    hasDraftRevision: true,
+    draftRevisionId: "revision-1-draft",
+    fileCount: 4,
+    updatedAt: "2026-07-23T15:00:00Z",
+  }),
+  recordRow({
+    id: "record-2",
+    recordNumber: "M-501",
+    title: "Mechanical Ductwork Schedule",
+    recordType: "schedule",
+    discipline: "mechanical",
+    currentRevision: currentRevision({
+      id: "revision-2",
+      revisionNumber: 1,
+      status: "published",
+    }),
+    fileCount: 2,
+    updatedAt: "2026-07-21T11:30:00Z",
+  }),
+  recordRow({
+    id: "record-3",
+    recordNumber: "S-004",
+    title: "Structural Calculations Narrative",
+    recordType: "report",
+    discipline: "structural",
+    currentRevision: currentRevision({
+      id: "revision-3",
+      revisionNumber: 2,
+      status: "superseded",
+    }),
+    fileCount: 6,
+    updatedAt: "2026-07-18T08:00:00Z",
+  }),
+  // A legacy record that never received a server-generated number, and that
+  // has no authoritative current revision yet -- both honest states the
+  // register must show rather than paper over.
+  recordRow({
+    id: "record-4",
+    recordNumber: null,
+    title:
+      "Existing conditions survey transferred from the previous document control system",
+    recordType: "other",
+    discipline: "survey",
+    currentRevision: null,
+    hasDraftRevision: true,
+    draftRevisionId: "revision-4-draft",
+    fileCount: 0,
+    updatedAt: "2026-07-12T16:45:00Z",
+  }),
+  recordRow({
+    id: "record-5",
+    recordNumber: "A-090",
+    title: "Superseded Lobby Elevation",
+    recordType: "drawing",
+    discipline: "architectural",
+    status: "archived",
+    currentRevision: currentRevision({
+      id: "revision-5",
+      revisionNumber: 2,
+      status: "superseded",
+    }),
+    fileCount: 3,
+    updatedAt: "2026-06-30T13:10:00Z",
+  }),
+];
+
+function currentRecordRows() {
+  if (recordFixture === "empty") return [];
+  if (recordFixture === "archived-only") {
+    return recordRows
+      .filter((row) => row.id === "record-5")
+      .map((row) => ({ ...row, status: "archived" }));
+  }
+  return recordRows;
+}
+
+function isRecordListUrl(url: string) {
+  return /\/api\/v2\/projects\/[^/?]+\/records(\?|$)/.test(url);
+}
+function isRevisionCreateUrl(url: string) {
+  return /\/api\/v2\/projects\/[^/?]+\/records\/[^/?]+\/revisions$/.test(url);
+}
 
 function rfiRow(overrides: Record<string, unknown>) {
   return {
@@ -220,7 +355,6 @@ globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
         ? input.href
         : input.url;
   const method = (init?.method || "GET").toUpperCase();
-
   if (url.includes("/api/v2/session")) {
     return Promise.resolve(
       response({
@@ -271,6 +405,75 @@ globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
             ...body,
             updatedAt: "2026-07-24T12:00:00Z",
           }),
+        },
+        201,
+      ),
+    );
+  }
+
+  if (isRecordListUrl(url) && method === "GET") {
+    if (recordFixture === "error") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RECORDS_UNAVAILABLE",
+              message: "The document register is temporarily unavailable.",
+              requestId: "req-ui6b-evidence",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response(
+        {
+          data: {
+            records: currentRecordRows(),
+            capabilities: { createRecord: true },
+          },
+          meta: { requestId: "req-ui6b-evidence" },
+        },
+        200,
+      ),
+    );
+  }
+
+  if (isRecordListUrl(url) && method === "POST") {
+    const body =
+      init?.body && typeof init.body === "string"
+        ? (JSON.parse(init.body) as Record<string, unknown>)
+        : {};
+    return Promise.resolve(
+      response(
+        { data: { id: "record-new", recordNumber: "A-118", ...body } },
+        201,
+      ),
+    );
+  }
+
+  if (isRevisionCreateUrl(url) && method === "POST") {
+    // The partial-success evidence stops here: the Record exists, its draft
+    // Revision does not, and the workflow must say so and offer recovery.
+    if (recordCreateMode === "revision-failure") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "REVISION_UNAVAILABLE",
+              message: "The original draft revision could not be created.",
+              requestId: "req-ui6b-revision",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response(
+        {
+          data: { id: "revision-new", revisionNumber: 1, revisionLabel: null },
         },
         201,
       ),
@@ -589,3 +792,67 @@ async function runProjectScenario() {
 }
 
 void runProjectScenario();
+
+async function runRecordScenario() {
+  if (recordScenario === "none") return;
+  if (recordScenario === "mobile-filters") {
+    const filters = (await waitForSelector(
+      'button[aria-label^="Show"][aria-controls]',
+    )) as HTMLButtonElement;
+    filters.click();
+    await waitForSelector(".base-toolbar__filters--mobile-disclosure.is-open");
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    return;
+  }
+
+  // Every remaining scenario starts by opening the Add Document Drawer from
+  // the real capability-gated page action.
+  const add = (await waitForSelector(
+    "[data-add-document]",
+  )) as HTMLButtonElement;
+  add.click();
+  await waitForSelector(".add-document-drawer");
+  if (recordScenario === "add-choice") return;
+
+  const upload = (await waitForSelector(
+    "[data-mode='upload']",
+  )) as HTMLButtonElement;
+  upload.click();
+  await waitForSelector(".add-document-form");
+  if (recordScenario === "add-upload") {
+    const title = (await waitForSelector(
+      ".add-document-form input[type='text']",
+    )) as HTMLInputElement;
+    setNativeValue(title, "Level 3 Framing Plan");
+    return;
+  }
+
+  if (recordScenario === "add-recovery") {
+    const title = (await waitForSelector(
+      ".add-document-form input[type='text']",
+    )) as HTMLInputElement;
+    setNativeValue(title, "Level 3 Framing Plan");
+    const file = (await waitForSelector(
+      "[data-document-file]",
+    )) as HTMLInputElement;
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(["evidence"], "level-3-framing.pdf", {
+        type: "application/pdf",
+      }),
+    );
+    file.files = transfer.files;
+    file.dispatchEvent(new Event("change", { bubbles: true }));
+    (
+      (await waitForSelector("[data-submit-document]")) as HTMLButtonElement
+    ).click();
+    // Record creation succeeds and the draft Revision fails, so the recovery
+    // block (server message, request ID, and link to the usable Record) is
+    // what the screenshot captures. Scroll it into view so the recovery link
+    // itself is visible above the Drawer's stable footer.
+    const recovery = await waitForSelector("[data-recovery-link]");
+    recovery.scrollIntoView({ block: "center", behavior: "instant" });
+  }
+}
+
+void runRecordScenario();

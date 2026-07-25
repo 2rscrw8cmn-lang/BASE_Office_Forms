@@ -325,6 +325,68 @@ each relevant role while retaining the list `data` array contract and legacy
 rollback tests. Deterministic evidence under `docs/evidence/ui-6a/` covers all
 required desktop/mobile and async/empty/error states.
 
+### 12A-iii. UI-6B Document Register coverage (implemented)
+
+UI-6B adds 72 unit tests across three suites plus 2 shared `Drawer` tests.
+
+`records-register-react.test.tsx` (51) covers authorized rendering and the
+project-scoped query key (a route change never shows another project's rows);
+Record/Revision/File identity — authoritative `currentRevision` only, a draft
+never masquerading as current, the revision number visible alongside a label,
+"No revision", the draft-in-progress indication, total file count, archived
+marking, an honest missing legacy record number, and no database id as
+user-facing identity; the six semantic column headers with no grid role and no
+Actions/Open column; dedicated mobile cards with no nested interactive
+controls; a semantic `<time>` element; search visible on mobile and an
+active-filter count that ignores the search query; search, type, discipline,
+revision-status, no-revision, archived, and sort behaviour; controlled options
+only; filter chips and individual removal; Clear semantics; replace-on-search
+and push-on-filter/sort history; direct URL restoration, Back/Forward, hash
+preservation, and invalid-value normalization; title-link, safe-row-area,
+modifier-click, text-selection, and mobile-card navigation; and loading,
+refreshing, first-use empty, no-active-but-archived, filtered empty,
+permission (403 and 404 alike), and error-with-request-ID states.
+
+The Add Document workflow is covered for capability gating, the shared detail
+Drawer size and side, initial focus on the first choice, Escape with focus
+restoration to the trigger, the two real entry choices, required validation,
+the controlled discipline vocabulary, the absence of any Record-number field,
+no optimistic insertion before server confirmation, the confirmed
+Record → Revision → upload sequence with canonical Revision navigation, cache
+refresh from confirmed server data, and all three failure paths —
+Record-create failure creating nothing, draft-Revision failure after Record
+success, and upload failure after both — each asserting the request ID, the
+recovery link, and that a retry re-attempts only the failed stage without
+duplicating a Record or Revision.
+
+`records-register-route-integration.test.tsx` (4) proves the native route
+mounts and the legacy `records` controller is never loaded, the shell keeps the
+only `<h1>` and the selected Documents tab, Records are requested only after
+project access is confirmed, and Record and Revision detail stay
+compatibility-mounted.
+
+`records-register-contract.test.ts` (17) enforces the static boundaries: no
+role-string inference, no Tabulator/`BaseDataGrid`/grid role/raw SVG/direct
+Radix or Lucide import, exactly six declared columns, no draft-derived current
+revision, no nested controls in the card, the shared 760px/460px breakpoints
+only, the shared Drawer instead of a local modal or focus trap, no feature
+focus rings or shared-control appearance, reuse of the shared status
+vocabularies and the one controlled discipline source, a label for every
+controlled record type, no client-generated Record number, the preserved URL
+parameter names, no raw colour literals, only registered tokens, and retention
+of both legacy rollback modules.
+
+Three UI-4 shell suites that used `/projects/p1/records` as their example
+compatibility-mounted route were repointed at routes still on that path
+(`record-detail`, `overview`) — the same adjustment UI-6A made for `/projects`.
+No assertion was weakened, and the legacy `records-ui` rollback tests are
+untouched.
+
+Deterministic evidence under `docs/evidence/ui-6b/` covers all required
+desktop, tablet (834px), and mobile (390px, 360px) states. Each capture waits
+for a selector that only exists once the documented state has rendered, asserts
+its CSS viewport, and fails if the page overflows horizontally.
+
 ### 12B. RFI Slice 1 reconciliation evidence
 
 Before production approval, run the guarded remote rehearsal in

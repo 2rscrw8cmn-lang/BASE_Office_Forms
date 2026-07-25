@@ -1,0 +1,397 @@
+/*
+ * Composition-only layout for the native Document Register and its Add
+ * Document workflow. Focus rings, button/input/badge/link appearance, Drawer
+ * geometry, dialog geometry, and all colour values remain owned by the shared
+ * component layer and the application token registry.
+ */
+
+.records-register-page {
+  gap: var(--app-space-4);
+  padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
+}
+
+/* ---- Desktop table ----------------------------------------------------- */
+
+.records-register-table-wrap {
+  overflow-x: auto;
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.records-register-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  /* Fixed layout so the declared column widths hold and a long document title
+     truncates inside its cell instead of pushing Updated out of view. */
+  table-layout: fixed;
+  font-size: var(--app-text-sm);
+}
+
+.records-register-table thead th {
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  background: var(--app-surface-sunken);
+  color: var(--app-text-primary);
+  font-weight: var(--app-weight-medium);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.records-register-table thead th:nth-child(1) {
+  width: 34%;
+}
+
+.records-register-table thead th:nth-child(2),
+.records-register-table thead th:nth-child(3) {
+  width: 132px;
+}
+
+.records-register-table thead th:nth-child(4) {
+  width: 176px;
+}
+
+.records-register-table thead th:nth-child(5) {
+  width: 72px;
+}
+
+.records-register-table thead th:nth-child(6) {
+  width: 128px;
+}
+
+.records-register-table tbody th,
+.records-register-table tbody td {
+  height: 60px;
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: var(--app-border-width) solid var(--app-border-subtle);
+  /* A row header is left-aligned like every other cell; the UA default for
+     <th> is centred. */
+  text-align: left;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.records-register-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.records-register-row {
+  cursor: pointer;
+}
+
+.records-register-row:hover {
+  background: var(--app-surface-hover);
+}
+
+.records-register-title {
+  display: block;
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-weight: var(--app-weight-semibold);
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.records-register-title:hover {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+
+.records-register-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  margin-top: 2px;
+}
+
+.records-register-number {
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-family: var(--app-font-mono);
+  font-size: var(--app-text-xs);
+  font-weight: var(--app-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-register-draft {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+.records-register-revision-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.records-register-revision {
+  color: var(--app-text-primary);
+  font-size: var(--app-text-sm);
+}
+
+.records-register-no-revision {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-sm);
+}
+
+.records-register-files {
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.records-register-updated {
+  color: var(--app-text-muted);
+  white-space: nowrap;
+}
+
+/* ---- Mobile cards ------------------------------------------------------ */
+
+.records-register-cards {
+  display: none;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.records-register-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  color: var(--app-text-primary);
+  text-decoration: none;
+}
+
+.records-register-card:hover {
+  border-color: var(--app-border-strong);
+  background: var(--app-surface-hover);
+}
+
+.records-register-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.records-register-card__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-1);
+}
+
+.records-register-card__identity strong {
+  overflow: hidden;
+  font-size: var(--app-text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-register-card__meta,
+.records-register-card__revision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+.records-register-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  padding-top: var(--app-space-3);
+  border-top: var(--app-border-width) solid var(--app-border-subtle);
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+/* ---- Add Document drawer ----------------------------------------------- */
+
+.add-document-intro {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: var(--app-text-sm);
+  line-height: var(--app-line-normal);
+}
+
+.add-document-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.add-document-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--app-space-3);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  color: var(--app-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-document-choice:hover {
+  border-color: var(--app-border-strong);
+  background: var(--app-surface-hover);
+}
+
+.add-document-choice > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-1);
+}
+
+.add-document-choice span span {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+  line-height: var(--app-line-normal);
+}
+
+.add-document-form {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+.add-document-form__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--app-space-4);
+}
+
+.add-document-back {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--app-accent);
+  font: inherit;
+  font-size: var(--app-text-xs);
+  cursor: pointer;
+}
+
+.add-document-back[disabled] {
+  color: var(--app-text-disabled);
+  cursor: not-allowed;
+}
+
+.add-document-fields {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.add-document-grid {
+  display: grid;
+  gap: var(--app-space-4);
+}
+
+.add-document-grid--paired {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.add-document-file {
+  height: auto;
+  padding: var(--app-space-2);
+}
+
+.add-document-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--app-space-2);
+  padding: var(--app-space-3);
+  border: var(--app-border-width) solid var(--app-danger);
+  border-radius: var(--app-radius-md);
+  background: var(--app-danger-soft);
+  font-size: var(--app-text-sm);
+}
+
+.add-document-error p {
+  margin: 0 0 var(--app-space-1);
+}
+
+.add-document-request-id {
+  font-size: var(--app-text-xs);
+}
+
+.add-document-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-1);
+  margin-top: var(--app-space-2);
+}
+
+.add-document-form__footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+  padding-top: var(--app-space-4);
+  margin-top: var(--app-space-4);
+  border-top: var(--app-border-width) solid var(--app-border-subtle);
+  background: var(--app-surface);
+}
+
+/* ---- Shared responsive breakpoints ------------------------------------- */
+
+@media (max-width: 760px) {
+  .records-register-table-wrap {
+    display: none;
+  }
+
+  .records-register-cards {
+    display: flex;
+  }
+
+  /* Five controls (four filters plus sort) do not fit one phone row, so the
+     disclosed panel lays them out two-up. Composition only -- the control
+     appearance and the disclosure behaviour stay shared. */
+  .records-register-page .base-toolbar__filters--mobile-disclosure.is-open {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .records-register-page .base-toolbar__filters .base-field,
+  .records-register-page .base-toolbar__filters .base-select,
+  .records-register-page .base-toolbar__filters .base-select__control {
+    width: 100%;
+  }
+}
+
+@media (max-width: 460px) {
+  .records-register-page {
+    padding-right: var(--app-space-3);
+    padding-left: var(--app-space-3);
+  }
+
+  .add-document-grid--paired,
+  .records-register-page .base-toolbar__filters--mobile-disclosure.is-open {
+    grid-template-columns: 1fr;
+  }
+}

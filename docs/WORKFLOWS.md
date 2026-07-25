@@ -71,6 +71,45 @@ Effects:
 - create activity event
 - optionally create acknowledgment assignments
 
+### Add Document (create a document and its original draft)
+
+The Add Document workflow launched from the Document Register creates a
+document identity and its first draft revision, optionally attaching the
+original file. It is a staged server sequence, not a single call:
+
+1. **Create the Record** — the document identity. The server generates the
+   record number; the browser never supplies one.
+2. **Create the initial draft Revision** — always revision number 1
+   (presented as "Original"), with the required initial change summary and an
+   optional revision label.
+3. **Upload the File** — only when the upload entry choice was used.
+4. **Navigate** to the created draft Revision workspace, only after every
+   required stage above has been confirmed by the server.
+
+Two entry choices exist and correspond to real domain outcomes: upload the
+original document (stages 1–3), or reserve a document identity for a later
+upload (stages 1–2). There is no template/library instantiation path, because
+no persisted project-document template relationship exists; selecting a Library
+master does not create a project Record.
+
+**Partial success is a first-class outcome.** Because the stages are separate
+server calls, any of them can fail after an earlier one succeeded. The workflow
+records which stages the server confirmed and never claims that nothing was
+created:
+
+- Record created, draft Revision failed — the document identity exists and is
+  usable. The user is shown the server error and request ID, told the document
+  exists (named when the server returned a number), and given a link to open
+  it. Retrying attempts only the Revision.
+- Record and draft Revision created, upload failed — both exist. The user is
+  shown the server error, the request ID, and the file name that was not
+  attached, and is given a link to open the draft Revision and retry the
+  upload. Retrying attempts only the upload.
+
+An ordinary retry must never create a duplicate Record or Revision. No record
+appears in the register before the server confirms it, and the register is
+refreshed from confirmed server data before navigation.
+
 ## 5. RFI workflow
 
 ### 5.1 States

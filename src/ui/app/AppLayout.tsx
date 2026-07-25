@@ -32,6 +32,7 @@ import { ShellProvider, type ShellBridge } from "./ShellContext";
 import { LegacyFeatureMount } from "./LegacyFeatureMount";
 import { RfiRegisterFeature } from "../features/rfis/RfiRegisterFeature";
 import { ProjectsRegisterFeature } from "../features/projects/ProjectsRegisterFeature";
+import { RecordsRegisterFeature } from "../features/records/RecordsRegisterFeature";
 import {
   LoadingState,
   SessionErrorState,
@@ -325,6 +326,13 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
         // The RFI workspace (route id "rfi-workspace") stays compatibility
         // mounted below until UI-7.
         content = <RfiRegisterFeature key={projectId} projectId={projectId} />;
+      } else if (route.id === "project-records") {
+        // The Document Register is native from UI-6B. The Record and Revision
+        // detail routes ("record-detail", "revision-detail") stay compatibility
+        // mounted below until UI-7.
+        content = (
+          <RecordsRegisterFeature key={projectId} projectId={projectId} />
+        );
       } else if (descriptor) {
         content = (
           <LegacyFeatureMount
