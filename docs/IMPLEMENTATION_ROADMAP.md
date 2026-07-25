@@ -45,12 +45,14 @@ Tabulator behavior spike
 → RFI register as a native React feature using a compact semantic table,
   dedicated mobile cards, and a shared responsive draft Drawer
 → Projects register + Create Project (UI-6A)
-→ Document Register + Add Document (UI-6B, after UI-6A review/merge)
-→ RFI/Record/Revision workspaces
+→ Document Register + Add Document (UI-6B)
+→ RFI/Record/Revision workspaces (UI-7)
 → Dashboard/forms/Team/Administration
 → Library and Studio controls
 → visual, accessibility, and drift enforcement
 ```
+
+**Status ownership.** The UI phases above are tracked in `UI_PROGRAM_STATUS.md` §6.1, which is their single source of truth; this document owns the status of the product delivery phases in §2–§8 below. Neither sequence gates the other, and neither document should restate the other's phase status as authoritative.
 
 This is a cross-cutting delivery program, not permission to pause official RFI workflow work indefinitely or to perform a broad rewrite. Each UI phase has an exit gate. Existing routes, APIs, renderer compatibility, domain invariants, tenant isolation, numbering, and official lifecycle authority remain binding.
 

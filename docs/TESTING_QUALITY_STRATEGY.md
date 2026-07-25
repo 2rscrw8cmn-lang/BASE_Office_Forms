@@ -325,7 +325,7 @@ each relevant role while retaining the list `data` array contract and legacy
 rollback tests. Deterministic evidence under `docs/evidence/ui-6a/` covers all
 required desktop/mobile and async/empty/error states.
 
-### 12A-iii. UI-6B Document Register coverage (implemented)
+### 12A-iii. UI-6B Document Register coverage (merged — `315de55`, PR #47)
 
 UI-6B adds 72 unit tests across three suites plus 2 shared `Drawer` tests.
 
