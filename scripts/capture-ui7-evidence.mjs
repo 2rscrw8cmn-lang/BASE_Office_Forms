@@ -389,10 +389,22 @@ await capture("rfi-workspace-desktop-validation-error.png", {
   query: `?route=${route(RFI)}&rfiWorkspaceScenario=validation-error`,
   expect: ".base-field__error, [role='alert']",
 });
-await capture("rfi-workspace-desktop-document-view.png", {
+await capture("rfi-workspace-desktop-document-view-unavailable.png", {
   ...DESKTOP,
   query: `?route=${route(RFI)}&rfiWorkspaceScenario=preview`,
-  expect: "[data-preview-unavailable], [data-rfi-preview]",
+  // No "Show document view" toggle is rendered in this state -- only the
+  // restrained, non-interactive note.
+  expect: "[data-preview-unavailable]",
+});
+await capture("rfi-workspace-desktop-long-content.png", {
+  ...DESKTOP,
+  query: `?route=${route(RFI)}&rfiWorkspaceFixture=long`,
+  expect: "[data-rfi-content-form]",
+});
+await capture("rfi-workspace-mobile-long-content.png", {
+  ...MOBILE,
+  query: `?route=${route(RFI)}&rfiWorkspaceFixture=long`,
+  expect: "[data-rfi-content-form]",
 });
 await capture("rfi-workspace-error.png", {
   ...DESKTOP,

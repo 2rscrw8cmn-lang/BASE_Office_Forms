@@ -1682,6 +1682,138 @@ checklist above. Do not merge without explicit approval. **UI-8 — Dashboard,
 Project Overview, remaining forms, Team, and Administration** is the next phase;
 its prompt is in `UI_AGENT_PROMPTS.md`.
 
+## 5H. UI-7 correction — RFI workspace layout (rail pattern)
+
+Same branch (`claude/ui-7-detail-workspaces`), same draft PR #48. This is a
+visual-review correction to §5G's delivery, not a new phase: no route, API,
+capability, or lifecycle rule changed.
+
+### What was wrong
+
+The native RFI workspace rendered as one full-width vertical form under a
+sparse full-width metadata strip — technically the §5G pattern, but a
+regression in information architecture against the legacy workspace's
+constrained main column plus compact context rail. On a wide desktop the
+overflow-actions button also sat detached at the far edge of the page, and an
+expandable "Document view" control could be opened only to reveal that the
+document view is unavailable — a dead end, not a feature.
+
+### What changed
+
+**`WorkspacePage` gained an opt-in `layout="rail"` mode**
+(`src/ui/components/patterns/WorkspacePage.tsx`), used only by the RFI
+workspace. `layout="stacked"` (the default) is byte-for-byte what §5G shipped,
+so the Record and Revision workspaces are unchanged. In rail mode:
+
+- breadcrumbs and the identity header stay full width, but the whole
+  workspace container is now width-capped (`.base-workspace--rail`), which is
+  what keeps the overflow-actions button near the title instead of stranded at
+  the edge of a wide viewport;
+- below the header, `notice` and `metadata` — the same props Record/Revision
+  already pass — move into a `.base-workspace__rail-top` column instead of a
+  full-width strip, sized to roughly 300–360px;
+- `children` (RFI content, files, response) sit in a `.base-workspace__body`
+  column capped at 720px, so text inputs and textareas no longer stretch
+  across the full desktop;
+- `secondary` (activity) stays in the same rail column, below rail-top, but
+  deliberately **not** sticky — only the compact facts+notice block is sticky
+  on desktop (`min-width:961px`), so a long activity feed can never be pinned
+  partly off-screen;
+- at ≤960px the grid collapses to one column in the same DOM order used at
+  every width — notice, metadata, content, files, response, then activity —
+  so mobile reading order never had to change, only which facts sit beside
+  the work on a wide screen.
+
+No new props were added to the Record or Revision workspace call sites, and no
+existing `WorkspacePage` prop changed meaning.
+
+**Document view no longer offers a dead-end control.**
+`RfiTemplatePreview.tsx` exports `templatePreviewAvailable(data)`; when the
+controlled renderer runtime is not present (unchanged from §5G — the
+authenticated app has never loaded it), `RfiWorkspaceFeature` renders the
+restrained "unavailable" sentence directly, with no "Show document view"
+toggle to click through to the same sentence. The interactive `Collapsible` +
+`RfiTemplatePreview` pair still renders exactly as before whenever a renderer
+runtime **is** present.
+
+**Fact-location rule, unchanged in substance, now proven against the rail.**
+While the RFI is an editable draft, Assigned to and Response due stay only in
+the editor; once read-only, they move into `.base-workspace__rail-top` — the
+same rule §5G shipped, now asserted against the rail's own container rather
+than only against `.base-workspace__metadata` in isolation.
+
+**`ButtonLink` modifier-click correction.** Four in-app navigation call sites
+in `RecordWorkspaceFeature.tsx` (`Open draft revision` / `View current
+version` / `Open revision` / the empty-state upload CTA) called
+`event.preventDefault()` unconditionally before routing through
+`shell.navigate`, which broke ctrl/cmd/shift/alt-click and middle-click —
+those must open a new tab, not be hijacked into the current one. Fixed with a
+shared `isPlainLeftClick(event)` guard
+(`src/ui/components/util/isPlainLeftClick.ts`, also adopted by `AppLink`,
+which already had the correct guard inline): the four sites now call
+`preventDefault`/`navigate` only for an unmodified left click, matching
+`AppLink`'s existing contract. `ButtonLink` itself (the primitive) was already
+a real anchor with no `onClick` of its own — the bug was only in how these
+four call sites used it, not in the primitive.
+
+### Evidence and tests added
+
+`scripts/capture-ui7-evidence.mjs` grew from 27 to 29 captures: a new
+`rfiWorkspaceFixture=long` fixture (a multi-line subject, a three-paragraph
+question, and an eight-event activity list) captured at 1280px and 390px to
+stress-test the constrained main column and the non-sticky activity rail
+under worst-case content, and the `document-view` capture was renamed to
+`rfi-workspace-desktop-document-view-unavailable.png` with its scenario
+updated to assert no toggle is rendered at all (previously it clicked a
+toggle that no longer exists in the unavailable state).
+
+Unit tests grew from 151 to **159** across the same six suites (net +8, all
+in three files):
+
+- `rfi-workspace-react` (26 → 31): a new "RFI workspace — rail layout"
+  block (rail/grid structure present; editable-draft facts absent from the
+  rail; read-only facts present in the rail; activity confined to
+  `.base-workspace__secondary`, never `.base-workspace__body`), plus
+  replacing the old single document-view test with one proving the
+  no-renderer state has no `Show document view` button and one proving the
+  interactive Collapsible still works once a `globalThis.BASE` runtime is
+  mocked;
+- `record-workspace-react` (21 → 23): a new "Record workspace — navigation
+  safety" block proving a plain click on the primary action navigates through
+  the shell, and a ctrl-clicked primary action leaves `defaultPrevented`
+  `false` and never calls `shell.navigate`;
+- `workspace-accessibility` (12 → 13): the existing keyboard-operable
+  Collapsible test now mocks a renderer runtime (since that state requires
+  one to exist at all), and a new test asserts the unavailable-state note has
+  no interactive descendant (`button, a, [tabindex]`).
+
+No test for horizontal overflow at rail breakpoints was added to the unit
+suite: `happy-dom` has no real layout engine, so `scrollWidth` assertions
+there would be meaningless. The enforceable check is
+`scripts/capture-ui7-evidence.mjs`'s existing per-capture assertion that
+`document.documentElement.scrollWidth` never exceeds the claimed CSS viewport,
+which now also runs against the new long-content fixture at 390px.
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **728 unit tests**, **120 Worker integration tests**, the Vite
+production build, static-asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan.
+
+### Known limitation, unchanged
+
+Screenshots still cannot be produced in this environment — no Chrome/Chromium
+binary is present, exactly as in §5G. The evidence bundle continues to build
+successfully; `npm run evidence:ui7` must be run on a machine with Chrome to
+populate `docs/evidence/ui-7/`, including the two new long-content captures.
+
+### Next recommended action
+
+Review this correction alongside §5G on PR #48, run `npm run evidence:ui7` on
+a machine with Chrome, and complete the §5G product-owner smoke checklist
+(its "Mobile (390 px)" step now also exercises the long-content fixture via
+the rail layout). Do not merge without explicit approval. UI-8 remains the
+next phase after merge, unchanged from §5G.
+
 ## 6. Phase status
 
 Two different programs are tracked in this repository, and they must not be

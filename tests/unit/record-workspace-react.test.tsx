@@ -451,6 +451,39 @@ describe("Record workspace — record workflows", () => {
   });
 });
 
+describe("Record workspace — navigation safety", () => {
+  it("navigates through the shell on a plain click of the primary action", async () => {
+    installWorkspaceFetch();
+    const { navigations } = render();
+    await waitForWorkspace();
+
+    const primary = screen.getByRole("link", { name: "View current version" });
+    await userEvent.click(primary);
+    expect(navigations).toEqual([
+      `/projects/${PROJECT_ID}/records/${RECORD_ID}/revisions/revision-1`,
+    ]);
+  });
+
+  it("leaves a modifier-clicked primary action to native browser behaviour", async () => {
+    installWorkspaceFetch();
+    const { navigations } = render();
+    await waitForWorkspace();
+
+    const primary = screen.getByRole("link", { name: "View current version" });
+    const modifierClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+    });
+    primary.dispatchEvent(modifierClick);
+
+    // Ctrl/cmd/shift/alt-click and middle-click must open a new tab, not be
+    // hijacked into an in-app navigation the browser never gets to see.
+    expect(modifierClick.defaultPrevented).toBe(false);
+    expect(navigations).toEqual([]);
+  });
+});
+
 describe("Record workspace — async states", () => {
   it("shows a loading state before the workspace resolves", async () => {
     const release: { current: ((value: Response) => void) | null } = {

@@ -37,6 +37,7 @@ import {
 } from "../../components";
 import { useShell } from "../../app/ShellContext";
 import { AppLink } from "../../app/AppLink";
+import { isPlainLeftClick } from "../../components/util/isPlainLeftClick";
 import {
   ArchiveRecordDialog,
   CreateRevisionDialog,
@@ -182,6 +183,7 @@ export function RecordWorkspaceFeature({
         href={revisionHref(singleDraft.id)}
         data-primary-action
         onClick={(event) => {
+          if (!isPlainLeftClick(event)) return;
           event.preventDefault();
           shell.navigate(revisionHref(singleDraft.id));
         }}
@@ -198,6 +200,7 @@ export function RecordWorkspaceFeature({
         href={revisionHref(current.id)}
         data-primary-action
         onClick={(event) => {
+          if (!isPlainLeftClick(event)) return;
           event.preventDefault();
           shell.navigate(revisionHref(current.id));
         }}
@@ -301,6 +304,7 @@ export function RecordWorkspaceFeature({
               href={revisionHref(revision.id)}
               data-open-revision={revision.id}
               onClick={(event) => {
+                if (!isPlainLeftClick(event)) return;
                 event.preventDefault();
                 shell.navigate(revisionHref(revision.id));
               }}
@@ -360,6 +364,7 @@ export function RecordWorkspaceFeature({
                 href={revisionHref(revision.id)}
                 data-upload-cta={revision.id}
                 onClick={(event) => {
+                  if (!isPlainLeftClick(event)) return;
                   event.preventDefault();
                   shell.navigate(revisionHref(revision.id));
                 }}

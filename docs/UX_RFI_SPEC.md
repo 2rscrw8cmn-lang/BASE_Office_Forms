@@ -134,6 +134,17 @@ until it is asked for. While a user may edit the draft, Assigned to and Response
 due appear in the editor and not also in the metadata strip, so each fact keeps
 one authoritative location.
 
+**Desktop spatial correction (§5H).** On desktop the page is not one
+full-width stacked form: content, files, and response sit in a constrained
+main column, while status, number, current version, file count, updated/issued
+dates, and any lifecycle notice sit together in a compact context rail
+alongside it, with activity below them in the same rail. The rail is sticky
+only for the compact facts, never for activity, so a long history can never be
+pinned partly off-screen. Below ~960px the page collapses to one column in the
+same reading order (notice, metadata, content, files, response, activity), so
+nothing about the content model above changes — only where each part sits on
+a wide screen.
+
 Structure:
 
 - **Header**: RFI Number or "Unnumbered Draft", Subject, project identity,

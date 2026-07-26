@@ -133,6 +133,10 @@
 
 /* ---- Document view ------------------------------------------------------ */
 
+.rfi-workspace-preview-note {
+  margin: 0;
+}
+
 .rfi-workspace-preview {
   display: flex;
   flex-direction: column;

@@ -533,6 +533,19 @@ than saves; and issuance is still not exposed. See `UI_PROGRAM_STATUS.md` §5G.
    offering a retry, so an operator decides against confirmed server truth and a
    repeat attempt cannot duplicate server state. This extends the UI-6B staged
    Add Document rule to single-stage work.
+4. *A shared page pattern needs a layout escape hatch, not a fork.* The RFI
+   workspace's initial full-width stacked form was a visual-review regression
+   against the legacy workspace's constrained-column-plus-rail layout. Rather
+   than forking a second detail-page component, `WorkspacePage` gained one
+   opt-in `layout="rail"` mode that repositions the same `notice`/`metadata`/
+   `secondary` props into a context rail; `layout="stacked"` (default) stayed
+   byte-for-byte what Record/Revision already used. See §5H in
+   `UI_PROGRAM_STATUS.md`.
+5. *An expandable control must not be able to open onto "unavailable."* The
+   Document view toggle opened even when the renderer runtime was absent, so it
+   could only ever reveal the same "not loaded" sentence — a dead end
+   disguised as a feature. The fix checks availability before deciding whether
+   to render the toggle at all, not inside the toggle's content.
 
 ### Exit gate
 

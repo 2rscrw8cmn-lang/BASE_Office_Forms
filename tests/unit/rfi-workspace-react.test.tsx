@@ -242,6 +242,85 @@ describe("RFI workspace — content and concurrency", () => {
   });
 });
 
+describe("RFI workspace — rail layout", () => {
+  it("renders the shared workspace in the rail layout, beside a constrained main column", async () => {
+    installWorkspaceFetch();
+    render();
+    await waitForWorkspace();
+
+    expect(root()).toHaveClass("base-workspace--rail");
+    const grid = root().querySelector(".base-workspace__grid");
+    expect(grid).not.toBeNull();
+    // Rail-top (facts + any lifecycle notice), main body, and secondary
+    // (activity) are three siblings inside the same grid -- not a full-width
+    // strip above a full-width column, the pattern this correction replaces.
+    expect(
+      grid?.querySelector(":scope > .base-workspace__rail-top"),
+    ).not.toBeNull();
+    expect(
+      grid?.querySelector(":scope > .base-workspace__body"),
+    ).not.toBeNull();
+    expect(
+      grid?.querySelector(":scope > .base-workspace__secondary"),
+    ).not.toBeNull();
+  });
+
+  it("keeps editable-draft facts only in the editor, never duplicated into the context rail", async () => {
+    installWorkspaceFetch();
+    render();
+    await waitForWorkspace();
+
+    const railTop = root().querySelector(".base-workspace__rail-top");
+    expect(railTop?.textContent).not.toContain("Assigned to");
+    expect(railTop?.textContent).not.toContain("Response due");
+    expect(screen.getByLabelText(/Assigned to/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Response due/)).toBeInTheDocument();
+  });
+
+  it("shows routing facts in the context rail once the RFI is read-only", async () => {
+    installWorkspaceFetch({
+      rfi: rfiWorkspace({
+        rfi: { rfiNumber: "RFI-014", status: "open" },
+        capabilities: { updateDraft: false },
+      }),
+    });
+    render();
+    await waitForWorkspace();
+
+    // The editor is gone, so Assigned to / Response due move into the rail --
+    // their only remaining authoritative location.
+    expect(screen.queryByLabelText(/Assigned to/)).toBeNull();
+    const railTop = root().querySelector(".base-workspace__rail-top");
+    expect(railTop?.textContent).toContain("Assigned to");
+    expect(railTop?.textContent).toContain("Response due");
+  });
+
+  it("keeps activity in the secondary rail context, never mixed into the main work column", async () => {
+    installWorkspaceFetch({
+      rfi: rfiWorkspace({
+        activity: [
+          {
+            action: "rfi.created",
+            actorType: "user",
+            actorDisplayName: "Dana PM",
+            createdAt: "2026-07-01T09:00:00Z",
+            changedFields: [],
+            role: null,
+          },
+        ],
+      }),
+    });
+    render();
+    await waitForWorkspace();
+
+    const body = root().querySelector(".base-workspace__body");
+    const secondary = root().querySelector(".base-workspace__secondary");
+    expect(body?.querySelector(".base-activity")).toBeNull();
+    expect(secondary?.querySelector(".base-activity")).not.toBeNull();
+    expect(secondary?.textContent).toContain("RFI drafted");
+  });
+});
+
 describe("RFI workspace — files", () => {
   it("shows each file's explicit role and exact draft revision", async () => {
     installWorkspaceFetch({
@@ -488,17 +567,57 @@ describe("RFI workspace — lifecycle and issuance", () => {
 });
 
 describe("RFI workspace — document view and activity", () => {
-  it("reports the document view honestly when the renderer is not loaded", async () => {
+  it("never offers a document view control that can only report itself unavailable", async () => {
     installWorkspaceFetch();
     render();
     await waitForWorkspace();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Show document view/ }),
-    );
+    // No renderer runtime is loaded in this test environment, so the note is
+    // shown directly -- not behind a "Show document view" toggle that would
+    // only ever open onto the same sentence.
+    expect(
+      screen.queryByRole("button", { name: /Show document view/ }),
+    ).toBeNull();
     expect(
       await screen.findByText(/controlled renderer is not loaded/),
     ).toBeInTheDocument();
+  });
+
+  it("offers the real, keyboard-operable document view once a renderer runtime is present", async () => {
+    const base = globalThis as { BASE?: unknown };
+    const previousBase = base.BASE;
+    base.BASE = {
+      render: () => '<div data-mock-preview="1">Bound document</div>',
+    };
+    try {
+      installWorkspaceFetch({
+        rfi: rfiWorkspace({
+          template: {
+            templateVersionId: "tv-1",
+            key: "rfi",
+            name: "RFI Template",
+            versionNumber: 1,
+            definition: {},
+          },
+        }),
+      });
+      render();
+      await waitForWorkspace();
+
+      const toggle = screen.getByRole("button", {
+        name: /Show document view/,
+      });
+      expect(
+        screen.queryByText(/controlled renderer is not loaded/),
+      ).toBeNull();
+      await userEvent.click(toggle);
+      await waitFor(() => {
+        expect(root().querySelector("[data-mock-preview]")).not.toBeNull();
+      });
+    } finally {
+      if (previousBase === undefined) delete base.BASE;
+      else base.BASE = previousBase;
+    }
   });
 
   it("renders only mapped activity labels and structured details", async () => {

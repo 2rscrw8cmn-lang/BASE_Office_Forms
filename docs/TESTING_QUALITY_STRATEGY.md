@@ -465,6 +465,52 @@ suites) were updated because their fixture route is no longer
 compatibility-mounted; they exercise the same shell behaviour through
 `project-overview`/`dashboard` or assert the native workspace.
 
+### 12A-v. UI-7 RFI workspace layout correction
+
+A follow-up correction (§5G/§5H in `UI_PROGRAM_STATUS.md`) replaced the RFI
+workspace's full-width stacked layout with an opt-in `WorkspacePage`
+`layout="rail"` mode and closed a dead-end "Document view" control and a
+`ButtonLink` modifier-click bug. It grows three of the six suites above by 8
+tests (151 → 159):
+
+`rfi-workspace-react.test.tsx` (26 → 31) adds an "RFI workspace — rail
+layout" block: the workspace renders `.base-workspace--rail` with a
+`.base-workspace__grid` containing `.base-workspace__rail-top`,
+`.base-workspace__body`, and `.base-workspace__secondary` as siblings;
+editable-draft facts (Assigned to, Response due) are absent from
+`.base-workspace__rail-top`; the same facts appear there once the RFI is
+read-only; and activity renders inside `.base-workspace__secondary`, never
+`.base-workspace__body`. The prior single "document view" test is now two:
+one proving the no-renderer state renders no `Show document view` button at
+all (only the restrained note), and one proving the interactive
+`Collapsible` still opens and reports `aria-expanded` correctly once a
+`globalThis.BASE` renderer runtime is mocked.
+
+`record-workspace-react.test.tsx` (21 → 23) adds a "Record workspace —
+navigation safety" block: a plain click on the primary action's `ButtonLink`
+navigates through the shell, while a ctrl-clicked primary action leaves the
+native `MouseEvent.defaultPrevented` `false` and never calls `shell.navigate`
+— the regression check for the modifier-click fix, following the same
+pattern already used by `projects-register-react.test.tsx`.
+
+`workspace-accessibility.test.tsx` (12 → 13): the existing keyboard-operable
+Collapsible test now mocks a renderer runtime (the interactive control no
+longer exists without one), and a new test asserts the renderer-unavailable
+note has no interactive descendant (`button, a, [tabindex]`) — a control that
+can only report itself unavailable must not be focusable at all.
+
+`scripts/capture-ui7-evidence.mjs` grew from 27 to 29 captures: a
+`rfiWorkspaceFixture=long` fixture (long subject, three-paragraph question,
+eight-event activity list) captured at 1280px and 390px, exercising the
+constrained main column and the non-sticky activity rail under worst-case
+content; and the document-view capture's scenario was updated to assert no
+toggle exists in the unavailable state, rather than clicking one that no
+longer renders. `happy-dom` has no real layout engine, so the CSS
+grid/rail breakpoints and the "no horizontal overflow" requirement are
+verified by this capture script's existing `scrollWidth` assertion, not by a
+new unit test — a `document.documentElement.scrollWidth` check under
+`happy-dom` would not reflect real layout.
+
 ### 12B. RFI Slice 1 reconciliation evidence
 
 Before production approval, run the guarded remote rehearsal in

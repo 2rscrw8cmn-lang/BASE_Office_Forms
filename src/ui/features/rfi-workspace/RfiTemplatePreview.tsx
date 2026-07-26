@@ -65,6 +65,16 @@ function boundValues(data: RfiWorkspaceModel): Record<string, string | null> {
   };
 }
 
+/**
+ * Whether the template-bound document view has anything to show. The feature
+ * checks this before deciding whether to offer the "Show document view"
+ * control at all -- an expandable control that can only report "unavailable"
+ * once opened is a dead end, not a real feature.
+ */
+export function templatePreviewAvailable(data: RfiWorkspaceModel): boolean {
+  return rendererRuntime() !== null && data.template !== null;
+}
+
 export function RfiTemplatePreview({ data }: { data: RfiWorkspaceModel }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtime = rendererRuntime();

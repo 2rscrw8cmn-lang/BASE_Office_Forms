@@ -1502,6 +1502,72 @@
   color: var(--app-text-muted);
 }
 
+/* ---- rail layout (WorkspacePage layout="rail") --------------------------
+ * A constrained main column beside a ~320-360px context rail, instead of a
+ * full-width metadata strip over a full-width content column. Capping the
+ * whole workspace's width (not just the grid) keeps the identity header's
+ * overflow action near the title on a wide viewport, since the header shares
+ * this same container.
+ */
+.base-workspace--rail {
+  max-width: 1120px;
+}
+
+.base-workspace__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: start;
+  column-gap: var(--app-space-6);
+  row-gap: var(--app-space-4);
+}
+
+.base-workspace__grid .base-workspace__rail-top {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+.base-workspace__grid .base-workspace__body {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.base-workspace__grid .base-workspace__secondary {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
+@media (min-width: 961px) {
+  /* Sticks the compact facts, never the (potentially long) activity feed
+   * below it -- that stays in normal flow so its tail is never pinned
+   * out of reach. Offset clears the shell's fixed 56px header. */
+  .base-workspace__grid .base-workspace__rail-top {
+    position: sticky;
+    top: calc(56px + var(--app-space-4));
+  }
+}
+
+@media (max-width: 960px) {
+  .base-workspace__grid {
+    display: block;
+  }
+
+  .base-workspace__grid .base-workspace__rail-top {
+    margin-bottom: var(--app-space-5);
+  }
+
+  .base-workspace__grid .base-workspace__body {
+    max-width: none;
+    margin-bottom: var(--app-space-5);
+  }
+}
+
 @media (max-width: 760px) {
   .base-workspace__identity {
     flex-direction: column;

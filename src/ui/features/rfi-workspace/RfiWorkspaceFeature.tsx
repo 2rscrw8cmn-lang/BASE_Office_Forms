@@ -42,7 +42,10 @@ import { useShell } from "../../app/ShellContext";
 import { RfiAttachmentsPanel, attachmentList } from "./RfiAttachmentsPanel";
 import { RfiContentPanel } from "./RfiContentPanel";
 import { RfiResponsePanel, shouldShowResponse } from "./RfiResponsePanel";
-import { RfiTemplatePreview } from "./RfiTemplatePreview";
+import {
+  RfiTemplatePreview,
+  templatePreviewAvailable,
+} from "./RfiTemplatePreview";
 import { rfiRegisterHref, runRfiTransition, RfiWorkspaceApiError } from "./api";
 import {
   actorLabel,
@@ -325,6 +328,7 @@ export function RfiWorkspaceFeature({
     <>
       <WorkspacePage
         className="rfi-workspace"
+        layout="rail"
         status="ready"
         breadcrumbs={[
           { label: "RFIs", href: registerHref },
@@ -385,19 +389,32 @@ export function RfiWorkspaceFeature({
         metadata={metadata}
         secondary={
           <>
-            <WorkspaceSection
-              secondary
-              headingLevel={3}
-              title="Document view"
-              description="A read-only rendering of this RFI through its bound template."
-            >
-              <Collapsible
-                title="Show document view"
-                className="rfi-workspace-preview-toggle"
+            {templatePreviewAvailable(data) ? (
+              <WorkspaceSection
+                secondary
+                headingLevel={3}
+                title="Document view"
+                description="A read-only rendering of this RFI through its bound template."
               >
-                <RfiTemplatePreview data={data} />
-              </Collapsible>
-            </WorkspaceSection>
+                <Collapsible
+                  title="Show document view"
+                  className="rfi-workspace-preview-toggle"
+                >
+                  <RfiTemplatePreview data={data} />
+                </Collapsible>
+              </WorkspaceSection>
+            ) : (
+              // No expandable control here: it could only ever open onto an
+              // "unavailable" message, which is a dead end, not a feature.
+              <p
+                className="rfi-workspace-empty-value rfi-workspace-preview-note"
+                data-preview-unavailable
+              >
+                The controlled renderer is not loaded in the application
+                workspace, so the template-bound document view is unavailable
+                here. The RFI content above is the authoritative record.
+              </p>
+            )}
             <WorkspaceSection
               secondary
               headingLevel={3}

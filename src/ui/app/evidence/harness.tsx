@@ -510,8 +510,17 @@ const RFI_ATTACHMENTS = [
   },
 ];
 
+const LONG_RFI_SUBJECT =
+  "Resolve conflicting ceiling height, duct clearance, acoustic soffit, and sprinkler head layout requirements across the second-floor corridor between grid lines C and G, including coordination with the adjacent classroom wing";
+const LONG_RFI_QUESTION = [
+  "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run -- please confirm which elevation governs.",
+  "In addition, the sprinkler shop drawings (F-201) show heads centered on a 4'-0\" grid that conflicts with the soffit return at three locations near column lines D and F; if the soffit governs, those heads will need to be relocated and the fire-protection engineer will need to reissue calculations for the affected zone.",
+  "Please also confirm whether the acoustic treatment above the soffit needs to extend into the adjacent classroom wing, since the existing RCP only shows it terminating at the corridor line and the specification section referenced below implies continuous treatment across the corridor-to-classroom transition.",
+].join(" ");
+
 function currentRfiWorkspace() {
-  const issued = rfiWorkspaceFixture !== "draft";
+  const long = rfiWorkspaceFixture === "long";
+  const issued = rfiWorkspaceFixture !== "draft" && !long;
   const legacy = rfiWorkspaceFixture === "legacy";
   const responded = rfiWorkspaceFixture === "responded";
   return {
@@ -520,13 +529,17 @@ function currentRfiWorkspace() {
       rfiNumber: issued ? "RFI-014" : null,
       legacyReference: null,
       status: responded ? "response_received" : issued ? "open" : "draft",
-      subject:
-        "Resolve conflicting ceiling height requirements at the second-floor corridor",
-      question:
-        "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run — please confirm which elevation governs.",
+      subject: long
+        ? LONG_RFI_SUBJECT
+        : "Resolve conflicting ceiling height requirements at the second-floor corridor",
+      question: long
+        ? LONG_RFI_QUESTION
+        : "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run — please confirm which elevation governs.",
       contractorSuggestion:
         "Hold the acoustic soffit at 8'-6\" and reroute the duct above the adjacent classroom.",
-      drawingReferences: "A2.31, A2.32, M4.02",
+      drawingReferences: long
+        ? "A2.31, A2.32, A2.33, M4.02, M4.03, F-201, F-202"
+        : "A2.31, A2.32, M4.02",
       specificationReferences: "09 51 13, 23 31 13",
       responsibleParty: RFI_CONTACT.name,
       responsiblePartyId: RFI_CONTACT.id,
@@ -586,32 +599,99 @@ function currentRfiWorkspace() {
           },
         ]
       : [],
-    activity: [
-      {
-        action: "rfi.created",
-        actorType: "user",
-        actorDisplayName: "Dana Project Manager",
-        createdAt: "2026-07-01T09:00:00Z",
-        changedFields: [],
-        role: null,
-      },
-      {
-        action: "rfi.attachment_added",
-        actorType: "user",
-        actorDisplayName: "Dana Project Manager",
-        createdAt: "2026-07-19T10:30:00Z",
-        changedFields: [],
-        role: "reference_drawing",
-      },
-      {
-        action: "rfi.updated",
-        actorType: "user",
-        actorDisplayName: "Dana Project Manager",
-        createdAt: "2026-07-22T09:00:00Z",
-        changedFields: ["subject", "requestedResponseDate"],
-        role: null,
-      },
-    ],
+    activity: long
+      ? [
+          {
+            action: "rfi.created",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-01T09:00:00Z",
+            changedFields: [],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-02T11:15:00Z",
+            changedFields: [],
+            role: "supporting_attachment",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-05T09:00:00Z",
+            changedFields: ["question", "drawingReferences"],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-08T14:45:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "system",
+            actorDisplayName: null,
+            createdAt: "2026-07-12T09:00:00Z",
+            changedFields: ["requestedResponseDate"],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-15T10:30:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-19T10:30:00Z",
+            changedFields: ["subject"],
+            role: null,
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-22T09:00:00Z",
+            changedFields: ["subject", "requestedResponseDate"],
+            role: null,
+          },
+        ]
+      : [
+          {
+            action: "rfi.created",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-01T09:00:00Z",
+            changedFields: [],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-19T10:30:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-22T09:00:00Z",
+            changedFields: ["subject", "requestedResponseDate"],
+            role: null,
+          },
+        ],
     capabilities: {
       updateDraft: !issued,
       uploadAttachment: !issued,
@@ -1312,11 +1392,10 @@ async function runRfiWorkspaceScenario() {
   if (rfiWorkspaceScenario === "none") return;
 
   if (rfiWorkspaceScenario === "preview") {
-    const toggle = (await waitForSelector(
-      ".rfi-workspace-preview-toggle .base-collapsible__trigger",
-    )) as HTMLButtonElement;
-    toggle.click();
-    await waitForSelector("[data-preview-unavailable], [data-rfi-preview]");
+    // This dev harness never loads a renderer runtime, matching the
+    // authenticated app -- so the document-view note renders directly, with
+    // no "Show document view" toggle to click through to a dead end.
+    await waitForSelector("[data-preview-unavailable]");
     return;
   }
 

@@ -8,6 +8,7 @@
 import type { AnchorHTMLAttributes, MouseEvent } from "react";
 import { useShell } from "./ShellContext";
 import { cx } from "../components/util/cx";
+import { isPlainLeftClick } from "../components/util/isPlainLeftClick";
 
 export function AppLink({
   href,
@@ -20,14 +21,7 @@ export function AppLink({
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
+    if (!isPlainLeftClick(event)) {
       return;
     }
     event.preventDefault();

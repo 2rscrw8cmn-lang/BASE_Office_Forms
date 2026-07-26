@@ -34,6 +34,23 @@ export interface WorkspacePageProps {
   missing?: ReactNode;
   error?: ReactNode;
   className?: string;
+  /**
+   * `"stacked"` (default) keeps the original full-width metadata strip above a
+   * single content column, unchanged.
+   *
+   * `"rail"` keeps breadcrumbs and the identity header full width, then splits
+   * everything below into a constrained main column (`children`) and a
+   * ~320-360px context rail carrying `notice`, `metadata`, and `secondary` --
+   * so quick facts and activity sit beside the work instead of stretching a
+   * form across the whole viewport. `notice` and `metadata` stay together at
+   * the top of the rail (sticky on desktop, since together they stay short);
+   * `secondary` (activity) stays in normal flow below them, since it can grow
+   * long and must not be pinned off-screen. Collapses to one column on
+   * narrower viewports, in the same notice/metadata/content/secondary order as
+   * the stacked layout, so reading order never changes -- only which facts
+   * visually sit beside the work on a wide screen.
+   */
+  layout?: "stacked" | "rail";
 }
 
 /**
@@ -65,9 +82,19 @@ export function WorkspacePage({
   missing,
   error,
   className,
+  layout = "stacked",
 }: WorkspacePageProps) {
+  const rail = layout === "rail";
+  const hasRailTop = notice != null || (metadata && metadata.length > 0);
   return (
-    <div className={cx("base-workspace", className)} data-status={status}>
+    <div
+      className={cx(
+        "base-workspace",
+        rail && "base-workspace--rail",
+        className,
+      )}
+      data-status={status}
+    >
       <Breadcrumbs items={breadcrumbs} />
       {status === "loading" ? (
         <div className="base-workspace__loading" aria-busy="true">
@@ -98,17 +125,39 @@ export function WorkspacePage({
               </div>
             ) : null}
           </header>
-          {notice}
-          {metadata && metadata.length > 0 ? (
-            <MetadataStrip
-              items={metadata}
-              className="base-workspace__metadata"
-            />
-          ) : null}
-          <div className="base-workspace__body">{children}</div>
-          {secondary != null ? (
-            <div className="base-workspace__secondary">{secondary}</div>
-          ) : null}
+          {rail ? (
+            <div className="base-workspace__grid">
+              {hasRailTop ? (
+                <div className="base-workspace__rail-top">
+                  {notice}
+                  {metadata && metadata.length > 0 ? (
+                    <MetadataStrip
+                      items={metadata}
+                      className="base-workspace__metadata"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="base-workspace__body">{children}</div>
+              {secondary != null ? (
+                <div className="base-workspace__secondary">{secondary}</div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              {notice}
+              {metadata && metadata.length > 0 ? (
+                <MetadataStrip
+                  items={metadata}
+                  className="base-workspace__metadata"
+                />
+              ) : null}
+              <div className="base-workspace__body">{children}</div>
+              {secondary != null ? (
+                <div className="base-workspace__secondary">{secondary}</div>
+              ) : null}
+            </>
+          )}
         </>
       ) : null}
     </div>

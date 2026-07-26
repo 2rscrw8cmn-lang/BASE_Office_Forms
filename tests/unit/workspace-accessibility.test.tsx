@@ -23,6 +23,7 @@ import {
   renderWorkspace,
   revision,
   revisionWorkspace,
+  rfiWorkspace,
 } from "../helpers/workspace-harness";
 
 const originalFetch = globalThis.fetch;
@@ -200,18 +201,52 @@ describe("Workspace accessibility — keyboard and focus", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("keeps the document view keyboard-operable through the shared collapsible", async () => {
+  it("keeps the document view keyboard-operable through the shared collapsible when a renderer is present", async () => {
+    const base = globalThis as { BASE?: unknown };
+    const previousBase = base.BASE;
+    base.BASE = { render: () => '<div data-mock-preview="1"></div>' };
+    try {
+      installWorkspaceFetch({
+        rfi: rfiWorkspace({
+          template: {
+            templateVersionId: "tv-1",
+            key: "rfi",
+            name: "RFI Template",
+            versionNumber: 1,
+            definition: {},
+          },
+        }),
+      });
+      renderRfi();
+      await ready(".rfi-workspace");
+
+      const toggle = screen.getByRole("button", {
+        name: /Show document view/,
+      });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      toggle.focus();
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => {
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+      });
+    } finally {
+      if (previousBase === undefined) delete base.BASE;
+      else base.BASE = previousBase;
+    }
+  });
+
+  it("gives the renderer-unavailable document view note no interactive control at all", async () => {
     installWorkspaceFetch();
     renderRfi();
     await ready(".rfi-workspace");
 
-    const toggle = screen.getByRole("button", { name: /Show document view/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    toggle.focus();
-    await userEvent.keyboard("{Enter}");
-    await waitFor(() => {
-      expect(toggle).toHaveAttribute("aria-expanded", "true");
-    });
+    expect(
+      screen.queryByRole("button", { name: /Show document view/ }),
+    ).toBeNull();
+    const note = document.querySelector("[data-preview-unavailable]");
+    expect(note).not.toBeNull();
+    expect(note?.tagName).toBe("P");
+    expect(note?.querySelector("button, a, [tabindex]")).toBeNull();
   });
 });
 
