@@ -228,7 +228,7 @@ UX/testing docs, and the PR body.
 
 ## Prompt UI-7 — Detail workspaces
 
-**Status: implemented** on `claude/ui-7-detail-workspaces` (no PR opened yet).
+**Status: implemented** on `claude/ui-7-detail-workspaces` (draft PR #48).
 See `docs/UI_PROGRAM_STATUS.md` §5G. The prompt below is retained as the phase's
 specification of record.
 

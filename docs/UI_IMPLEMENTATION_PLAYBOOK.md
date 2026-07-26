@@ -27,7 +27,7 @@ UI-4     React application shell and route parity
 UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45 merged]
 UI-6A    Projects register + Create Project workflow          [complete: PR #46 merged]
 UI-6B    Document Register + Add Document workflow            [complete: PR #47 merged, main 315de55]
-UI-7     RFI, Record, and Revision workspaces                 [implemented: branch claude/ui-7-detail-workspaces]
+UI-7     RFI, Record, and Revision workspaces                 [implemented: draft PR #48]
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
 UI-10    Drift prevention, E2E, visual regression, and cleanup
