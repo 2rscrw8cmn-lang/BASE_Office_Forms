@@ -4,7 +4,7 @@
 **Current phase:** UI-6B is merged to `main` (`315de55`). UI-7 detail
 workspaces are proceeding separately; RFI Slice 2A is implementing the
 independent official-issuance backend contract.
-**Active branch/PR:** `feature/rfi-slice-2a-official-issuance` (draft PR
+**Active branch/PR:** `feature/rfi-slice-2a-official-issuance` (draft PR #49
 against `main`; do not merge from this task). Discovery found no open UI-7 PR;
 the local `claude/ui-7-detail-workspaces` branch contains documentation-only
 work and is not the base of this branch.
