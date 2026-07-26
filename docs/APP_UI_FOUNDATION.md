@@ -256,6 +256,9 @@ Controls, block cards, settings groups, save state, menus, and dialogs use the a
 ### 6.1 Primitives
 
 - Button
+- ButtonLink (a real anchor wearing the Button appearance, for destinations
+  such as an authenticated download; features never assemble button classes
+  onto an `<a>` themselves)
 - IconButton
 - TextInput
 - TextArea
@@ -304,6 +307,9 @@ Radix may provide behavior, but BASE owns the rendered styling and component con
 - ErrorState
 - PermissionState
 - FormDialog
+- WorkspacePage (with WorkspaceNotice) — the detail-route counterpart to
+  RegisterPage; owns the §5.2 hierarchy and its loading/ready/missing/error
+  states so a workspace never rebuilds them
 - WorkspaceSection
 - Breadcrumbs
 

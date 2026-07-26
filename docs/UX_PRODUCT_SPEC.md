@@ -473,6 +473,16 @@ Record metadata and revision metadata must never share an unlabeled definition l
 
 **Desktop file presentation:** Use a compact semantic table within the exact `RevisionPanel`: selection checkbox when issuance-eligible, filename, media type, formatted size, uploaded by/time, and actions. The selection header says **Select files from this revision**. Selection cannot span revisions.
 
+> **UI-7 implementation note.** This section predates the UI-3 component
+> library. The native Record and Revision workspaces render files through the
+> shared `FileRow` pattern instead of a feature-owned table: it carries the same
+> facts (filename, readable media type, formatted size, upload time, and one
+> labelled action), reflows on mobile without a second card system, and keeps
+> file presentation identical wherever a revision's files appear. No selection
+> affordance is rendered because issuance selection is not enabled; when
+> issuance lands, selection is added to `FileRow` rather than by reintroducing a
+> separate table.
+
 **Mobile file presentation:** Use `FileCard` items inside the revision panel. Put the checkbox, filename, media type/size, upload metadata, and a labeled action menu in a 44 px touch layout. A sticky bottom action may show **Issue revision (3 files)** after selection, but it must not obscure content or safe areas.
 
 **File actions:**

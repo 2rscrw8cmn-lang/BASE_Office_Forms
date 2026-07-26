@@ -225,13 +225,18 @@ describe("React application shell", () => {
 
   describe("project context and tabs", () => {
     it("renders real project identity and selects the parent tab for descendants", async () => {
-      const { runtime, mounts } = makeRuntime();
+      const { runtime } = makeRuntime();
       installFetch({
         session: () => READY_SESSION(),
         project: READY_PROJECT,
       });
+      // A record descendant route. Its content is the native UI-7 Record
+      // workspace; what this test owns is the shell's project identity and
+      // descendant-tab selection around it.
       renderShell("/projects/p1/records/r1", runtime);
-      await screen.findByText("FEATURE:record-detail");
+      await waitFor(() => {
+        expect(document.querySelector(".record-workspace")).not.toBeNull();
+      });
 
       expect(
         screen.getByRole("heading", { name: "Riverside Tower" }),
@@ -241,10 +246,6 @@ describe("React application shell", () => {
         name: "Documents",
       });
       expect(documentsTab).toHaveAttribute("aria-current", "page");
-
-      const record = mounts.find((m) => m.kind === "record-detail");
-      expect(record?.deps.projectId).toBe("p1");
-      expect(record?.deps.recordId).toBe("r1");
     });
 
     it("shows a generic not-found for a 403 project", async () => {

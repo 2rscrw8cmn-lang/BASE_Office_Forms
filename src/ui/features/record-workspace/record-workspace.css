@@ -1,0 +1,233 @@
+/*
+ * Composition-only layout for the Record and Revision workspaces. Focus rings,
+ * button/input/badge/link appearance, dialog geometry, panel surfaces, and every
+ * colour value stay owned by the shared component layer and the application
+ * token registry -- this file positions the shared pieces and nothing more.
+ */
+
+.record-workspace,
+.revision-workspace {
+  padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
+}
+
+.record-workspace-work {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+}
+
+.record-workspace-work__label {
+  margin: 0;
+  font-family: var(--app-font-mono);
+  font-size: var(--app-text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+}
+
+/* ---- Revision panel ----------------------------------------------------- */
+
+.record-workspace-revision {
+  padding: var(--app-space-4);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.record-workspace-revision__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  flex-wrap: wrap;
+}
+
+.record-workspace-current-note {
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.record-workspace-revision-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-5);
+  margin: 0 0 var(--app-space-3);
+}
+
+.record-workspace-revision-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.record-workspace-revision-facts dt {
+  font-size: var(--app-text-2xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+}
+
+.record-workspace-revision-facts dd {
+  margin: 0;
+  font-size: var(--app-text-sm);
+}
+
+/* ---- Files -------------------------------------------------------------- */
+
+.record-workspace-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-workspace-files-empty {
+  margin: 0;
+}
+
+/* ---- Draft list and history -------------------------------------------- */
+
+.record-workspace-draft-list,
+.record-workspace-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-workspace-draft-list li,
+.record-workspace-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--app-space-3);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.record-workspace-draft-list li p,
+.record-workspace-history__summary {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  color: var(--app-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.record-workspace-draft-list li span,
+.record-workspace-history__meta {
+  margin: 0;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.record-workspace-history__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- Revision workspace ------------------------------------------------- */
+
+.revision-workspace-summary {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  line-height: var(--app-line-normal);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.revision-workspace-publish-hint {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  color: var(--app-text-muted);
+}
+
+/* ---- Upload ------------------------------------------------------------- */
+
+.revision-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  margin-top: var(--app-space-4);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) dashed var(--app-border-strong);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-sunken);
+}
+
+.revision-upload__input {
+  padding: var(--app-space-2);
+}
+
+.revision-upload__selected {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  color: var(--app-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.revision-upload__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+  flex-wrap: wrap;
+}
+
+.revision-upload__error {
+  display: flex;
+  gap: var(--app-space-2);
+  padding: var(--app-space-3);
+  border: var(--app-border-width) solid var(--app-danger);
+  border-radius: var(--app-radius-md);
+  background: var(--app-danger-soft);
+  font-size: var(--app-text-sm);
+}
+
+.revision-upload__error p {
+  margin: 0 0 4px;
+}
+
+.revision-upload__error p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- Shared bits -------------------------------------------------------- */
+
+.record-workspace-request-id {
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.record-workspace-request-id code {
+  font-family: var(--app-font-mono);
+}
+
+.record-workspace-alert__error {
+  display: block;
+  margin-top: var(--app-space-2);
+  color: var(--app-danger);
+}
+
+@media (max-width: 760px) {
+  .record-workspace-revision {
+    padding: var(--app-space-3);
+  }
+
+  .record-workspace-revision-facts {
+    gap: var(--app-space-4);
+  }
+
+  .revision-upload {
+    padding: var(--app-space-3);
+  }
+
+  .revision-upload__actions .base-btn {
+    width: 100%;
+    min-height: var(--app-touch-target);
+  }
+}

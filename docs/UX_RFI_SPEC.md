@@ -122,6 +122,18 @@ binding directly from the register.
 Route-addressable and connected to the register (returning preserves prior
 search/filter/sort/scroll where practical, via browser history and URL state).
 
+**Implemented natively in UI-7.** The workspace composes the shared Record
+Workspace pattern (`WorkspacePage`) so an RFI, a document, and a revision read
+as one product, while keeping the RFI's own domain shape: its "current work" is
+its authoritative structured content rather than a file list. The Details /
+Preview mode switch is replaced by one page hierarchy — content, files, and
+response as primary sections, with the read-only template-bound document view
+and the activity timeline as secondary context. The document view is still
+rendered only on demand (inside a `Collapsible`), so the renderer never runs
+until it is asked for. While a user may edit the draft, Assigned to and Response
+due appear in the editor and not also in the metadata strip, so each fact keeps
+one authoritative location.
+
 Structure:
 
 - **Header**: RFI Number or "Unnumbered Draft", Subject, project identity,
@@ -144,6 +156,10 @@ Structure:
 - **Activity**: the timeline of meaningful events (created, subject changed,
   question changed, responsible party changed, response date changed, attachment
   added). Raw activity JSON is never exposed.
+- **Lifecycle actions**: Close, Reopen, and Void are confirmed transitions
+  driven by server capabilities. Issue and mark-ready are not exposed at all
+  (§11.2). `returnForClarification` is implemented server-side but has no
+  browser surface; adding one is a Slice 3 decision, not a migration one.
 
 ## 7. Table/detail shared-data rule
 

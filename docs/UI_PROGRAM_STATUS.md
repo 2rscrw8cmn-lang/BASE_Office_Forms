@@ -1,35 +1,24 @@
 # BASE UI Program Status
 
-**Status date:** 2026-07-27
-**Current phase:** UI-6B is merged to `main` (`315de55`). UI-7 detail
-workspaces are in draft PR #48; RFI Slice 2A draft PR #49 is completing the
-independent official-issuance backend contract.
-**Active branch/PR:** `feature/rfi-slice-2a-official-issuance` (draft PR #49
-against `main`; do not merge from this task). Draft UI-7 PR #48
-(`claude/ui-7-detail-workspaces`) is open against the same `main` and overlaps
-durable documentation, but it is not the base of this backend branch.
-**Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
+**Status date:** 2026-07-28
+**Current phase:** **UI-7 — RFI, Record, and Revision detail workspaces.** The
+native workspaces are implemented on `claude/ui-7-detail-workspaces` and are
+being reconciled to the accepted RFI Slice 2A contract in draft PR #48. Only
+the Work Dashboard and Project Overview remain compatibility-mounted.
+**Active branch/PR:** `claude/ui-7-detail-workspaces`, draft PR #48. RFI Slice
+2A merged as PR #49; its backend contract is the authority for the UI-7 RFI
+workspace. The UI-6A squash/UI-6B rebase episode recorded in §5F is closed
+history, not an active condition.
+**Authority:** This is the living handoff for the **UI foundation program (UI-1 … UI-10)**. Update it in every UI-related PR.
+**Scope boundary:** This document tracks UI-program phases only. Product delivery phases (RFI Slice 1/2, submittals, templates, sharing, AI, productization) are tracked in `IMPLEMENTATION_ROADMAP.md`; they appear here only as context in §6.2, and their status there is a pointer, not a second source of truth.
 
-> **2026-07-27 RFI Slice 2A final review correction (draft PR #49):**
-> Mark ready now validates every locked RFI-level fact: subject, question,
-> responsible contact ID, active same-project contact, and the exact usable
-> published template binding. A separately authorized **Return to draft**
-> capability and endpoint intentionally moves an unnumbered
-> `ready_to_issue` RFI back to editable `draft`, with a D1 guard that rejects
-> any consumed number or official issue/issuance evidence. Ready PATCH editing
-> remains prohibited, and issue infrastructure/idempotency failures never
-> trigger the reverse transition automatically. The workspace
-> `officialIssue` field is now `RfiOfficialIssueSummary`: immutable original
-> issuance evidence only, with no status or capabilities. UI-7 must treat
-> top-level `rfi.status` and top-level `capabilities` as the sole current
-> lifecycle authority. Full `npm run check` passes: 574 unit tests, 154
-> Worker/D1 integration tests, production/assets and Pages Functions builds,
-> dependency audit with zero vulnerabilities, and the 473-file secret scan.
-> The focused RFI suite has 52 passing tests; the empty/populated 0015 migration
-> rehearsal has 2. No screenshots apply because this correction changes no
-> application UI, CSS, or renderer output. `record_only`, no issuance UI, and
-> no production migration/deployment remain deliberate limitations. Next:
-> review draft PR #49, then reconcile UI-7 PR #48 to the accepted contract.
+> **2026-07-28 Slice 2A contract integration:** `officialIssue` is an immutable
+> `RfiOfficialIssueSummary` for original-issue evidence, not a current-state
+> object. The workspace must use top-level `rfi.status` and top-level
+> `capabilities` as current authority, including the separately authorized
+> `returnToDraft` capability. The UI retains no full issuance dialog. It must
+> instead show persisted issued evidence after reload, including the official
+> PDF download, and provide Return to draft when authorized.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
 > A product-owner review of PR #44 found three gaps against the legacy shell's
@@ -1217,12 +1206,18 @@ filters, first-use empty, filtered empty, and error states is committed under
 
 ### Next recommended action
 
-Historical closeout: UI-6A and UI-6B are both merged. The current next action
-is recorded in §8.
+Complete. UI-6A merged to `main` as `0b5ec89` (PR #46, squash), followed by
+UI-6B as `315de55` (PR #47). The stacking instructions previously recorded here
+are closed history.
 
 ## 5F. UI-6B complete — native React Document Register
 
-### Historical branch stacking
+**Merged 2026-07-24: PR #47 squash-merged to `main` as `315de55`.** Everything
+below about branch stacking, the still-open UI-6A PR, and the post-squash
+rebase is retained as the phase's audit record; none of it is an active
+condition.
+
+### Branch stacking (historical — resolved by the UI-6A and UI-6B merges)
 
 UI-6B was specified to start from a `main` containing UI-6A. When this phase
 began, `main` was at `86b11e1` (UI-5) and **UI-6A's PR #46 was open, not
@@ -1236,9 +1231,9 @@ Why: UI-6A modifies ten files UI-6B must also modify — `AppLayout.tsx`,
 Branching from `main` would have produced guaranteed conflicts with PR #46 and
 forced UI-6B to re-derive UI-6A work that is explicitly out of its scope.
 
-At review time, until PR #46 merged, this PR's diff against `main` contained
-UI-6A's commits as well as UI-6B's. UI-6B changed no Projects code. Both PRs
-have since merged.
+Consequences for review: until PR #46 merges, this PR's diff against `main`
+contains UI-6A's commits as well as UI-6B's. Review and merge UI-6A first, then
+UI-6B. UI-6B changes no Projects code.
 
 ### Confirmed starting point
 
@@ -1322,10 +1317,10 @@ resumes at the failed stage and never creates a duplicate Record or Revision:
 - **Draft Revision fails after the Record succeeded** — the message states the
   document identity exists (naming it when the server returned a number), shows
   the request ID, and offers a link to open the usable Record. The primary
-  action becomes _Retry draft revision_ and re-attempts only that stage.
+  action becomes *Retry draft revision* and re-attempts only that stage.
 - **Upload fails after Record and Revision succeeded** — the message states
   both exist, preserves the selected file name, shows the request ID, and links
-  to the draft Revision workspace. The primary action becomes _Retry upload_.
+  to the draft Revision workspace. The primary action becomes *Retry upload*.
 
 On success the workflow announces creation, invalidates the Records query so it
 refetches confirmed server data (browser Back cannot then omit the new
@@ -1451,44 +1446,282 @@ new native feature; a bundle budget remains UI-10 scope.
 
 ### Next recommended action
 
-Historical closeout: UI-6A and UI-6B are merged. UI-7 may continue separately,
-and RFI Slice 2A's backend contract is the current review target.
+Complete. UI-6B merged to `main` as `315de55` (PR #47). **UI-7 Detail
+Workspaces** is the active phase — see §5G and §8.
+
+## 5G. UI-7 implemented — native React detail workspaces
+
+Branch `claude/ui-7-detail-workspaces`, based on `main` at `315de55`. **Not
+merged; no PR opened yet.**
+
+### Confirmed starting point
+
+`main` contained every register phase — the native RFI register (UI-5,
+`86b11e1`), the native Projects register and Create Project workflow (UI-6A,
+`0b5ec89`), and the native Document Register and Add Document workflow (UI-6B,
+`315de55`) — plus the shared `Drawer size="detail"`
+(`initialFocusRef`/`closeLabel`), the shared mobile `RegisterToolbar` filter
+disclosure, and the retained legacy rollback modules. The working tree was
+clean, no pull requests were open, and the first commit on this branch is the
+documentation correction that recorded UI-6B as merged.
+
+### Scope delivered
+
+Only the three detail routes move to native React:
+
+- `/projects/:projectId/records/:recordId` → `RecordWorkspaceFeature`
+- `/projects/:projectId/records/:recordId/revisions/:revisionId` →
+  `RevisionWorkspaceFeature`
+- `/projects/:projectId/rfis/:rfiId` → `RfiWorkspaceFeature`
+
+`AppLayout.tsx` gained three `route.id` branches, each keyed by the full
+identity in the path. `routing.ts`, the route table, and every
+`featureDescriptor` entry are unchanged, so the rollback path is intact. No
+endpoint, response shape, capability, numbering rule, lifecycle rule, D1/R2
+ownership, or renderer behaviour changed.
+
+**One shared workspace pattern.** `WorkspacePage` +`WorkspaceNotice`
+(`src/ui/components/patterns/WorkspacePage.tsx`) is the detail-route
+counterpart to `RegisterPage`, owning the binding hierarchy from
+`APP_UI_FOUNDATION.md` §5.2 exactly once — breadcrumbs, identity header with one
+primary action plus overflow, lifecycle notice, metadata strip, current-work
+body, and secondary history/activity — and rendering exactly one of
+loading/ready/missing/error. Three supporting shared-component changes came with
+it: `WorkspaceSection` gained an optional `headingLevel` (so workspace sections
+are `h3` under the identity `h2` and the shell keeps the only `h1`),
+`ButtonLink` was added so a download or destination keeps real anchor semantics,
+and `useReturnFocus` centralises focus restoration for overlays opened
+programmatically rather than from a Radix trigger. Following the UI-5
+precedent, no broad generic abstraction was introduced: each workspace is a
+focused feature composing shared primitives.
+
+**Domain differences preserved.**
+
+- *Record*: record facts in the metadata strip, revision facts in the revision
+  panels — never one unlabeled list. A draft is **Current work**; the
+  authoritative published version keeps its own **Current version** panel
+  alongside it, so a draft can never be the only version on screen. Multiple
+  drafts are listed rather than reduced to one.
+- *Revision*: the exact version, its status, and whether it is current are all
+  stated; published and superseded versions say they are immutable; an archived
+  document's notice takes precedence over the revision's own.
+- *RFI*: the authoritative structured content is the current work, the response
+  is its own section and is never merged into the question, attachments carry an
+  explicit role and their exact draft revision, and the template-bound document
+  view is read-only and rendered on demand.
+
+**Official actions are not saves.** Publish, Archive, Close, Reopen, and Void
+all go through an explicit confirmation (`AlertDialog`, `official`/`danger`
+treatment), send nothing before confirmation, and claim success only after the
+server confirms. Publish is offered only when the server says
+`publishRevision` *and* the draft has a file; otherwise the requirement is
+explained rather than presented as a disabled control.
+
+**Issuance stays unavailable.** The RFI workspace exposes no issue or
+mark-ready control and its API module has no way to call them. The server
+returns `issue: false`/`markReady: false` in Slice 1 and fails those transitions
+closed. A legacy RFI that consumed a number without a complete issuance is
+labelled "Needs issue repair", keeps the reconciliation notice, and deliberately
+does **not** show an Issued date as fact.
+
+**Concurrency and staged work.** RFI draft saves carry the server's
+`lockVersion`; a `409` reloads the authoritative values, re-seeds the editor,
+and asks for a deliberate retry rather than overwriting. Both upload paths (a
+revision file and an RFI attachment) refetch their workspace *before* offering a
+retry, so the list on screen is confirmed server truth and a repeat attempt
+cannot silently attach a second copy — the UI-6B staged-confirmation rule
+applied to a single-stage sequence.
+
+### API and capability decisions
+
+No API change was required or made. Every action is gated on an existing
+server-derived capability: `updateRecord`, `archiveRecord`, `createRevision`,
+per-revision `uploadFile`/`publishRevision`, and the RFI `updateDraft`,
+`uploadAttachment`, `recordResponse`, `close`, `reopen`, `void`. Nothing is
+inferred from a role string. `returnForClarification` is implemented and
+returned by the server but had no browser surface before UI-7 and deliberately
+still has none — enabling a previously unreachable transition is a product
+decision for the RFI Slice 3 phase that owns response/close/clarification, not a
+migration phase.
+
+### Shared component changes
+
+- **New:** `WorkspacePage`, `WorkspaceNotice`, `ButtonLink`, `useReturnFocus`.
+- **Changed:** `WorkspaceSection` (optional `headingLevel`/`headingId`, default
+  unchanged); `createRendererPreviewAdapter` (optional `fill`, default `false`,
+  so the existing contract and its test are unchanged).
+- No new global button, badge, dialog, field, or focus system; no raw colour
+  literals; no direct Radix or Lucide imports in feature code — all enforced by
+  the existing token suite.
+
+### Tests and checks
+
+UI-7 adds **151 unit tests** across six suites:
+
+- `record-workspace-react` (21) — hierarchy, identity discipline, files,
+  capabilities, archived lifecycle, publish confirmation and failure, the three
+  record workflows, and every async state;
+- `revision-workspace-react` (17) — exact revision context, immutability
+  notices, upload including the server-reconciled failure path, publish gating
+  and conflict, async states;
+- `rfi-workspace-react` (26) — hierarchy, numbering honesty, lockVersion
+  concurrency and 403/409 handling, read-only content, role-explicit
+  attachments, response separation, lifecycle transitions, issuance absence,
+  document view, activity safety, async states;
+- `workspace-route-integration` (9) — native mount for all three routes, no
+  legacy factory load, one shell-owned `h1`, correct descendant tab,
+  project-readiness gating, generic project not-found, and the retained rollback
+  descriptors;
+- `workspace-accessibility` (12) — heading outline, breadcrumb labelling, named
+  icon-only controls, textual status, field/error association, keyboard menu and
+  dialog operation with focus restoration, and live announcements;
+- `workspace-format-parity` (66) — every ported label (media type, activity,
+  RFI field, attachment role, number label, actor, activity detail) and the file
+  size formatter compared against `public/app-format.js` and the legacy detail
+  views, so the ported vocabulary cannot drift.
+
+Four existing shell suites were updated because their fixture route
+(`record-detail`) is no longer compatibility-mounted; they now exercise the same
+behaviour through `project-overview`/`dashboard`, or assert the native
+workspace. The legacy rollback suites (`record-detail-ui`, `revision-detail-ui`,
+`rfi-ui`) are unchanged and still green.
+
+Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
+ESLint, **720 unit tests**, **120 Worker integration tests**, the Vite
+production build, static-asset verification, Pages Functions compilation,
+`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan.
+
+### Evidence
+
+`scripts/capture-ui7-evidence.mjs` (`npm run evidence:ui7`) drives the real
+workspaces through the shared evidence harness — production components only, no
+static mock markup — and captures 27 deterministic states across 1280, 834,
+430, and 390 px CSS viewports: current version, draft-plus-current, no original,
+archived read-only, edit/create/archive dialogs, record error; draft upload,
+publish confirmation, upload-failure recovery, published read-only, empty draft,
+mobile; RFI draft editor, issued read-only, recorded response, legacy
+reconciliation, void confirmation, validation error, document view, error,
+tablet and mobile. Each capture asserts its CSS viewport and fails on horizontal
+overflow.
+
+**No screenshots were produced in this session.** This machine has no
+Chrome/Chromium binary (`CHROME_PATH` unset and none of the candidate paths
+exist), so the capture script cannot run here; the evidence bundle itself builds
+successfully (`vite build --config vite.evidence.config.ts`). Run
+`npm run evidence:ui7` on a machine with Chrome to populate
+`docs/evidence/ui-7/`.
+
+### Bundle impact
+
+`public/app/app.js` grows from ~485 kB (~147 kB gzip) to ~543 kB (~159 kB
+gzip) and `app.css` from ~52 kB (~7.6 kB gzip) to ~61 kB (~8.5 kB gzip): three
+feature modules, their dialogs, and the shared workspace pattern. The three
+legacy controllers they replace are no longer fetched at runtime on these
+routes, but they remain served for rollback, so this is a net application-bundle
+increase. A bundle/performance budget and route-level code splitting remain
+UI-10 scope.
+
+### Known limitations
+
+- **No screenshots yet** (above). `docs/evidence/ui-7/` is empty until the
+  capture runs on a machine with a browser.
+- **The controlled renderer is not loaded in the authenticated application**, so
+  the RFI document view reports itself unavailable. This is unchanged from the
+  legacy workspace — `public/index.html` has never loaded `engine.js`, by the
+  deliberate UI-2 CSS boundary — and loading a scoped renderer bundle is a later
+  decision, not UI-7 scope.
+- **`returnForClarification` remains without a browser surface** (see above).
+- **Issuance remains incomplete and fail-closed**, unchanged.
+- **`revision-issue`, `issuance-detail`, `issuance-created`, and
+  `project-team`** still resolve to the shell's placeholder route; they are
+  UI-8 scope.
+- **No authenticated browser smoke** was possible in this session (no Cloudflare
+  Access session available); the product-owner checklist below is prepared for
+  whoever has one.
+- **No pixel-baseline visual-regression harness** yet — still UI-10.
+
+### Product-owner authenticated smoke checklist
+
+- Open a document with a published current version: confirm the identity header,
+  metadata strip, current-version panel with its file, and version history.
+- Open a document that also has a draft: confirm the draft appears as **Current
+  work** *and* the published version keeps its own panel.
+- Edit document details, create a draft revision, and archive a document:
+  confirm each dialog's focus behaviour and that the register reflects the
+  change after returning.
+- On a draft revision: upload a file, then publish it through the confirmation;
+  confirm the register and record workspace both show the new current version.
+- On an RFI draft: edit and save, then reproduce a conflict by editing the same
+  RFI in a second tab; confirm the "Changed elsewhere" recovery reloads the
+  latest values.
+- On an issued RFI: confirm content is read-only, the response section is
+  separate from the question, and no Issue control exists anywhere.
+- Mobile (390 px): confirm each workspace reflows without horizontal scrolling
+  and primary actions stay reachable.
+- Keyboard: operate the overflow menus and confirmations end to end and confirm
+  focus returns to the control that opened them.
+
+### Rollback procedure
+
+1. Revert this branch's merge commit. `public/record-detail-view.js`,
+   `public/record-detail-dialogs.js`, `public/revision-detail-view.js`,
+   `public/rfi-workspace-view.js`, `public/rfi-template-preview.js`, their tests,
+   and their `featureDescriptor` entries are all still present, so the three
+   routes return to their legacy controllers with no data migration and no API
+   change.
+2. To disable one workspace without a full revert, remove its `route.id` branch
+   in `src/ui/app/AppLayout.tsx`; the route then falls through to
+   `featureDescriptor` and mounts the legacy controller exactly as before UI-7.
+3. No database, storage, `/api/v2` contract, renderer, or controlled-document
+   definition change is involved in either path.
+
+### Next recommended action
+
+Review UI-7 and run `npm run evidence:ui7` plus the authenticated smoke
+checklist above. Do not merge without explicit approval. **UI-8 — Dashboard,
+Project Overview, remaining forms, Team, and Administration** is the next phase;
+its prompt is in `UI_AGENT_PROMPTS.md`.
 
 ## 6. Phase status
 
-| Phase                               | Status                                                                                                        | Next gate                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Spike 0 — Tabulator                 | Complete; rejected for RFI                                                                                    | Future high-volume proposal only                                                             |
-| UI-1 — Audit and decisions          | Complete                                                                                                      | Binding documents and ADRs recorded                                                          |
-| UI-2 — CSS + React/Vite             | Complete; merged (`a1ade6d`)                                                                                  | none                                                                                         |
-| RFI Slice 1                         | Complete; merged and closed out in production                                                                 | none                                                                                         |
-| UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                                                                          | none                                                                                         |
-| UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                                                                          | none                                                                                         |
-| UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                                                                          | none                                                                                         |
-| UI-6A — Projects register           | **Complete; merged** (`0b5ec89`, PR #46, squash)                                                              | none                                                                                         |
-| UI-6B — Document Register           | **Complete; merged** (`315de55`, PR #47)                                                                      | none                                                                                         |
-| UI-7 — Detail workspaces            | In progress separately; not complete                                                                          | Rebase onto stable backend contract                                                          |
-| UI-8 — Dashboard/forms/admin        | Not started                                                                                                   | Shared shell/forms/registers stable                                                          |
-| UI-9 — Library + Studio             | Not started                                                                                                   | Application foundation stable                                                                |
-| UI-10 — Enforcement/cleanup         | Not started                                                                                                   | Route parity and visual baselines                                                            |
-| RFI Slice 2A — backend architecture | Final review correction implemented on `feature/rfi-slice-2a-official-issuance`; draft PR #49 remains pending | Review ready/draft safety, immutable workspace evidence, sample PDF, and migration rehearsal |
-| RFI Slice 2 — issuance UI           | Not started; depends on accepted Slice 2A API contract                                                        | Integrate after Slice 2A review                                                              |
+Two different programs are tracked in this repository, and they must not be
+read as one sequence. §6.1 is this document's authoritative scope. §6.2 is a
+convenience pointer to the product delivery roadmap, whose source of truth is
+`IMPLEMENTATION_ROADMAP.md`.
+
+### 6.1 UI foundation program — authoritative here
+
+| Phase                        | Status                                          | Next gate                           |
+| ---------------------------- | ----------------------------------------------- | ----------------------------------- |
+| Spike 0 — Tabulator          | Complete; rejected for RFI                      | Future high-volume proposal only    |
+| UI-1 — Audit and decisions   | Complete                                        | Binding documents and ADRs recorded |
+| UI-2 — CSS + React/Vite      | Complete; merged (`a1ade6d`, PR #41)            | none                                |
+| UI-3 — Components + UI Lab   | Complete; merged (`cb9f191`, PR #43)            | none                                |
+| UI-4 — React shell           | Complete; merged (`6976f16`, PR #44)            | none                                |
+| UI-5 — RFI register          | Complete; merged (`86b11e1`, PR #45)            | none                                |
+| UI-6A — Projects register    | Complete; merged (`0b5ec89`, PR #46, squash)    | none                                |
+| UI-6B — Document Register    | **Complete; merged** (`315de55`, PR #47, squash) | none                                |
+| UI-7 — Detail workspaces     | **Implemented** — branch `claude/ui-7-detail-workspaces`, no PR yet | Review and merge UI-7 |
+| UI-8 — Dashboard/forms/admin | Not started                                     | Shared shell/forms/registers stable |
+| UI-9 — Library + Studio      | Not started                                     | Application foundation stable       |
+| UI-10 — Enforcement/cleanup  | Not started                                     | Route parity and visual baselines   |
+
+### 6.2 Implementation-roadmap status — context only
+
+Product delivery phases are **not** UI-program phases and do not gate or
+advance the table above. Source of truth: `IMPLEMENTATION_ROADMAP.md` (and
+`RFI_SLICE_1_ROLLOUT.md` for the Slice 1 closeout).
+
+| Roadmap item                        | Status                                                   | Relationship to the UI program                       |
+| ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| RFI Slice 1                         | Complete; merged and closed out in production            | Its register/workspace surfaces are what UI-5/UI-7 migrate |
+| RFI Slice 2A — backend architecture | Not started; may begin whenever `main` is pulled and stable | Independent of the UI program                     |
+| RFI Slice 2 — issuance UI           | Not started; shared components exist                      | Must compose the UI-3 components and the UI-7 workspace pattern rather than invent register/workspace chrome |
 
 ## 7. Current constraints and risks
 
-- Official RFI issuance is implemented on the Slice 2A branch but remains
-  unreleased until its migration and backend PR are reviewed and deployed.
-- UI-7 can consume workspace `officialIssue` only as immutable original-issue
-  evidence (`Original Issue`, issuance, routing/file snapshots, due date,
-  artifact download file ID, original request ID). It must never use that
-  object for current status/actions; top-level `rfi.status` and top-level
-  `capabilities`, including `returnToDraft`, are authoritative. No Slice 2
-  issuance UI is included here.
-- Slice 2A supports `record_only` issuance only. Email, secure shares, external
-  response, response/close UI, and issuance UI remain deferred.
-- Official rendering is intentionally limited to the exact published BASE RFI
-  definition through `base-rfi-official-document/v1`; unsupported meaningful
-  definition changes are rejected.
+- Official RFI issuance remains incomplete and must fail closed.
+- Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
   resolved or formally accepted before a production release; do not use
@@ -1498,9 +1731,24 @@ and RFI Slice 2A's backend contract is the current review target.
 
 ## 8. Next action
 
-UI-6A and UI-6B are merged. Review draft PR #49's ready/draft lifecycle safety,
-immutable workspace evidence, persistence/idempotency, strict-SHA, and
-renderer/sample-PDF contract, then run the rollout gates in
-`RFI_SLICE_2A_ROLLOUT.md`. UI-7 PR #48 must reconcile the finalized
-`RfiOfficialIssueSummary` and top-level `returnToDraft` capability after this
-backend contract is accepted. Do not add issuance UI to this backend PR.
+**UI-7 — Detail workspaces — is implemented and awaiting review.** Work is on
+`claude/ui-7-detail-workspaces` (based on `main` at `315de55`); no PR is open
+and nothing is merged. The three detail routes —
+`/projects/:projectId/records/:recordId`,
+`.../revisions/:revisionId`, and `/projects/:projectId/rfis/:rfiId` — now render
+native React through the shared Record Workspace pattern, and the legacy
+controllers are retained as the documented rollback path. Full scope, decisions,
+tests, limitations, and rollback are in §5G.
+
+Two things are outstanding before this phase can close: run
+`npm run evidence:ui7` on a machine with Chrome to populate
+`docs/evidence/ui-7/` (none of this session's environment had a browser), and
+complete the authenticated product-owner smoke checklist in §5G.
+
+After UI-7 is reviewed and merged, **UI-8 — Dashboard, Project Overview,
+remaining create/edit forms, Team, and Administration** is the next phase. It
+migrates the last two compatibility-mounted screens (`dashboard`,
+`project-overview`) plus the placeholder project routes, and must compose the
+shared shell, register, workspace, and form patterns rather than introduce new
+chrome. Roadmap work (RFI Slice 2A backend architecture) may proceed
+independently; see §6.2 and `IMPLEMENTATION_ROADMAP.md`.

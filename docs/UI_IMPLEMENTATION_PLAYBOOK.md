@@ -27,7 +27,7 @@ UI-4     React application shell and route parity
 UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45 merged]
 UI-6A    Projects register + Create Project workflow          [complete: PR #46 merged]
 UI-6B    Document Register + Add Document workflow            [complete: PR #47 merged, main 315de55]
-UI-7     RFI, Record, and Revision workspaces                 [active]
+UI-7     RFI, Record, and Revision workspaces                 [implemented: branch claude/ui-7-detail-workspaces]
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
 UI-10    Drift prevention, E2E, visual regression, and cleanup
@@ -512,6 +512,27 @@ Unify detail routes around the Record Workspace pattern.
 - issued/published revisions immutable;
 - current files and change summary;
 - issue/publish actions never represented as ordinary save.
+
+**Delivered.** All three detail routes are native React and compose one shared
+`WorkspacePage` pattern (`src/ui/components/patterns/WorkspacePage.tsx`), the
+detail-route counterpart to `RegisterPage`. Record facts and revision facts stay
+in separate labelled locations; a draft never impersonates the authoritative
+current revision; published, superseded, and archived states state their own
+immutability; publish/archive/close/reopen/void are confirmed transitions rather
+than saves; and issuance is still not exposed. See `UI_PROGRAM_STATUS.md` §5G.
+
+**The reusable lessons.**
+
+1. *One page pattern per route family.* A detail route composes `WorkspacePage`
+   the same way a register composes `RegisterPage`. Later detail surfaces
+   (submittals, issuances) reuse it rather than rebuilding the hierarchy.
+2. *Each fact has one authoritative location.* Where a fact becomes editable it
+   moves into the editor and leaves the metadata strip, instead of appearing
+   twice — see the RFI workspace's Assigned to / Response due.
+3. *Reconcile before retrying.* A failed upload refetches its workspace before
+   offering a retry, so an operator decides against confirmed server truth and a
+   repeat attempt cannot duplicate server state. This extends the UI-6B staged
+   Add Document rule to single-stage work.
 
 ### Exit gate
 

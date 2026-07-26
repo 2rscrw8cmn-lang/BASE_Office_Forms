@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 /*
- * Proves the UI-5 routing boundary: `project-rfis`
- * (/projects/:projectId/rfis) renders the native React
- * `RfiRegisterFeature` directly from the real shell, while `rfi-workspace`
- * (/projects/:projectId/rfis/:rfiId) still mounts through
- * `LegacyFeatureMount` (compatibility bridge to public/rfi-workspace-view.js),
- * unchanged, per the binding UI-5 scope.
+ * Proves the RFI routing boundary: `project-rfis`
+ * (/projects/:projectId/rfis) renders the native React `RfiRegisterFeature`
+ * directly from the real shell, and the register never leaks onto the RFI
+ * workspace route. `rfi-workspace` became native in UI-7 and has its own
+ * coverage in tests/unit/workspace-route-integration.test.tsx.
  */
 import { describe, expect, it } from "vitest";
 import { waitFor } from "@testing-library/react";
@@ -92,16 +91,15 @@ describe("UI-5 route wiring", () => {
     expect(factoryCalls).not.toContain("rfis");
   });
 
-  it("still mounts the RFI workspace through LegacyFeatureMount", async () => {
+  it("does not render the register on the RFI workspace route", async () => {
     const { runtime, factoryCalls } = makeRuntime();
     installFetch({ session: READY_SESSION, project: READY_PROJECT });
     renderShellWithNavigation("/projects/project-1/rfis/rfi-1", runtime);
 
     await waitFor(() => {
-      expect(
-        document.querySelector('[data-feature="rfi-workspace"]'),
-      ).not.toBeNull();
+      expect(document.querySelector(".rfi-workspace")).not.toBeNull();
     });
-    expect(factoryCalls).toContain("rfi-workspace");
+    expect(document.querySelector(".rfi-register-page")).toBeNull();
+    expect(factoryCalls).not.toContain("rfi-workspace");
   });
 });

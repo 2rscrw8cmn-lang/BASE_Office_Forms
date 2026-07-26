@@ -14,7 +14,9 @@ export { Icon, ICON_NAMES, type IconName, type IconProps } from "./icons/Icon";
 // Primitives
 export {
   Button,
+  ButtonLink,
   type ButtonProps,
+  type ButtonLinkProps,
   type ButtonVariant,
   type ButtonSize,
 } from "./primitives/Button";
@@ -120,6 +122,13 @@ export {
   type WorkspaceSectionProps,
 } from "./patterns/WorkspaceSection";
 export {
+  WorkspacePage,
+  WorkspaceNotice,
+  type WorkspacePageProps,
+  type WorkspaceNoticeProps,
+  type WorkspaceStatus,
+} from "./patterns/WorkspacePage";
+export {
   Breadcrumbs,
   type BreadcrumbsProps,
   type Crumb,
@@ -149,6 +158,9 @@ export {
   type SaveIndicatorProps,
   type SaveState,
 } from "./patterns/SaveIndicator";
+
+// Shared UI utilities
+export { useReturnFocus } from "./util/useReturnFocus";
 
 // Tokens
 export { APP_TOKENS, BRAND_TOKENS, type AppToken } from "../theme/tokens";

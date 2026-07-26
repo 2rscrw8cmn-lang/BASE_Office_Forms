@@ -169,24 +169,22 @@ describe("UI-6B Document Register route wiring", () => {
     });
   });
 
-  it("keeps Record and Revision detail compatibility-mounted until UI-7", async () => {
-    for (const [path, kind] of [
-      ["/projects/project-1/records/record-1", "record-detail"],
-      [
-        "/projects/project-1/records/record-1/revisions/revision-1",
-        "revision-detail",
-      ],
-    ] as const) {
+  it("does not render the register on the Record and Revision detail routes", async () => {
+    // Those routes became native in UI-7 and have their own coverage in
+    // tests/unit/workspace-route-integration.test.tsx. What this suite still
+    // owns is that the Document Register never leaks onto them.
+    for (const path of [
+      "/projects/project-1/records/record-1",
+      "/projects/project-1/records/record-1/revisions/revision-1",
+    ]) {
       const { runtime, factoryCalls } = makeRuntime();
       installShellFetch();
       renderShellWithNavigation(path, runtime);
       await waitFor(() => {
-        expect(
-          document.querySelector(`[data-feature="${kind}"]`),
-        ).not.toBeNull();
+        expect(document.querySelector(".project-route-content")).not.toBeNull();
       });
-      expect(factoryCalls).toContain(kind);
       expect(document.querySelector(".records-register-page")).toBeNull();
+      expect(factoryCalls).not.toContain("records");
       cleanup();
     }
   });

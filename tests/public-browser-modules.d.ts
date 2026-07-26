@@ -39,6 +39,20 @@ declare module "*app-format.js" {
     revisionLabel?: string | null;
   }): string;
   export function fileTypeLabel(mediaType?: string | null): string;
+  // Presentation vocabulary the UI-7 workspaces port rather than import; the
+  // parity suite compares the ported maps against these originals.
+  export function describeActivity(action: string): string;
+  export function actorLabel(event: {
+    actorType: string;
+    actorDisplayName?: string | null;
+  }): string;
+  export function rfiActivityDetail(event: {
+    changedFields?: string[];
+    role?: string | null;
+  }): string;
+  export function rfiAttachmentRoleLabel(role: string): string;
+  export function rfiFieldLabel(field: string): string;
+  export function rfiNumberLabel(rfiNumber?: string | null): string;
 }
 
 interface BrowserView {

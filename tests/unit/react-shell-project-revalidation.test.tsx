@@ -86,7 +86,11 @@ describe("Project-context authorization caching and revalidation", () => {
     expect(projectCallCount).toBe(1);
 
     shell.goTo("/projects/p1/records/r1");
-    await screen.findByText("FEATURE:record-detail");
+    // The destination is the native UI-7 Record workspace; the shell still
+    // re-confirms project access before it renders.
+    await waitFor(() => {
+      expect(el(".record-workspace")).toBeInTheDocument();
+    });
     expect(projectCallCount).toBe(2);
   });
 
@@ -101,13 +105,13 @@ describe("Project-context authorization caching and revalidation", () => {
     });
     const { runtime } = makeRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1?status=open",
+      "/projects/p1/overview?status=open",
       runtime,
     );
-    await screen.findByText("FEATURE:record-detail");
+    await screen.findByText("FEATURE:overview");
     expect(projectCallCount).toBe(1);
 
-    shell.goTo("/projects/p1/records/r1?status=closed");
+    shell.goTo("/projects/p1/overview?status=closed");
     await waitFor(() => {
       expect(el(".feature-view")).toBeInTheDocument();
     });
@@ -165,7 +169,9 @@ describe("Project-context authorization caching and revalidation", () => {
     expect(screen.getByText("req-99")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await screen.findByText("FEATURE:record-detail");
+    await waitFor(() => {
+      expect(el(".record-workspace")).toBeInTheDocument();
+    });
   });
 
   it("does not begin the destination feature's request before the revalidated project is ready", async () => {
@@ -177,8 +183,15 @@ describe("Project-context authorization caching and revalidation", () => {
 
     const baseFetch = globalThis.fetch;
     let projectCallCount = 0;
+    // The destination is the native UI-7 Record workspace, so "the feature's
+    // own request" is its workspace read model rather than a legacy factory.
+    const workspaceCalls: string[] = [];
     globalThis.fetch = (input: string | URL | Request) => {
       const url = requestUrl(input);
+      if (/\/records\/[^/?]+\/workspace$/.test(url)) {
+        workspaceCalls.push(url);
+        return Promise.resolve(jsonResponse({}, { status: 404 }));
+      }
       if (/\/api\/v2\/projects\/[^/?]+$/.test(url)) {
         projectCallCount += 1;
         if (projectCallCount === 1) {
@@ -199,12 +212,15 @@ describe("Project-context authorization caching and revalidation", () => {
     await waitFor(() => {
       expect(document.querySelector(".route-loading")).toBeInTheDocument();
     });
-    // The project revalidation is still pending: no "record-detail" feature request
-    // has begun.
+    // The project revalidation is still pending: the Record workspace has not
+    // requested anything, and no legacy controller was created either.
+    expect(workspaceCalls).toEqual([]);
     expect(factoryCalls).toEqual(["overview"]);
 
     pendingProjectResolve.current?.(READY_PROJECT("p1"));
-    await screen.findByText("FEATURE:record-detail");
-    expect(factoryCalls).toEqual(["overview", "record-detail"]);
+    await waitFor(() => {
+      expect(workspaceCalls.length).toBe(1);
+    });
+    expect(factoryCalls).toEqual(["overview"]);
   });
 });

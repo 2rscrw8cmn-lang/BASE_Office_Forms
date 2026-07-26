@@ -228,8 +228,11 @@ UX/testing docs, and the PR body.
 
 ## Prompt UI-7 — Detail workspaces
 
-**Status: active.** UI-6A (PR #46) and UI-6B (PR #47) are merged, so this phase
-starts from `main` at `315de55`, which contains the native RFI register (UI-5),
+**Status: implemented** on `claude/ui-7-detail-workspaces` (no PR opened yet).
+See `docs/UI_PROGRAM_STATUS.md` §5G. The prompt below is retained as the phase's
+specification of record.
+
+This phase started from `main` at `315de55`, which contains the native RFI register (UI-5),
 the native Projects register and Create Project workflow (UI-6A), and the
 native Document Register and Add Document workflow (UI-6B), along with the
 shared `Drawer size="detail"` (`initialFocusRef`/`closeLabel`), the shared
