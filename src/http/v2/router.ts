@@ -16,6 +16,7 @@ import {
   RfiIssueIdempotencyConflictError,
   RfiIssuePersistenceError,
   RfiIssueRenderError,
+  RfiIssueRequestError,
   RfiIssueStorageError,
   RfiIssueValidationError,
   RfiResponsibleContactError,
@@ -1309,6 +1310,8 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 409, "RFI_VERSION_CONFLICT", error.message);
   if (error instanceof RfiIssueIdempotencyConflictError)
     return apiError(context, 409, "IDEMPOTENCY_KEY_REUSED", error.message);
+  if (error instanceof RfiIssueRequestError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
   if (error instanceof RfiAlreadyIssuedError)
     return apiError(context, 409, "RFI_ALREADY_ISSUED", error.message);
   if (error instanceof RfiIssueValidationError)

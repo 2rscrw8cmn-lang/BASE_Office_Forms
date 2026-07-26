@@ -135,15 +135,20 @@ preserve the number, revision, issuance, artifact, snapshots, activity, and
 idempotency result; use a reviewed forward migration or compensating business
 workflow. Never rerun an applied migration manually.
 
-## Orphan reconciliation
+## Artifact reconciliation
 
-A pending `rfi_artifact_orphans` row means D1 did not commit official issue
-state and R2 deletion failed. It is not an official artifact.
+A pending `rfi_artifact_orphans` row records either
+`compensation_delete_failed` (D1 absence was confirmed, but R2 deletion failed)
+or `commit_outcome_unknown` (authoritative evidence was partial/unavailable).
+The latter may represent a successful issue and must be retained.
 
 1. Keep the affected RFI issue action disabled and preserve logs/request IDs.
-2. Confirm there is no matching `rfi_official_issues.artifact_storage_key`.
+2. Check all four reference surfaces: `rfi_official_issues`,
+   `revision_files`, `issuance_files`, and `rfi_issue_file_snapshots`.
 3. Verify the R2 object's key, size, and SHA-256 match the orphan row.
-4. With explicit operator approval, delete only that exact R2 object.
+4. Delete only when all authoritative queries succeed, every reference is
+   absent, and explicit operator approval names that exact R2 object. Otherwise
+   retain and escalate for a reviewed forward repair.
 5. Verify it is absent, then update the orphan row to `deleted` with
    `reconciled_at`. If policy requires retention, set `retained` and document
    the reason instead.

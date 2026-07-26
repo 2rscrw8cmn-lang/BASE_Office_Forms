@@ -5,6 +5,7 @@ import {
   RfiIssueIdempotencyConflictError,
   RfiIssuePersistenceError,
   RfiIssueRenderError,
+  RfiIssueRequestError,
   RfiIssueStorageError,
   RfiIssueValidationError,
   RfiNotFoundError,
@@ -25,6 +26,7 @@ import type { D1RecordRevisionsRepository } from "../../infrastructure/db/d1/rec
 import type { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import type { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import type {
+  CommitRfiOfficialIssueInput,
   D1RfiOfficialIssueRepository,
   OfficialIssueRecipientSnapshot,
 } from "../../infrastructure/db/d1/rfi-official-issue-repository";
@@ -125,17 +127,24 @@ export class RfiOfficialIssueService {
       "rfis:issue",
     );
     if (!idempotencyKey.trim() || idempotencyKey.length > 200) {
-      throw new RfiIssueValidationError(
+      throw new RfiIssueRequestError(
         "A valid Idempotency-Key header is required.",
       );
     }
-    const requestHash = await sha256(canonicalRfiIssueRequest(request));
+    const requestHash = await sha256(
+      canonicalRfiIssueRequest(projectId, rfiId, request),
+    );
     const replay = await this.issues.findIdempotentResult(
       actor.organizationId,
+      projectId,
+      rfiId,
       idempotencyKey,
     );
     if (replay) {
-      if (replay.requestHash !== requestHash) {
+      if (
+        !replay.requestedResourceMatches ||
+        replay.requestHash !== requestHash
+      ) {
         throw new RfiIssueIdempotencyConflictError();
       }
       return replay.result;
@@ -231,10 +240,7 @@ export class RfiOfficialIssueService {
           "An included file is missing from private storage.",
         );
       }
-      if (
-        object.size !== file.byteSize ||
-        (object.sha256 !== undefined && object.sha256 !== file.sha256)
-      ) {
+      if (object.size !== file.byteSize || object.sha256 !== file.sha256) {
         throw new RfiIssueStorageError(
           "An included file does not match its authoritative metadata.",
         );
@@ -336,24 +342,48 @@ export class RfiOfficialIssueService {
     } catch (error) {
       const raced = await this.issues.findIdempotentResult(
         actor.organizationId,
+        project.id,
+        rfi.id,
         idempotencyKey,
       );
-      if (raced?.requestHash === requestHash) return raced.result;
+      if (
+        raced?.requestedResourceMatches &&
+        raced.requestHash === requestHash
+      ) {
+        return raced.result;
+      }
+      if (raced) throw new RfiIssueIdempotencyConflictError();
       throw new RfiIssueStorageError(
         "The official artifact could not be stored.",
         error,
       );
     }
-    const verified = await this.head(artifactStorageKey);
+    let verified: { size: number; sha256?: string } | null;
+    try {
+      verified = await this.head(artifactStorageKey);
+    } catch (error) {
+      await this.compensateOrRecord({
+        organizationId: actor.organizationId,
+        projectId: project.id,
+        rfiId: rfi.id,
+        fileId: artifactFileId,
+        storageKey: artifactStorageKey,
+        sha256: artifactSha256,
+        byteSize: rendered.bytes.byteLength,
+        failure: error,
+      });
+      throw error;
+    }
     if (
       !verified ||
       verified.size !== rendered.bytes.byteLength ||
-      (verified.sha256 !== undefined && verified.sha256 !== artifactSha256)
+      verified.sha256 !== artifactSha256
     ) {
       await this.compensateOrRecord({
         organizationId: actor.organizationId,
         projectId: project.id,
         rfiId: rfi.id,
+        fileId: artifactFileId,
         storageKey: artifactStorageKey,
         sha256: artifactSha256,
         byteSize: rendered.bytes.byteLength,
@@ -366,59 +396,110 @@ export class RfiOfficialIssueService {
       );
     }
 
+    const commitInput: CommitRfiOfficialIssueInput = {
+      issueId: crypto.randomUUID(),
+      organizationId: actor.organizationId,
+      projectId: project.id,
+      rfiId: rfi.id,
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber,
+      revisionCreatedBy: revision.createdBy,
+      revisionCreatedAt: revision.createdAt,
+      subject: rfi.subject,
+      question: rfi.question,
+      expectedLastRfiNumber: lastNumber,
+      existingRfiSequence: rfi.issuedNumberSequence,
+      officialDisplayNumber,
+      templateVersionId: template.templateVersionId,
+      templateDefinitionJson,
+      templateDefinitionSha256,
+      renderPayloadJson,
+      renderPayloadSha256,
+      rendererVersion: this.renderer.rendererVersion,
+      artifact: {
+        fileId: artifactFileId,
+        storageKey: artifactStorageKey,
+        originalFilename: artifactFilename,
+        mediaType: rendered.mediaType,
+        byteSize: rendered.bytes.byteLength,
+        sha256: artifactSha256,
+      },
+      includedFiles,
+      recipients,
+      cc,
+      responseDueDate: request.responseDueDate,
+      issuedBy: actor.userId,
+      issuedByDisplayName: actorUser?.displayName ?? null,
+      issuedAt,
+      requestId,
+      idempotencyKey,
+      requestHash,
+      issuanceId: crypto.randomUUID(),
+    };
+    let commitError: unknown = null;
     try {
-      return await this.issues.commit({
-        issueId: crypto.randomUUID(),
-        organizationId: actor.organizationId,
-        projectId: project.id,
-        rfiId: rfi.id,
-        revisionId: revision.id,
-        revisionNumber: revision.revisionNumber,
-        revisionCreatedBy: revision.createdBy,
-        revisionCreatedAt: revision.createdAt,
-        subject: rfi.subject,
-        question: rfi.question,
-        expectedLastRfiNumber: lastNumber,
-        existingRfiSequence: rfi.issuedNumberSequence,
-        officialDisplayNumber,
-        templateVersionId: template.templateVersionId,
-        templateDefinitionJson,
-        templateDefinitionSha256,
-        renderPayloadJson,
-        renderPayloadSha256,
-        rendererVersion: this.renderer.rendererVersion,
-        artifact: {
-          fileId: artifactFileId,
-          storageKey: artifactStorageKey,
-          originalFilename: artifactFilename,
-          mediaType: rendered.mediaType,
-          byteSize: rendered.bytes.byteLength,
-          sha256: artifactSha256,
-        },
-        includedFiles,
-        recipients,
-        cc,
-        responseDueDate: request.responseDueDate,
-        issuedBy: actor.userId,
-        issuedByDisplayName: actorUser?.displayName ?? null,
-        issuedAt,
-        requestId,
-        idempotencyKey,
-        requestHash,
-        issuanceId: crypto.randomUUID(),
-      });
+      await this.issues.commit(commitInput);
     } catch (error) {
-      await this.compensateOrRecord({
+      commitError = error;
+    }
+
+    let state;
+    try {
+      state = await this.issues.inspectCommitState(commitInput);
+    } catch (inspectionError) {
+      await this.retainForReconciliation({
         organizationId: actor.organizationId,
         projectId: project.id,
         rfiId: rfi.id,
         storageKey: artifactStorageKey,
         sha256: artifactSha256,
         byteSize: rendered.bytes.byteLength,
-        failure: error,
+        failure: commitError ?? inspectionError,
+        detail: `authoritative inspection unavailable: ${errorMessage(inspectionError)}`,
       });
-      throw new RfiIssuePersistenceError(error);
+      throw new RfiIssueCompensationError(inspectionError);
     }
+    if (state.status === "committed") return state.result;
+
+    if (commitError && state.status === "absent") {
+      await this.compensateOrRecord({
+        organizationId: actor.organizationId,
+        projectId: project.id,
+        rfiId: rfi.id,
+        fileId: artifactFileId,
+        storageKey: artifactStorageKey,
+        sha256: artifactSha256,
+        byteSize: rendered.bytes.byteLength,
+        failure: commitError,
+      });
+      throw new RfiIssuePersistenceError(commitError);
+    }
+    if (commitError && state.status === "conflict") {
+      await this.compensateOrRecord({
+        organizationId: actor.organizationId,
+        projectId: project.id,
+        rfiId: rfi.id,
+        fileId: artifactFileId,
+        storageKey: artifactStorageKey,
+        sha256: artifactSha256,
+        byteSize: rendered.bytes.byteLength,
+        failure: commitError,
+      });
+      throw new RfiIssueIdempotencyConflictError();
+    }
+
+    await this.retainForReconciliation({
+      organizationId: actor.organizationId,
+      projectId: project.id,
+      rfiId: rfi.id,
+      storageKey: artifactStorageKey,
+      sha256: artifactSha256,
+      byteSize: rendered.bytes.byteLength,
+      failure:
+        commitError ?? new Error("Commit returned without durable evidence."),
+      detail: `authoritative state: ${state.status}`,
+    });
+    throw new RfiIssueCompensationError(commitError);
   }
 
   private validateRfi(rfi: Rfi): void {
@@ -486,22 +567,48 @@ export class RfiOfficialIssueService {
     organizationId: string;
     projectId: string;
     rfiId: string;
+    fileId: string;
     storageKey: string;
     sha256: string;
     byteSize: number;
     failure: unknown;
   }): Promise<void> {
+    let referenced: boolean;
+    try {
+      referenced = await this.issues.artifactIsReferenced({
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        rfiId: input.rfiId,
+        fileId: input.fileId,
+        storageKey: input.storageKey,
+        sha256: input.sha256,
+      });
+    } catch (inspectionError) {
+      await this.retainForReconciliation({
+        ...input,
+        detail: `safe-delete inspection unavailable: ${errorMessage(inspectionError)}`,
+      });
+      throw new RfiIssueCompensationError(inspectionError);
+    }
+    if (referenced) {
+      await this.retainForReconciliation({
+        ...input,
+        detail: "artifact is referenced by authoritative official state",
+      });
+      throw new RfiIssueCompensationError(input.failure);
+    }
     try {
       await this.storage.delete(input.storageKey);
     } catch (deleteError) {
       try {
-        await this.issues.recordArtifactOrphan({
+        await this.issues.recordArtifactReconciliation({
           organizationId: input.organizationId,
           projectId: input.projectId,
           rfiId: input.rfiId,
           storageKey: input.storageKey,
           sha256: input.sha256,
           byteSize: input.byteSize,
+          kind: "compensation_delete_failed",
           failureSummary: `${errorMessage(input.failure)}; compensation: ${errorMessage(deleteError)}`,
         });
       } catch (reconciliationError) {
@@ -514,6 +621,38 @@ export class RfiOfficialIssueService {
         });
       }
       throw new RfiIssueCompensationError(deleteError);
+    }
+  }
+
+  private async retainForReconciliation(input: {
+    organizationId: string;
+    projectId: string;
+    rfiId: string;
+    storageKey: string;
+    sha256: string;
+    byteSize: number;
+    failure: unknown;
+    detail: string;
+  }): Promise<void> {
+    try {
+      await this.issues.recordArtifactReconciliation({
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        rfiId: input.rfiId,
+        storageKey: input.storageKey,
+        sha256: input.sha256,
+        byteSize: input.byteSize,
+        kind: "commit_outcome_unknown",
+        failureSummary: `${errorMessage(input.failure)}; ${input.detail}`,
+      });
+    } catch (reconciliationError) {
+      console.error("rfi_issue_reconciliation_record_failed", {
+        organizationId: input.organizationId,
+        projectId: input.projectId,
+        rfiId: input.rfiId,
+        storageKey: input.storageKey,
+        error: errorMessage(reconciliationError),
+      });
     }
   }
 }

@@ -45,6 +45,18 @@ describe("RFI official issuance migration 0015", () => {
       "rfi_issue_recipients",
       "rfi_official_issues",
     ]);
+    const idempotencyColumns = await testDatabase()
+      .prepare("PRAGMA table_info(idempotency_keys)")
+      .all<{ name: string }>();
+    expect(idempotencyColumns.results.map((column) => column.name)).toContain(
+      "project_id",
+    );
+    const reconciliationColumns = await testDatabase()
+      .prepare("PRAGMA table_info(rfi_artifact_orphans)")
+      .all<{ name: string }>();
+    expect(
+      reconciliationColumns.results.map((column) => column.name),
+    ).toContain("reconciliation_kind");
   });
 
   it("preserves a populated post-0014 RFI and its sequence state", async () => {

@@ -95,6 +95,7 @@ export function createV2RouteDependencies(
     environment.DB,
   );
   const rfiRecords = new D1RfiRecordsRepository(environment.DB, rfiResponses);
+  const rfiOfficialIssues = new D1RfiOfficialIssueRepository(environment.DB);
   const templatesRepository = new D1TemplatesRepository(environment.DB);
   const rfiTemplateBinding = new RfiTemplateBindingService(templatesRepository);
   const recordRevisionSequences = new D1RecordRevisionSequencesRepository(
@@ -118,7 +119,7 @@ export function createV2RouteDependencies(
     projectContactsRepository,
     rfiTemplateBinding,
     users,
-    new D1RfiOfficialIssueRepository(environment.DB),
+    rfiOfficialIssues,
     storage,
     new RfiPdfArtifactRenderer(),
   );
@@ -173,6 +174,7 @@ export function createV2RouteDependencies(
       rfiResponses,
       new D1RfiWorkspaceReadRepository(environment.DB),
       rfiTemplateBinding,
+      rfiOfficialIssues,
     ),
     records: new RecordService(projects, records),
     revisions: new RevisionService(projects, records, revisions),

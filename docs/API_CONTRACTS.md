@@ -66,7 +66,9 @@ Mutable draft resources expose `lockVersion`. Update requests must provide eithe
 - `If-Match: "<lockVersion>"`; or
 - `lockVersion` in the request body where headers are impractical.
 
-Official transitions require `Idempotency-Key`. Replaying the same key with the same request returns the original result. Reusing the key with a different payload returns `409 IDEMPOTENCY_KEY_REUSED`.
+Official transitions require `Idempotency-Key`. Replay requires the same
+tenant, operation, resource identity, and canonical request. Reusing the key
+for another resource or changed input returns `409 IDEMPOTENCY_KEY_REUSED`.
 
 ## 4. Identity
 
@@ -453,6 +455,15 @@ Creates an unnumbered draft.
 
 Returns details, current revision, file summary, delivery summary, and capabilities.
 
+### `GET /projects/{projectId}/rfis/{rfiId}/workspace`
+
+Returns `officialIssue: null` before issue. After issue it returns the safe,
+reloadable official result: number/status, `Original Issue` revision, issuance,
+`issuedAt`, `responseDueDate`, artifact download file ID and checksum, included
+file snapshots, To/CC snapshots, and server-derived capabilities. It never
+returns R2 keys or raw snapshot/idempotency JSON. Workspace attachments are
+labeled `Current Draft` before issue and `Original Issue` after issue.
+
 ### `PATCH /rfis/{rfiId}`
 
 Updates a draft or fields explicitly mutable in the current state.
@@ -501,6 +512,7 @@ Success returns the standard envelope with:
       "issueNumber": "ISS-001"
     },
     "issuedAt": "2026-07-25T20:00:00.000Z",
+    "responseDueDate": "2026-07-27",
     "officialArtifact": {
       "fileId": "artifact_file_id",
       "role": "generated_artifact",
@@ -538,13 +550,16 @@ Success returns the standard envelope with:
 ```
 
 The response never exposes storage keys, raw snapshot JSON, or idempotency
-metadata. Same key/same canonical request returns the original `data`; same
-key/different request returns `409 IDEMPOTENCY_KEY_REUSED`.
+metadata. The canonical identity includes organization isolation plus
+`projectId` and `rfiId`. Same key/same resource/same request returns the
+original `data`; using the key for another RFI/project or changed input returns
+`409 IDEMPOTENCY_KEY_REUSED` without disclosing the other resource.
 
 Relevant errors:
 
 - `400 IDEMPOTENCY_KEY_REQUIRED`
-- `400 VALIDATION_FAILED` for malformed request/unsupported delivery
+- `400 VALIDATION_FAILED` for malformed request, unsupported delivery, or an
+  `Idempotency-Key` longer than 200 characters
 - `401 AUTHENTICATION_REQUIRED`
 - concealed `404 PROJECT_NOT_FOUND` / `RFI_NOT_FOUND` where required
 - `409 RFI_ILLEGAL_TRANSITION`, `RFI_ALREADY_ISSUED`, or
@@ -553,8 +568,8 @@ Relevant errors:
   project, responsible contact, or file relationship
 - `503 RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, or
   `RFI_ISSUE_COMMIT_FAILED`
-- `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` when artifact compensation cannot
-  delete R2 and an orphan requires operator action
+- `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` when commit evidence is partial or
+  unavailable, or guarded compensation cannot delete R2
 
 ### `POST /rfis/{rfiId}/responses`
 

@@ -7,24 +7,51 @@ import {
 } from "pdf-lib";
 
 import type {
-  FrozenRfiRenderPayload,
-  RfiIssueFileSummary,
-} from "../../domain/rfis/official-issue";
-import type {
   RenderedRfiArtifact,
   RfiArtifactRenderer,
 } from "../../application/rfis/rfi-artifact-renderer";
+import {
+  compileBaseRfiOfficialDocument,
+  type BaseRfiOfficialField,
+} from "../../domain/rfis/base-rfi-official-document";
+import type {
+  FrozenRfiRenderPayload,
+  RfiIssueFileSummary,
+} from "../../domain/rfis/official-issue";
 import { requireValidRendererDefinition } from "../../rendering/renderer-definition";
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
-const MARGIN = 54;
+const MARGIN = 42;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const BODY_SIZE = 9;
-const LEADING = 12;
-const MAROON = rgb(0.36, 0.055, 0.11);
-const INK = rgb(0.12, 0.12, 0.12);
-const MUTED = rgb(0.36, 0.34, 0.33);
+const FOOTER_HEIGHT = 30;
+const MAROON = rgb(0.34, 0.035, 0.095);
+const PALE_MAROON = rgb(0.965, 0.935, 0.942);
+const INK = rgb(0.105, 0.105, 0.115);
+const MUTED = rgb(0.39, 0.39, 0.42);
+const RULE = rgb(0.72, 0.69, 0.69);
+const WHITE = rgb(1, 1, 1);
+
+function splitWord(
+  word: string,
+  font: PDFFont,
+  size: number,
+  width: number,
+): string[] {
+  const pieces: string[] = [];
+  let piece = "";
+  for (const character of word) {
+    const next = piece + character;
+    if (piece && font.widthOfTextAtSize(next, size) > width) {
+      pieces.push(piece);
+      piece = character;
+    } else {
+      piece = next;
+    }
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
+}
 
 function wrap(
   text: string,
@@ -32,21 +59,27 @@ function wrap(
   size: number,
   width: number,
 ): string[] {
-  const paragraphs = text.replace(/\r\n?/g, "\n").split("\n");
   const lines: string[] = [];
-  for (const paragraph of paragraphs) {
+  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
     const words = paragraph.split(/\s+/).filter(Boolean);
     if (words.length === 0) {
       lines.push("");
       continue;
     }
-    let line = words[0];
-    for (const word of words.slice(1)) {
-      const candidate = `${line} ${word}`;
-      if (font.widthOfTextAtSize(candidate, size) <= width) line = candidate;
-      else {
-        lines.push(line);
-        line = word;
+    let line = "";
+    for (const originalWord of words) {
+      const pieces =
+        font.widthOfTextAtSize(originalWord, size) > width
+          ? splitWord(originalWord, font, size, width)
+          : [originalWord];
+      for (const word of pieces) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (font.widthOfTextAtSize(candidate, size) <= width) {
+          line = candidate;
+        } else {
+          if (line) lines.push(line);
+          line = word;
+        }
       }
     }
     lines.push(line);
@@ -57,7 +90,12 @@ function wrap(
 function fieldValues(payload: FrozenRfiRenderPayload): Record<string, string> {
   return {
     subject: payload.rfi.subject,
-    responsible_party: payload.rfi.responsibleParty.contactName,
+    responsible_party: [
+      payload.rfi.responsibleParty.contactName,
+      payload.rfi.responsibleParty.companyName,
+    ]
+      .filter(Boolean)
+      .join(" — "),
     requested_response_date: payload.rfi.responseDueDate,
     question: payload.rfi.question,
     contractor_suggestion: payload.rfi.contractorSuggestion ?? "",
@@ -72,160 +110,343 @@ interface Cursor {
   y: number;
 }
 
-/**
- * Deterministic definition-driven PDF implementation for the RFI issue port.
- * It consumes the same validated renderer definition contract as browser
- * preview, but never scrapes browser DOM or accepts a browser-generated file.
- */
 export class RfiPdfArtifactRenderer implements RfiArtifactRenderer {
-  readonly rendererVersion = "base-rfi-pdf/v1";
+  readonly rendererVersion = "base-rfi-official-document/v1";
 
   async render(payload: FrozenRfiRenderPayload): Promise<RenderedRfiArtifact> {
     const definition = requireValidRendererDefinition(
       payload.template.definition,
     );
+    const plan = compileBaseRfiOfficialDocument(definition);
     const document = await PDFDocument.create();
     const regular = await document.embedFont(StandardFonts.Helvetica);
     const bold = await document.embedFont(StandardFonts.HelveticaBold);
     const issuedAt = new Date(payload.issuedAt);
+
     document.setTitle(
       `${payload.officialDisplayNumber} — ${payload.rfi.subject}`,
     );
     document.setSubject("Official Request for Information");
-    document.setAuthor(payload.organization.name ?? "BASE");
+    document.setAuthor(payload.organization.name ?? plan.brand);
     document.setCreator(this.rendererVersion);
     document.setProducer(this.rendererVersion);
     document.setCreationDate(issuedAt);
     document.setModificationDate(issuedAt);
 
-    const newPage = (): Cursor => {
-      const page = document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      page.drawText(payload.organization.name ?? "BASE", {
+    const drawPageHeader = (page: PDFPage): number => {
+      page.drawRectangle({
+        x: 0,
+        y: PAGE_HEIGHT - 58,
+        width: PAGE_WIDTH,
+        height: 58,
+        color: MAROON,
+      });
+      page.drawText(plan.brand.toUpperCase(), {
         x: MARGIN,
-        y: PAGE_HEIGHT - MARGIN + 8,
+        y: PAGE_HEIGHT - 31,
         size: 9,
         font: bold,
-        color: MAROON,
+        color: WHITE,
+      });
+      page.drawText(plan.title, {
+        x: MARGIN,
+        y: PAGE_HEIGHT - 48,
+        size: 16,
+        font: bold,
+        color: WHITE,
       });
       page.drawText(payload.officialDisplayNumber, {
-        x: PAGE_WIDTH - MARGIN - 95,
-        y: PAGE_HEIGHT - MARGIN + 8,
-        size: 9,
+        x: PAGE_WIDTH - MARGIN - 86,
+        y: PAGE_HEIGHT - 40,
+        size: 14,
+        font: bold,
+        color: WHITE,
+      });
+      return PAGE_HEIGHT - 76;
+    };
+
+    const newPage = (): Cursor => {
+      const page = document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      return { page, y: drawPageHeader(page) };
+    };
+    let cursor = newPage();
+    const ensure = (height: number): void => {
+      if (cursor.y - height < MARGIN + FOOTER_HEIGHT) cursor = newPage();
+    };
+
+    const drawControlCell = (
+      x: number,
+      y: number,
+      width: number,
+      label: string,
+      value: string,
+    ): void => {
+      cursor.page.drawRectangle({
+        x,
+        y: y - 35,
+        width,
+        height: 35,
+        borderColor: RULE,
+        borderWidth: 0.6,
+      });
+      cursor.page.drawText(label.toUpperCase(), {
+        x: x + 7,
+        y: y - 11,
+        size: 6.5,
+        font: bold,
+        color: MUTED,
+      });
+      const line = wrap(value || "—", regular, 8.3, width - 14)[0] ?? "—";
+      cursor.page.drawText(line, {
+        x: x + 7,
+        y: y - 25,
+        size: 8.3,
+        font: regular,
+        color: INK,
+      });
+    };
+
+    const half = CONTENT_WIDTH / 2;
+    drawControlCell(
+      MARGIN,
+      cursor.y,
+      half,
+      "Project",
+      `${payload.project.projectNumber} — ${payload.project.name}`,
+    );
+    drawControlCell(
+      MARGIN + half,
+      cursor.y,
+      half,
+      "Document control",
+      `${plan.documentType} · ${payload.officialDisplayNumber} · Original Issue`,
+    );
+    cursor.y -= 35;
+    drawControlCell(
+      MARGIN,
+      cursor.y,
+      half,
+      "Issue date / response due",
+      `${payload.issuedAt.slice(0, 10)} / ${payload.rfi.responseDueDate}`,
+    );
+    drawControlCell(
+      MARGIN + half,
+      cursor.y,
+      half,
+      "Issued by",
+      payload.issuedBy.displayName ?? payload.issuedBy.userId,
+    );
+    cursor.y -= 49;
+
+    const values = fieldValues(payload);
+    const drawSectionHeader = (name: string): void => {
+      ensure(25);
+      cursor.page.drawRectangle({
+        x: MARGIN,
+        y: cursor.y - 18,
+        width: CONTENT_WIDTH,
+        height: 18,
+        color: PALE_MAROON,
+      });
+      cursor.page.drawText(name.toUpperCase(), {
+        x: MARGIN + 7,
+        y: cursor.y - 12,
+        size: 7.5,
         font: bold,
         color: MAROON,
       });
-      return { page, y: PAGE_HEIGHT - MARGIN - 18 };
+      cursor.y -= 18;
     };
 
-    let cursor = newPage();
-    const ensure = (height: number): void => {
-      if (cursor.y - height < MARGIN + 20) cursor = newPage();
-    };
-    const text = (
+    const requiredHeight = (
+      field: BaseRfiOfficialField,
       value: string,
-      options: {
-        font?: PDFFont;
-        size?: number;
-        color?: ReturnType<typeof rgb>;
-        gap?: number;
-      } = {},
+      width: number,
+    ): number =>
+      Math.max(
+        field.multiline ? field.minimumHeight * 1.65 : 0,
+        29 + wrap(value || "—", regular, 8.5, width - 14).length * 11,
+      );
+
+    const drawField = (
+      field: BaseRfiOfficialField,
+      value: string,
+      x: number,
+      width: number,
+      forcedHeight?: number,
     ): void => {
-      const font = options.font ?? regular;
-      const size = options.size ?? BODY_SIZE;
-      const lines = wrap(value, font, size, CONTENT_WIDTH);
-      ensure(lines.length * LEADING + (options.gap ?? 0));
+      const lines = wrap(value || "—", regular, 8.5, width - 14);
+      const height = forcedHeight ?? requiredHeight(field, value, width);
+      cursor.page.drawRectangle({
+        x,
+        y: cursor.y - height,
+        width,
+        height,
+        borderColor: RULE,
+        borderWidth: 0.6,
+      });
+      cursor.page.drawText(field.label.toUpperCase(), {
+        x: x + 7,
+        y: cursor.y - 11,
+        size: 6.5,
+        font: bold,
+        color: MUTED,
+      });
+      let textY = cursor.y - 25;
+      for (const line of lines.slice(
+        0,
+        Math.max(1, Math.floor((height - 29) / 11)),
+      )) {
+        cursor.page.drawText(line, {
+          x: x + 7,
+          y: textY,
+          size: 8.5,
+          font: regular,
+          color: INK,
+        });
+        textY -= 11;
+      }
+    };
+
+    for (const section of plan.sections) {
+      const firstField = section.fields[0];
+      const firstValue = values[firstField.id] ?? "";
+      const firstWidth = firstField.width === 6 ? half : CONTENT_WIDTH;
+      ensure(
+        18 + Math.min(requiredHeight(firstField, firstValue, firstWidth), 60),
+      );
+      drawSectionHeader(section.name);
+      for (let index = 0; index < section.fields.length; index += 1) {
+        const field = section.fields[index];
+        const next = section.fields[index + 1];
+        const value = values[field.id] ?? "";
+        if (
+          field.width === 6 &&
+          index + 1 < section.fields.length &&
+          next.width === 6
+        ) {
+          const nextValue = values[next.id] ?? "";
+          const height = Math.max(
+            requiredHeight(field, value, half),
+            requiredHeight(next, nextValue, half),
+          );
+          ensure(height);
+          drawField(field, value, MARGIN, half, height);
+          drawField(next, nextValue, MARGIN + half, half, height);
+          cursor.y -= height;
+          index += 1;
+        } else {
+          const lines = wrap(value || "—", regular, 8.5, CONTENT_WIDTH - 14);
+          const maxLinesPerPage = Math.max(
+            1,
+            Math.floor((cursor.y - MARGIN - FOOTER_HEIGHT - 29) / 11),
+          );
+          if (lines.length <= maxLinesPerPage) {
+            const height = requiredHeight(field, value, CONTENT_WIDTH);
+            ensure(height);
+            drawField(field, value, MARGIN, CONTENT_WIDTH, height);
+            cursor.y -= height;
+          } else {
+            let offset = 0;
+            while (offset < lines.length) {
+              ensure(51);
+              const capacity = Math.max(
+                1,
+                Math.floor((cursor.y - MARGIN - FOOTER_HEIGHT - 29) / 11),
+              );
+              const chunk = lines.slice(offset, offset + capacity);
+              const continued = {
+                ...field,
+                label:
+                  offset === 0 ? field.label : `${field.label} (continued)`,
+                minimumHeight: 0,
+              };
+              const height = 29 + chunk.length * 11;
+              drawField(
+                continued,
+                chunk.join("\n"),
+                MARGIN,
+                CONTENT_WIDTH,
+                height,
+              );
+              cursor.y -= height;
+              offset += chunk.length;
+              if (offset < lines.length) cursor = newPage();
+            }
+          }
+        }
+      }
+      cursor.y -= 10;
+    }
+
+    const summaryLines = [
+      `To: ${payload.routing.to.map((item) => item.contactName).join("; ") || "—"}`,
+      `CC: ${payload.routing.cc.map((item) => item.contactName).join("; ") || "—"}`,
+      `Delivery: Record only`,
+    ];
+    const files: RfiIssueFileSummary[] = payload.includedFiles;
+    summaryLines.push(
+      files.length
+        ? `Included files: ${files.map((file) => `${file.originalFilename} (${file.sha256.slice(0, 12)}…)`).join("; ")}`
+        : "Included files: None",
+    );
+    const summaryField: BaseRfiOfficialField = {
+      id: "distribution",
+      label: "Official routing snapshot",
+      width: 12,
+      multiline: true,
+      minimumHeight: 30,
+    };
+    const summary = summaryLines.join("\n");
+    const summaryHeight = requiredHeight(summaryField, summary, CONTENT_WIDTH);
+    ensure(18 + summaryHeight);
+    drawSectionHeader("Distribution and file record");
+    drawField(summaryField, summary, MARGIN, CONTENT_WIDTH, summaryHeight);
+    cursor.y -= summaryHeight + 12;
+
+    for (const footnote of plan.footnotes) {
+      const lines = wrap(footnote, regular, 7.5, CONTENT_WIDTH - 12);
+      ensure(lines.length * 10 + 18);
+      cursor.page.drawLine({
+        start: { x: MARGIN, y: cursor.y },
+        end: { x: MARGIN + CONTENT_WIDTH, y: cursor.y },
+        thickness: 0.6,
+        color: RULE,
+      });
+      cursor.y -= 13;
       for (const line of lines) {
         cursor.page.drawText(line, {
-          x: MARGIN,
+          x: MARGIN + 6,
           y: cursor.y,
-          size,
-          font,
-          color: options.color ?? INK,
+          size: 7.5,
+          font: regular,
+          color: MUTED,
         });
-        cursor.y -= LEADING;
-      }
-      cursor.y -= options.gap ?? 0;
-    };
-
-    text(definition.title, {
-      font: bold,
-      size: 19,
-      color: MAROON,
-      gap: 4,
-    });
-    text(`${payload.project.projectNumber} · ${payload.project.name}`, {
-      font: bold,
-      size: 11,
-      gap: 3,
-    });
-    text(
-      `Issued ${payload.issuedAt} by ${payload.issuedBy.displayName ?? payload.issuedBy.userId}`,
-      {
-        color: MUTED,
-        gap: 10,
-      },
-    );
-
-    const values = fieldValues(payload);
-    const sections = Array.isArray(definition.sections)
-      ? definition.sections
-      : [];
-    for (const sectionValue of sections) {
-      if (!sectionValue || typeof sectionValue !== "object") continue;
-      const section = sectionValue as Record<string, unknown>;
-      const fields = Array.isArray(section.fields) ? section.fields : [];
-      const name = typeof section.name === "string" ? section.name : "Section";
-      ensure(34);
-      text(name, { font: bold, size: 11, color: MAROON, gap: 3 });
-      for (const fieldValue of fields) {
-        if (!fieldValue || typeof fieldValue !== "object") continue;
-        const field = fieldValue as Record<string, unknown>;
-        const id = typeof field.id === "string" ? field.id : "";
-        const label = typeof field.label === "string" ? field.label : id;
-        const value = values[id] ?? "";
-        ensure(30);
-        text(label, { font: bold, size: 8, color: MUTED });
-        text(value || "—", { gap: 5 });
+        cursor.y -= 10;
       }
     }
 
-    const recipientLine = (role: string, names: string[]): void => {
-      text(`${role}: ${names.join("; ") || "—"}`, { gap: 2 });
-    };
-    ensure(58);
-    text("Routing snapshot", { font: bold, size: 11, color: MAROON, gap: 3 });
-    recipientLine(
-      "To",
-      payload.routing.to.map((contact) => contact.contactName),
-    );
-    recipientLine(
-      "CC",
-      payload.routing.cc.map((contact) => contact.contactName),
-    );
-
-    ensure(40);
-    text("Included files", { font: bold, size: 11, color: MAROON, gap: 3 });
-    const files: RfiIssueFileSummary[] = payload.includedFiles;
-    if (files.length === 0) text("No supporting files included.", { gap: 3 });
-    for (const file of files) {
-      text(
-        `${file.originalFilename} · ${file.byteSize.toString()} bytes · SHA-256 ${file.sha256}`,
-        { gap: 2 },
-      );
-    }
-
-    for (const page of document.getPages()) {
+    const pages = document.getPages();
+    pages.forEach((page, index) => {
       page.drawText(
-        `Frozen render ${payload.template.definitionSha256.slice(0, 12)} · ${this.rendererVersion}`,
+        `Frozen definition ${payload.template.definitionSha256.slice(0, 12)} · ${this.rendererVersion}`,
         {
           x: MARGIN,
-          y: 28,
-          size: 7,
+          y: 24,
+          size: 6.5,
           font: regular,
           color: MUTED,
         },
       );
-    }
+      const pageLabel = `Page ${String(index + 1)} of ${String(pages.length)}`;
+      page.drawText(pageLabel, {
+        x: PAGE_WIDTH - MARGIN - regular.widthOfTextAtSize(pageLabel, 6.5),
+        y: 24,
+        size: 6.5,
+        font: regular,
+        color: MUTED,
+      });
+    });
 
     const bytes = await document.save({
       useObjectStreams: false,

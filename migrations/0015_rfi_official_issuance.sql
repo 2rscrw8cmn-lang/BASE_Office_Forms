@@ -101,6 +101,7 @@ CREATE TABLE rfi_issue_file_snapshots (
 
 CREATE TABLE idempotency_keys (
   organization_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   operation TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
@@ -109,7 +110,9 @@ CREATE TABLE idempotency_keys (
   created_at TEXT NOT NULL,
   expires_at TEXT,
   PRIMARY KEY (organization_id, operation, idempotency_key),
-  UNIQUE (organization_id, operation, resource_id)
+  UNIQUE (organization_id, operation, resource_id),
+  FOREIGN KEY (project_id, organization_id)
+    REFERENCES projects(id, organization_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE rfi_artifact_orphans (
@@ -120,6 +123,9 @@ CREATE TABLE rfi_artifact_orphans (
   artifact_storage_key TEXT NOT NULL UNIQUE,
   artifact_sha256 TEXT NOT NULL CHECK (length(artifact_sha256) = 64),
   artifact_byte_size INTEGER NOT NULL CHECK (artifact_byte_size > 0),
+  reconciliation_kind TEXT NOT NULL CHECK (
+    reconciliation_kind IN ('compensation_delete_failed', 'commit_outcome_unknown')
+  ),
   failure_summary TEXT NOT NULL,
   reconciliation_status TEXT NOT NULL CHECK (
     reconciliation_status IN ('pending', 'deleted', 'retained')

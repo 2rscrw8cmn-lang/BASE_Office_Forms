@@ -401,23 +401,29 @@ navigation, mobile, Studio, and Document Library checks.
 
 The Slice 2A gate includes:
 
-- deterministic server-PDF and canonical-idempotency unit tests;
+- strict template-compiler parity/rejection, multiline/long-token/page-break,
+  deterministic server-PDF, and resource-scoped canonical-idempotency tests;
 - empty-database and populated post-0014 migration rehearsals through schema
   version 13 with foreign-key checks;
 - successful number/revision/artifact/issuance/file/recipient/activity/API
   assertions and authorized artifact download;
 - authentication, role, tenant, project, contact, file, template, request, and
   lifecycle validation;
-- same-key replay, changed-request conflict, same-RFI concurrency, and
+- same-key replay, changed-request conflict, cross-RFI/project conflict,
+  tenant isolation, manager non-disclosure, same-RFI concurrency, and
   same-project numbering concurrency;
+- workspace reload evidence, `Current Draft`/`Original Issue` labels, and
+  discoverable authorized artifact download identity;
+- included-object matching, missing, wrong, or unavailable SHA/head evidence;
 - injected renderer, R2 write/verify, sequence, revision, issuance, recipient,
-  activity, D1 commit, and compensation-delete failures;
+  activity, D1 commit, post-commit response loss, authoritative query
+  success/absence/unavailability, and compensation-delete failures;
 - post-issue project, RFI-detail, contact, template-version, and renderer
   changes, plus database immutability-trigger assertions.
 
-No test may count an R2 object without committed D1 official state as a
-successful issue. Failed compensation must leave an explicit pending orphan
-row.
+No successful or potentially successful issue may lose its artifact. A
+confirmed absent commit may compensate; partial/unavailable evidence must
+retain the object and leave explicit pending reconciliation.
 
 ## 13. Performance targets
 

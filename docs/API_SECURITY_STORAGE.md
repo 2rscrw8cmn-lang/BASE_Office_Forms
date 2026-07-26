@@ -263,19 +263,25 @@ D1 and R2 do not share a transaction. Official RFI issue therefore:
 1. authorizes and validates all tenant/project/record/contact/file/template
    relationships;
 2. generates the artifact;
-3. writes it to the server key and verifies object size and SHA-256;
+3. writes it to the server key and requires matching object size and SHA-256;
 4. commits all official D1 state in one guarded batch;
-5. deletes the object if D1 fails.
+5. after any D1 error, reloads authoritative issue, revision-file,
+   issuance-file, file-snapshot, and idempotency evidence;
+6. returns a confirmed committed result, deletes only after confirmed absence
+   and a final no-reference check, or retains the object and records
+   reconciliation when evidence is partial/unavailable.
 
-If deletion fails, the API returns
+If commit state cannot be established, or a guarded deletion fails, the API returns
 `RFI_ARTIFACT_RECONCILIATION_REQUIRED` and inserts a pending
-`rfi_artifact_orphans` row. Operators follow
-`RFI_SLICE_2A_ROLLOUT.md`; the object must not be treated as official without a
-matching `rfi_official_issues` row.
+`rfi_artifact_orphans` row with `commit_outcome_unknown` or
+`compensation_delete_failed`. Operators follow `RFI_SLICE_2A_ROLLOUT.md`.
+Objects referenced by `rfi_official_issues`, `revision_files`,
+`issuance_files`, or `rfi_issue_file_snapshots` must never be deleted.
 
-The issue endpoint requires durable idempotency. The key is tenant-scoped;
-same key/same canonical request replays the stored success, while changed input
-conflicts. Server capability checks precede record disclosure, and all RFI,
+The issue endpoint requires durable idempotency. The key is tenant-scoped and
+the canonical request includes project and RFI identity. Only the same
+key/resource/request replays; cross-RFI/project reuse and changed input
+conflict. Server capability checks precede record disclosure, and all RFI,
 revision, contact, file, sequence, and issuance relationships remain
 organization/project scoped.
 

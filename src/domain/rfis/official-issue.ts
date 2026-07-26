@@ -40,6 +40,7 @@ export interface RfiOfficialIssueResult {
     issueNumber: string;
   };
   issuedAt: string;
+  responseDueDate: string;
   officialArtifact: RfiIssueFileSummary;
   includedFiles: RfiIssueFileSummary[];
   recipients: {
@@ -112,8 +113,14 @@ export interface FrozenRfiRenderPayload {
   };
 }
 
-export function canonicalRfiIssueRequest(input: RfiIssueRequest): string {
+export function canonicalRfiIssueRequest(
+  projectId: string,
+  rfiId: string,
+  input: RfiIssueRequest,
+): string {
   return JSON.stringify({
+    projectId,
+    rfiId,
     recipientProjectContactIds: input.recipientProjectContactIds,
     ccProjectContactIds: input.ccProjectContactIds,
     responseDueDate: input.responseDueDate,

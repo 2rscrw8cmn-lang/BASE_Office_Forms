@@ -19,6 +19,7 @@ import type {
 import { currentIsoDate, rfiScheduleFlags } from "../../domain/rfis/schedule";
 import type { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import type { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
+import type { D1RfiOfficialIssueRepository } from "../../infrastructure/db/d1/rfi-official-issue-repository";
 import type { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
 import type {
   D1RfiWorkspaceReadRepository,
@@ -26,6 +27,7 @@ import type {
 } from "../../infrastructure/db/d1/rfi-workspace-read-repository";
 import type { ProjectService } from "../projects/project-service";
 import type { RfiTemplateBindingService } from "../rfis/rfi-template-binding-service";
+import type { RfiOfficialIssueResult } from "../../domain/rfis/official-issue";
 
 export interface RfiWorkspaceCapabilities {
   updateDraft: boolean;
@@ -118,6 +120,7 @@ export interface RfiWorkspaceReadModel {
     supporting_attachment: WorkspaceAttachment[];
     reference_drawing: WorkspaceAttachment[];
   };
+  officialIssue: RfiOfficialIssueResult | null;
   responses: {
     id: string;
     response: string;
@@ -128,12 +131,15 @@ export interface RfiWorkspaceReadModel {
   capabilities: RfiWorkspaceCapabilities;
 }
 
-function toWorkspaceAttachment(attachment: RfiAttachment): WorkspaceAttachment {
+function toWorkspaceAttachment(
+  attachment: RfiAttachment,
+  revisionLabel: "Current Draft" | "Original Issue",
+): WorkspaceAttachment {
   return {
     id: attachment.id,
     role: attachment.role,
     revisionId: attachment.revisionId,
-    revisionLabel: "Current Draft",
+    revisionLabel,
     originalFilename: attachment.originalFilename,
     mediaType: attachment.mediaType,
     byteSize: attachment.byteSize,
@@ -157,6 +163,7 @@ export class RfiWorkspaceReadModelService {
     private readonly responses: D1RfiResponsesRepository,
     private readonly reads: D1RfiWorkspaceReadRepository,
     private readonly templateBinding: RfiTemplateBindingService,
+    private readonly officialIssues: D1RfiOfficialIssueRepository,
   ) {}
 
   async load(
@@ -182,6 +189,7 @@ export class RfiWorkspaceReadModelService {
       organizationName,
       template,
       responsibleContacts,
+      officialIssue,
     ] = await Promise.all([
       this.attachments.list(actor.organizationId, rfi.id),
       this.responses.list(actor.organizationId, rfi.id),
@@ -192,6 +200,11 @@ export class RfiWorkspaceReadModelService {
         rfi.templateVersionId,
       ),
       this.reads.listResponsibleContacts(actor.organizationId, project.id),
+      this.officialIssues.findOfficialIssueResult(
+        actor.organizationId,
+        project.id,
+        rfi.id,
+      ),
     ]);
 
     const flags = rfiScheduleFlags(
@@ -261,11 +274,26 @@ export class RfiWorkspaceReadModelService {
       attachments: {
         supporting_attachment: attachments
           .filter((item) => item.role === "supporting_attachment")
-          .map(toWorkspaceAttachment),
+          .map((item) =>
+            toWorkspaceAttachment(
+              item,
+              rfi.status === "draft" || rfi.status === "ready_to_issue"
+                ? "Current Draft"
+                : "Original Issue",
+            ),
+          ),
         reference_drawing: attachments
           .filter((item) => item.role === "reference_drawing")
-          .map(toWorkspaceAttachment),
+          .map((item) =>
+            toWorkspaceAttachment(
+              item,
+              rfi.status === "draft" || rfi.status === "ready_to_issue"
+                ? "Current Draft"
+                : "Original Issue",
+            ),
+          ),
       },
+      officialIssue,
       responses: responses.map((response) => ({
         id: response.id,
         response: response.response,

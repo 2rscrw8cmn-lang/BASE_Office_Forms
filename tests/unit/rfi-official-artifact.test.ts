@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 
+import { compileBaseRfiOfficialDocument } from "../../src/domain/rfis/base-rfi-official-document";
 import { buildBaseRfiTemplateDefinition } from "../../src/domain/rfis/base-rfi-template";
 import {
   canonicalRfiIssueRequest,
@@ -11,7 +13,7 @@ function payload(): FrozenRfiRenderPayload {
   const definition = buildBaseRfiTemplateDefinition();
   return {
     schemaVersion: "rfi-official-render.v1",
-    rendererVersion: "base-rfi-pdf/v1",
+    rendererVersion: "base-rfi-official-document/v1",
     issuedAt: "2026-07-25T12:00:00.000Z",
     officialDisplayNumber: "RFI-007",
     template: {
@@ -91,9 +93,68 @@ describe("official RFI artifact contract", () => {
     expect(new Uint8Array(second.bytes)).toEqual(new Uint8Array(first.bytes));
   });
 
+  it("compiles the exact BASE RFI header, control, field layout, and footnote", () => {
+    const plan = compileBaseRfiOfficialDocument(
+      buildBaseRfiTemplateDefinition(),
+    );
+    expect(plan).toMatchObject({
+      compilerVersion: "base-rfi-official-document/v1",
+      brand: "BASE Construction",
+      title: "Request for Information",
+      documentType: "RFI",
+      showHeader: true,
+      showControl: true,
+    });
+    expect(plan.sections.map((section) => section.name)).toEqual([
+      "RFI",
+      "Question",
+      "Contractor Suggestion",
+      "References",
+      "Response",
+    ]);
+    expect(
+      plan.sections[0]?.fields.map((field) => [field.label, field.width]),
+    ).toEqual([
+      ["Subject", 12],
+      ["Responsible Party", 6],
+      ["Requested Response Date", 6],
+    ]);
+    expect(plan.sections[1]?.fields[0]).toMatchObject({
+      label: "Question",
+      multiline: true,
+      minimumHeight: 28,
+    });
+    expect(plan.footnotes).toEqual([
+      "This RFI is a controlled project record. The official number is assigned when the RFI is issued.",
+    ]);
+  });
+
+  it("rejects meaningful published-template changes instead of silently misrendering", async () => {
+    const changed = buildBaseRfiTemplateDefinition();
+    changed.title = "Changed RFI";
+    const changedPayload = payload();
+    changedPayload.template.definition = changed;
+    await expect(
+      new RfiPdfArtifactRenderer().render(changedPayload),
+    ).rejects.toThrow(/not supported by the BASE RFI/);
+  });
+
+  it("handles multiline, long-token, and page-break content deterministically", async () => {
+    const long = payload();
+    long.rfi.question = `${"A".repeat(180)}\n${"Confirm the coordinated structural detail. ".repeat(260)}`;
+    long.rfi.contractorSuggestion =
+      "Use the coordinated detail pending written confirmation.\n".repeat(35);
+    const renderer = new RfiPdfArtifactRenderer();
+    const first = await renderer.render(long);
+    const second = await renderer.render(long);
+    const pdf = await PDFDocument.load(first.bytes);
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
+    expect(new Uint8Array(second.bytes)).toEqual(new Uint8Array(first.bytes));
+  });
+
   it("hash input keeps every issue field explicit and ordered", () => {
     expect(
-      canonicalRfiIssueRequest({
+      canonicalRfiIssueRequest("project-1", "rfi-1", {
         recipientProjectContactIds: ["to-1"],
         ccProjectContactIds: ["cc-1"],
         responseDueDate: "2026-08-01",
@@ -101,7 +162,7 @@ describe("official RFI artifact contract", () => {
         deliveryMode: "record_only",
       }),
     ).toBe(
-      '{"recipientProjectContactIds":["to-1"],"ccProjectContactIds":["cc-1"],"responseDueDate":"2026-08-01","includedFileIds":["file-1"],"deliveryMode":"record_only"}',
+      '{"projectId":"project-1","rfiId":"rfi-1","recipientProjectContactIds":["to-1"],"ccProjectContactIds":["cc-1"],"responseDueDate":"2026-08-01","includedFileIds":["file-1"],"deliveryMode":"record_only"}',
     );
   });
 });

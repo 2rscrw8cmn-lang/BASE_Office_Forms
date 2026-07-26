@@ -171,7 +171,8 @@ Guard:
   are complete and active;
 - exact bound template version exists, validates, and is still `published`;
 - every included file belongs to the authoritative current RFI revision and
-  matches its D1 size/checksum and private R2 object;
+  its private R2 object supplies matching D1 size and SHA-256 metadata (missing
+  SHA is a failure);
 - `Idempotency-Key` is supplied and the request is valid;
 - delivery mode is `record_only`.
 
@@ -180,8 +181,8 @@ Coordinated effects:
 1. Resolve the next project `rfi` record-type sequence without reserving it.
 2. Freeze exact template definition, project/RFI/contact/routing/due-date/file
    data, renderer version, and checksums.
-3. Compile and generate the official PDF through the server artifact-renderer
-   boundary.
+3. Compile and generate the official PDF through the strict, versioned BASE RFI
+   official-document compiler; unsupported template changes are rejected.
 4. Write the deterministic private R2 object and verify size/checksum.
 5. In one guarded D1 batch, allocate the number, promote the authoritative
    shared revision 1 to `published` and label it `Original Issue`, attach the
@@ -189,12 +190,14 @@ Coordinated effects:
    frozen RFI/recipient/file snapshots, set `issued_at` and `open`, append
    activity, and store the immutable idempotency result.
 
-If R2 write/verification fails, no D1 official state is committed. If the D1
-batch fails, the new R2 object is deleted; failed deletion creates a pending
-`rfi_artifact_orphans` reconciliation row and returns an explicit error. A
-committed number is never reused. Same key/same request replays the original
-result; same key/different request conflicts. Email/share delivery is not part
-of Slice 2A.
+If R2 write/verification fails, no D1 official state is committed. After a D1
+error, authoritative evidence determines whether the batch committed. Confirmed
+success retains the artifact and returns the stored result; confirmed absence
+permits guarded deletion; partial/unavailable evidence retains the artifact,
+records reconciliation, and returns
+`RFI_ARTIFACT_RECONCILIATION_REQUIRED`. Same key/resource/request replays;
+cross-RFI/project reuse or changed input conflicts. Email/share delivery is not
+part of Slice 2A.
 
 ### 5.5 Record response
 

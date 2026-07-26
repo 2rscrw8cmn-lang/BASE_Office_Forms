@@ -26,8 +26,9 @@ through the root preview binding; retained UI-2 scripts use
 `POST /api/v2/projects/:projectId/rfis/:rfiId/issue` now coordinates one
 server-authoritative operation. It requires `Idempotency-Key`, accepts only
 `record_only` delivery, validates the exact ready RFI/current revision/template
-and private attachment objects, produces a deterministic PDF through
-`RfiArtifactRenderer`, writes and verifies the artifact in R2, and then commits
+and private attachment objects (size and SHA-256 are both mandatory), produces a
+deterministic PDF through the strict `base-rfi-official-document/v1` compiler,
+writes and verifies the artifact in R2, and then commits
 the RFI number, promoted immutable revision, generic issuance/file snapshots,
 RFI render/template/recipient snapshots, activity, and idempotency result in
 one guarded D1 batch.
@@ -43,17 +44,28 @@ New backend boundaries:
 
 ```text
 src/domain/rfis/official-issue.ts
+src/domain/rfis/base-rfi-official-document.ts
 src/application/rfis/rfi-artifact-renderer.ts
 src/application/rfis/rfi-official-issue-service.ts
 src/infrastructure/rendering/rfi-pdf-artifact-renderer.ts
 src/infrastructure/db/d1/rfi-official-issue-repository.ts
 migrations/0015_rfi_official_issuance.sql
+scripts/generate-rfi-official-sample.ts
+output/pdf/base-rfi-official-sample.pdf
 ```
 
-R2 is written before D1 because the services cannot share a transaction. A D1
-failure deletes the deterministic new artifact. If deletion fails,
-`rfi_artifact_orphans` durably records the object for operator reconciliation.
-The API never returns its storage key.
+The checked-in sample PDF is generated from a fixed review payload and was
+rendered to page PNGs with Poppler for visual inspection; it is product-review
+evidence, not an official project record.
+
+R2 is written before D1 because the services cannot share a transaction. After
+any ambiguous D1 error, the repository queries authoritative issue,
+revision-file, issuance-file, file-snapshot, and idempotency evidence. A
+confirmed commit returns the stored result; confirmed absence permits a guarded
+delete; partial or unavailable evidence retains the object and records
+`commit_outcome_unknown`. No object referenced by official D1 state is deleted.
+The RFI workspace reloads the safe official issue snapshot, including its
+downloadable artifact file ID; APIs never return storage keys.
 
 The repository is a Cloudflare Pages application with static browser assets, a
 React/Vite application entry, Pages Functions, one D1 database binding, and one

@@ -34,6 +34,10 @@ import { D1RfiRecordsRepository } from "../../src/infrastructure/db/d1/rfi-recor
 import { D1RfiResponsesRepository } from "../../src/infrastructure/db/d1/rfi-responses-repository";
 import { D1RfiWorkspaceReadRepository } from "../../src/infrastructure/db/d1/rfi-workspace-read-repository";
 import { D1RfiOfficialIssueRepository } from "../../src/infrastructure/db/d1/rfi-official-issue-repository";
+import type {
+  CommitRfiOfficialIssueInput,
+  RfiOfficialCommitState,
+} from "../../src/infrastructure/db/d1/rfi-official-issue-repository";
 import { D1RecordRevisionsRepository } from "../../src/infrastructure/db/d1/record-revisions-repository";
 import { D1RecordRevisionSequencesRepository } from "../../src/infrastructure/db/d1/record-revision-sequences-repository";
 import { D1UsersRepository } from "../../src/infrastructure/db/d1/users-repository";
@@ -98,6 +102,8 @@ class FakeStorage implements FileStoragePort {
   failHead = false;
   failDelete = false;
   corruptHead = false;
+  readonly omitShaKeys = new Set<string>();
+  readonly wrongShaKeys = new Set<string>();
 
   reset(): void {
     this.objects.clear();
@@ -105,6 +111,8 @@ class FakeStorage implements FileStoragePort {
     this.failHead = false;
     this.failDelete = false;
     this.corruptHead = false;
+    this.omitShaKeys.clear();
+    this.wrongShaKeys.clear();
   }
 
   get objectCount(): number {
@@ -151,7 +159,7 @@ class FakeStorage implements FileStoragePort {
     return Promise.resolve();
   }
 
-  head(key: string): Promise<{ size: number; sha256: string } | null> {
+  head(key: string): Promise<{ size: number; sha256?: string } | null> {
     if (this.failHead) {
       return Promise.reject(new Error("forced R2 head failure"));
     }
@@ -160,7 +168,13 @@ class FakeStorage implements FileStoragePort {
       object
         ? {
             size: object.content.byteLength + (this.corruptHead ? 1 : 0),
-            sha256: object.sha256,
+            ...(this.omitShaKeys.has(key)
+              ? {}
+              : {
+                  sha256: this.wrongShaKeys.has(key)
+                    ? "0".repeat(64)
+                    : object.sha256,
+                }),
           }
         : null,
     );
@@ -189,6 +203,33 @@ class TestRenderer implements RfiArtifactRenderer {
 }
 const renderer = new TestRenderer();
 
+const issueRepositoryControls = {
+  failBeforeCommit: false,
+  failAfterCommit: false,
+  failInspection: false,
+};
+
+class TestOfficialIssueRepository extends D1RfiOfficialIssueRepository {
+  override async commit(input: CommitRfiOfficialIssueInput): Promise<void> {
+    if (issueRepositoryControls.failBeforeCommit) {
+      throw new Error("forced pre-commit failure");
+    }
+    await super.commit(input);
+    if (issueRepositoryControls.failAfterCommit) {
+      throw new Error("forced ambiguous response after committed batch");
+    }
+  }
+
+  override async inspectCommitState(
+    input: CommitRfiOfficialIssueInput,
+  ): Promise<RfiOfficialCommitState> {
+    if (issueRepositoryControls.failInspection) {
+      throw new Error("forced authoritative inspection failure");
+    }
+    return super.inspectCommitState(input);
+  }
+}
+
 function dependencies(): V2RouteDependencies {
   const database = testDatabase();
   const projects = new ProjectService(
@@ -198,6 +239,7 @@ function dependencies(): V2RouteDependencies {
   const responses = new D1RfiResponsesRepository(database);
   const attachmentsRepo = new D1RfiAttachmentsRepository(database);
   const records = new D1RfiRecordsRepository(database, responses);
+  const officialIssues = new TestOfficialIssueRepository(database);
   const templateBinding = new RfiTemplateBindingService(
     new D1TemplatesRepository(database),
   );
@@ -213,7 +255,7 @@ function dependencies(): V2RouteDependencies {
     new D1ProjectContactsRepository(database),
     templateBinding,
     new D1UsersRepository(database),
-    new D1RfiOfficialIssueRepository(database),
+    officialIssues,
     storage,
     renderer,
   );
@@ -250,6 +292,7 @@ function dependencies(): V2RouteDependencies {
       responses,
       new D1RfiWorkspaceReadRepository(database),
       templateBinding,
+      officialIssues,
     ),
   };
 }
@@ -368,9 +411,17 @@ interface WorkspaceModel {
   organization: { name: string | null };
   template: { key: string; name: string; definition: { kind: string } } | null;
   attachments: {
-    supporting_attachment: unknown[];
-    reference_drawing: unknown[];
+    supporting_attachment: { revisionLabel: string }[];
+    reference_drawing: { revisionLabel: string }[];
   };
+  officialIssue?: {
+    officialDisplayNumber: string;
+    responseDueDate: string;
+    issuedRevision: { userFacingVersion: string };
+    officialArtifact: { fileId: string; sha256: string };
+    includedFiles: { fileId: string }[];
+    recipients: { to: { contactName: string }[]; cc: unknown[] };
+  } | null;
   currentVersion?: { id: string; label: string; status: string };
   capabilities?: { issue: boolean; recordResponse: boolean };
 }
@@ -580,6 +631,9 @@ describe("RFI register & workspace (Slice 1)", () => {
     await resetIdentityFoundation();
     storage.reset();
     renderer.reset();
+    issueRepositoryControls.failBeforeCommit = false;
+    issueRepositoryControls.failAfterCommit = false;
+    issueRepositoryControls.failInspection = false;
     await seed();
   });
 
@@ -1109,6 +1163,44 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(storage.objectCount).toBe(1);
   });
 
+  it("reloads complete, safe official-issue evidence from the workspace", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-EVIDENCE", {
+      upload: true,
+    });
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody("contact-recipient", [prepared.fileId as string]),
+          { key: "evidence-key" },
+        )
+      ).status,
+    ).toBe(200);
+
+    const model = await workspace(prepared.project.id, prepared.draft.id);
+    expect(model.currentVersion).toEqual({
+      id: prepared.draft.draftRevisionId,
+      label: "Original Issue",
+      status: "published",
+    });
+    expect(model.attachments.supporting_attachment[0]?.revisionLabel).toBe(
+      "Original Issue",
+    );
+    expect(model.officialIssue).toMatchObject({
+      officialDisplayNumber: "RFI-001",
+      responseDueDate: "2026-08-01",
+      issuedRevision: { userFacingVersion: "Original Issue" },
+      includedFiles: [{ fileId: prepared.fileId }],
+      recipients: { to: [{ contactName: "Project Architect" }] },
+    });
+    expect(model.officialIssue?.officialArtifact.fileId).toBe(
+      `${prepared.draft.id}:official-rfi-pdf`,
+    );
+    expect(model.officialIssue).not.toHaveProperty("artifactStorageKey");
+    expect(JSON.stringify(model.officialIssue)).not.toContain("storageKey");
+  });
+
   it("rejects a reused idempotency key when the request changes", async () => {
     const { project, draft } = await prepareIssuableRfi("P-RFI-IDEMPOTENCY");
     expect(
@@ -1136,6 +1228,117 @@ describe("RFI register & workspace (Slice 1)", () => {
     ).toBe("IDEMPOTENCY_KEY_REUSED");
   });
 
+  it("never replays an idempotency result across RFI or project scope", async () => {
+    const project = await createProject("P-RFI-IDEM-SCOPE");
+    const first = await prepareRfiInProject(
+      project,
+      "contact-idem-first",
+      "First scoped RFI",
+    );
+    const second = await prepareRfiInProject(
+      project,
+      "contact-idem-second",
+      "Second scoped RFI",
+    );
+    expect(
+      (
+        await issue(project.id, first.id, issueBody("contact-idem-first"), {
+          key: "resource-scoped-key",
+        })
+      ).status,
+    ).toBe(200);
+    const sameProject = await issue(
+      project.id,
+      second.id,
+      issueBody("contact-idem-first"),
+      { key: "resource-scoped-key" },
+    );
+    expect(sameProject.status).toBe(409);
+    expect(
+      (await readJson<{ error: { code: string } }>(sameProject)).error.code,
+    ).toBe("IDEMPOTENCY_KEY_REUSED");
+
+    const otherProject = await createProject("P-RFI-IDEM-SCOPE-OTHER");
+    const other = await prepareRfiInProject(
+      otherProject,
+      "contact-idem-other",
+      "Other-project RFI",
+    );
+    const acrossProjects = await issue(
+      otherProject.id,
+      other.id,
+      issueBody("contact-idem-first"),
+      { key: "resource-scoped-key" },
+    );
+    expect(acrossProjects.status).toBe(409);
+    expect(
+      (await readJson<{ error: { code: string } }>(acrossProjects)).error.code,
+    ).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  it("does not disclose another project's replay to an authorized manager", async () => {
+    const first = await prepareIssuableRfi("P-RFI-IDEM-MANAGER-A", {
+      contactId: "contact-idem-manager-a",
+    });
+    expect(
+      (
+        await issue(
+          first.project.id,
+          first.draft.id,
+          issueBody(first.contactId),
+          { key: "manager-isolation-key" },
+        )
+      ).status,
+    ).toBe(200);
+    const second = await prepareIssuableRfi("P-RFI-IDEM-MANAGER-B", {
+      contactId: "contact-idem-manager-b",
+    });
+    await testDatabase()
+      .prepare(
+        `INSERT INTO project_memberships
+          (id, organization_id, project_id, user_id, role, status, created_at)
+         VALUES (?, 'org-a', ?, 'user-manager', 'project_manager', 'active', ?)`,
+      )
+      .bind(
+        "member-idem-manager-b",
+        second.project.id,
+        new Date().toISOString(),
+      )
+      .run();
+    const response = await issue(
+      second.project.id,
+      second.draft.id,
+      issueBody(second.contactId),
+      { key: "manager-isolation-key", session: "manager" },
+    );
+    expect(response.status).toBe(409);
+    const error = await readJson<{ error: { code: string }; data?: unknown }>(
+      response,
+    );
+    expect(error.error.code).toBe("IDEMPOTENCY_KEY_REUSED");
+    expect(error).not.toHaveProperty("data");
+  });
+
+  it("keeps identical idempotency keys isolated between organizations", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-IDEM-ORG");
+    expect(
+      (
+        await issue(prepared.project.id, prepared.draft.id, undefined, {
+          key: "organization-isolation-key",
+        })
+      ).status,
+    ).toBe(200);
+    const repository = new D1RfiOfficialIssueRepository(testDatabase());
+    expect(
+      await repository.findIdempotentResult(
+        "org-b",
+        "project-b",
+        "rfi-b",
+        "organization-isolation-key",
+      ),
+    ).toBeNull();
+  });
+
   it("requires the idempotency header and record_only delivery", async () => {
     const { project, draft } = await prepareIssuableRfi("P-RFI-REQUEST");
     const missing = await invokeV2Api(
@@ -1153,6 +1356,14 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(
       (await readJson<{ error: { code: string } }>(missing)).error.code,
     ).toBe("IDEMPOTENCY_KEY_REQUIRED");
+
+    const tooLong = await issue(project.id, draft.id, undefined, {
+      key: "x".repeat(201),
+    });
+    expect(tooLong.status).toBe(400);
+    expect(
+      (await readJson<{ error: { code: string } }>(tooLong)).error.code,
+    ).toBe("VALIDATION_FAILED");
 
     const unsupported = await issue(
       project.id,
@@ -1423,6 +1634,40 @@ describe("RFI register & workspace (Slice 1)", () => {
       { key: "file-missing" },
     );
     expect(missing.status).toBe(503);
+
+    for (const variant of [
+      "missing-sha",
+      "wrong-sha",
+      "head-failure",
+    ] as const) {
+      const candidate = await prepareIssuableRfi(`P-RFI-FILE-${variant}`, {
+        upload: true,
+        contactId: `contact-${variant}`,
+      });
+      const candidateRow = await testDatabase()
+        .prepare("SELECT storage_key FROM revision_files WHERE id = ?")
+        .bind(candidate.fileId)
+        .first<{ storage_key: string }>();
+      const key = candidateRow?.storage_key ?? "";
+      if (variant === "missing-sha") storage.omitShaKeys.add(key);
+      if (variant === "wrong-sha") storage.wrongShaKeys.add(key);
+      if (variant === "head-failure") storage.failHead = true;
+      const objectCountBeforeIssue = storage.objectCount;
+      try {
+        const rejected = await issue(
+          candidate.project.id,
+          candidate.draft.id,
+          issueBody(candidate.contactId, [candidate.fileId as string]),
+          { key: `strict-sha-${variant}` },
+        );
+        expect(rejected.status, variant).toBe(503);
+        expect(storage.objectCount, variant).toBe(objectCountBeforeIssue);
+      } finally {
+        storage.failHead = false;
+        storage.omitShaKeys.delete(key);
+        storage.wrongShaKeys.delete(key);
+      }
+    }
   });
 
   it("prevents simultaneous issue requests from creating duplicate official state", async () => {
@@ -1585,6 +1830,114 @@ describe("RFI register & workspace (Slice 1)", () => {
     }
   });
 
+  it("recovers a committed result after an ambiguous batch response", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-COMMIT-AMBIGUOUS");
+    issueRepositoryControls.failAfterCommit = true;
+    const response = await issue(
+      prepared.project.id,
+      prepared.draft.id,
+      undefined,
+      { key: "ambiguous-committed-key" },
+    );
+    expect(response.status).toBe(200);
+    expect(storage.objectCount).toBe(1);
+    const counts = await testDatabase()
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM rfi_official_issues WHERE rfi_id = ?) issues,
+          (SELECT COUNT(*) FROM revision_files
+           WHERE record_id = ? AND role = 'generated_artifact') files`,
+      )
+      .bind(prepared.draft.id, prepared.draft.id)
+      .first<{ issues: number; files: number }>();
+    expect(counts).toEqual({ issues: 1, files: 1 });
+  });
+
+  it("deletes only after a failed commit is authoritatively absent", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-COMMIT-ABSENT");
+    issueRepositoryControls.failBeforeCommit = true;
+    const response = await issue(
+      prepared.project.id,
+      prepared.draft.id,
+      undefined,
+      { key: "definitely-absent-key" },
+    );
+    expect(response.status).toBe(503);
+    expect(storage.objectCount).toBe(0);
+    expect(
+      await testDatabase()
+        .prepare("SELECT COUNT(*) count FROM rfi_artifact_orphans")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+  });
+
+  it("retains the artifact and records reconciliation when commit state is unavailable", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-COMMIT-UNKNOWN");
+    issueRepositoryControls.failBeforeCommit = true;
+    issueRepositoryControls.failInspection = true;
+    const response = await issue(
+      prepared.project.id,
+      prepared.draft.id,
+      undefined,
+      { key: "unknown-commit-key" },
+    );
+    expect(response.status).toBe(500);
+    expect(
+      (await readJson<{ error: { code: string } }>(response)).error.code,
+    ).toBe("RFI_ARTIFACT_RECONCILIATION_REQUIRED");
+    expect(storage.objectCount).toBe(1);
+    const reconciliation = await testDatabase()
+      .prepare(
+        `SELECT reconciliation_kind, reconciliation_status
+         FROM rfi_artifact_orphans WHERE rfi_id = ?`,
+      )
+      .bind(prepared.draft.id)
+      .first<{
+        reconciliation_kind: string;
+        reconciliation_status: string;
+      }>();
+    expect(reconciliation).toEqual({
+      reconciliation_kind: "commit_outcome_unknown",
+      reconciliation_status: "pending",
+    });
+  });
+
+  it("never deletes a committed artifact when authoritative reload is unavailable", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RELOAD-UNKNOWN");
+    issueRepositoryControls.failInspection = true;
+    const response = await issue(
+      prepared.project.id,
+      prepared.draft.id,
+      undefined,
+      { key: "committed-reload-failure-key" },
+    );
+    expect(response.status).toBe(500);
+    expect(storage.objectCount).toBe(1);
+    const references = await testDatabase()
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM rfi_official_issues WHERE rfi_id = ?) issues,
+          (SELECT COUNT(*) FROM revision_files
+           WHERE record_id = ? AND role = 'generated_artifact') revisions,
+          (SELECT COUNT(*) FROM issuance_files WHERE record_id = ?) issuances,
+          (SELECT COUNT(*) FROM rfi_issue_file_snapshots
+           WHERE rfi_id = ? AND snapshot_kind = 'official_artifact') snapshots`,
+      )
+      .bind(
+        prepared.draft.id,
+        prepared.draft.id,
+        prepared.draft.id,
+        prepared.draft.id,
+      )
+      .first<Record<string, number>>();
+    expect(references).toEqual({
+      issues: 1,
+      revisions: 1,
+      issuances: 1,
+      snapshots: 1,
+    });
+  });
+
   it("fails safely before D1 for render, R2 write, and R2 verification errors", async () => {
     const renderCase = await prepareIssuableRfi("P-RFI-RENDER-FAIL");
     renderer.fail = true;
@@ -1630,6 +1983,24 @@ describe("RFI register & workspace (Slice 1)", () => {
       ).status,
     ).toBe(503);
     expect(storage.objectCount).toBe(0);
+    storage.corruptHead = false;
+
+    const headCase = await prepareIssuableRfi("P-RFI-HEAD-FAIL", {
+      contactId: "contact-head-fail",
+    });
+    storage.failHead = true;
+    expect(
+      (
+        await issue(
+          headCase.project.id,
+          headCase.draft.id,
+          issueBody(headCase.contactId),
+          { key: "head-fail" },
+        )
+      ).status,
+    ).toBe(503);
+    expect(storage.objectCount).toBe(0);
+    storage.failHead = false;
   });
 
   it("durably records an orphan when R2 compensation deletion fails", async () => {

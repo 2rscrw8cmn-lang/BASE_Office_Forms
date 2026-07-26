@@ -1301,10 +1301,10 @@ resumes at the failed stage and never creates a duplicate Record or Revision:
 - **Draft Revision fails after the Record succeeded** — the message states the
   document identity exists (naming it when the server returned a number), shows
   the request ID, and offers a link to open the usable Record. The primary
-  action becomes *Retry draft revision* and re-attempts only that stage.
+  action becomes _Retry draft revision_ and re-attempts only that stage.
 - **Upload fails after Record and Revision succeeded** — the message states
   both exist, preserves the selected file name, shows the request ID, and links
-  to the draft Revision workspace. The primary action becomes *Retry upload*.
+  to the draft Revision workspace. The primary action becomes _Retry upload_.
 
 On success the workflow announces creation, invalidates the Records query so it
 refetches confirmed server data (browser Back cannot then omit the new
@@ -1435,31 +1435,36 @@ and RFI Slice 2A's backend contract is the current review target.
 
 ## 6. Phase status
 
-| Phase                               | Status                                                         | Next gate                           |
-| ----------------------------------- | -------------------------------------------------------------- | ----------------------------------- |
-| Spike 0 — Tabulator                 | Complete; rejected for RFI                                     | Future high-volume proposal only    |
-| UI-1 — Audit and decisions          | Complete                                                       | Binding documents and ADRs recorded |
-| UI-2 — CSS + React/Vite             | Complete; merged (`a1ade6d`)                                   | none                                |
-| RFI Slice 1                         | Complete; merged and closed out in production                  | none                                |
-| UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                           | none                                |
-| UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
-| UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
-| UI-6A — Projects register           | **Complete; merged** (`0b5ec89`, PR #46, squash)                | none                                 |
-| UI-6B — Document Register           | **Complete; merged** (`315de55`, PR #47)                       | none                                 |
-| UI-7 — Detail workspaces            | In progress separately; not complete                           | Rebase onto stable backend contract  |
-| UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
-| UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
-| UI-10 — Enforcement/cleanup         | Not started                                                    | Route parity and visual baselines   |
-| RFI Slice 2A — backend architecture | Implemented on `feature/rfi-slice-2a-official-issuance`; review pending | Draft PR review and migration rehearsal |
-| RFI Slice 2 — issuance UI           | Not started; depends on accepted Slice 2A API contract         | Integrate after Slice 2A review      |
+| Phase                               | Status                                                                                                  | Next gate                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Spike 0 — Tabulator                 | Complete; rejected for RFI                                                                              | Future high-volume proposal only                               |
+| UI-1 — Audit and decisions          | Complete                                                                                                | Binding documents and ADRs recorded                            |
+| UI-2 — CSS + React/Vite             | Complete; merged (`a1ade6d`)                                                                            | none                                                           |
+| RFI Slice 1                         | Complete; merged and closed out in production                                                           | none                                                           |
+| UI-3 — Components + UI Lab          | Complete; merged (`cb9f191`, PR #43)                                                                    | none                                                           |
+| UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                                                                    | none                                                           |
+| UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                                                                    | none                                                           |
+| UI-6A — Projects register           | **Complete; merged** (`0b5ec89`, PR #46, squash)                                                        | none                                                           |
+| UI-6B — Document Register           | **Complete; merged** (`315de55`, PR #47)                                                                | none                                                           |
+| UI-7 — Detail workspaces            | In progress separately; not complete                                                                    | Rebase onto stable backend contract                            |
+| UI-8 — Dashboard/forms/admin        | Not started                                                                                             | Shared shell/forms/registers stable                            |
+| UI-9 — Library + Studio             | Not started                                                                                             | Application foundation stable                                  |
+| UI-10 — Enforcement/cleanup         | Not started                                                                                             | Route parity and visual baselines                              |
+| RFI Slice 2A — backend architecture | Review correction implemented on `feature/rfi-slice-2a-official-issuance`; draft PR #49 remains pending | Review corrected contract, sample PDF, and migration rehearsal |
+| RFI Slice 2 — issuance UI           | Not started; depends on accepted Slice 2A API contract                                                  | Integrate after Slice 2A review                                |
 
 ## 7. Current constraints and risks
 
 - Official RFI issuance is implemented on the Slice 2A branch but remains
   unreleased until its migration and backend PR are reviewed and deployed.
+- UI-7 can consume the workspace `officialIssue` evidence contract, including
+  `Original Issue`, issuance, routing/file snapshots, due date, and artifact
+  download file ID; no Slice 2 issuance UI is included here.
 - Slice 2A supports `record_only` issuance only. Email, secure shares, external
   response, response/close UI, and issuance UI remain deferred.
-- Existing renderer output and valid definitions remain compatible.
+- Official rendering is intentionally limited to the exact published BASE RFI
+  definition through `base-rfi-official-document/v1`; unsupported meaningful
+  definition changes are rejected.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
   resolved or formally accepted before a production release; do not use
@@ -1469,7 +1474,8 @@ and RFI Slice 2A's backend contract is the current review target.
 
 ## 8. Next action
 
-UI-6A and UI-6B are merged. Review RFI Slice 2A's isolated backend PR and run
-the rollout gates in `RFI_SLICE_2A_ROLLOUT.md`. UI-7 may rebase independently;
+UI-6A and UI-6B are merged. Review draft PR #49's corrected persistence,
+idempotency, workspace evidence, strict-SHA, and renderer/sample-PDF contract,
+then run the rollout gates in `RFI_SLICE_2A_ROLLOUT.md`. UI-7 may rebase independently;
 its future Issue action must use the finalized contract in `API_CONTRACTS.md`
 and the `capabilities.issue` flag. Do not add issuance UI to this backend PR.

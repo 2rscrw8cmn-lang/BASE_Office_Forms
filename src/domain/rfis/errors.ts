@@ -29,6 +29,13 @@ export class RfiIssueValidationError extends Error {
   }
 }
 
+export class RfiIssueRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RfiIssueRequestError";
+  }
+}
+
 export class RfiIssueIdempotencyConflictError extends Error {
   constructor() {
     super("This Idempotency-Key was already used with a different request.");
@@ -70,7 +77,7 @@ export class RfiIssuePersistenceError extends Error {
 export class RfiIssueCompensationError extends Error {
   constructor(readonly cause?: unknown) {
     super(
-      "The issuance failed and its uncommitted artifact requires reconciliation.",
+      "The issuance outcome is uncertain and its artifact requires reconciliation.",
     );
     this.name = "RfiIssueCompensationError";
   }

@@ -55,20 +55,37 @@ export interface CommitRfiOfficialIssueInput {
 }
 
 interface IdempotencyRow {
+  project_id: string;
+  resource_id: string;
   request_hash: string;
   response_json: string;
 }
+
+export type RfiOfficialCommitState =
+  | { status: "committed"; result: RfiOfficialIssueResult }
+  | { status: "absent" }
+  | { status: "conflict" }
+  | { status: "unknown" };
 
 export class D1RfiOfficialIssueRepository {
   constructor(private readonly database: D1Database) {}
 
   async findIdempotentResult(
     organizationId: string,
+    projectId: string,
+    rfiId: string,
     idempotencyKey: string,
-  ): Promise<{ requestHash: string; result: RfiOfficialIssueResult } | null> {
+  ): Promise<{
+    projectId: string;
+    resourceId: string;
+    requestedResourceMatches: boolean;
+    requestHash: string;
+    result: RfiOfficialIssueResult;
+  } | null> {
     const row = await this.database
       .prepare(
-        `SELECT request_hash, response_json FROM idempotency_keys
+        `SELECT project_id, resource_id, request_hash, response_json
+         FROM idempotency_keys
          WHERE organization_id = ? AND operation = 'rfi.issue'
            AND idempotency_key = ?`,
       )
@@ -76,9 +93,31 @@ export class D1RfiOfficialIssueRepository {
       .first<IdempotencyRow>();
     if (!row) return null;
     return {
+      projectId: row.project_id,
+      resourceId: row.resource_id,
+      requestedResourceMatches:
+        row.project_id === projectId && row.resource_id === rfiId,
       requestHash: row.request_hash,
       result: JSON.parse(row.response_json) as RfiOfficialIssueResult,
     };
+  }
+
+  async findOfficialIssueResult(
+    organizationId: string,
+    projectId: string,
+    rfiId: string,
+  ): Promise<RfiOfficialIssueResult | null> {
+    const row = await this.database
+      .prepare(
+        `SELECT response_json FROM idempotency_keys
+         WHERE organization_id = ? AND project_id = ?
+           AND operation = 'rfi.issue' AND resource_id = ?`,
+      )
+      .bind(organizationId, projectId, rfiId)
+      .first<{ response_json: string }>();
+    return row
+      ? (JSON.parse(row.response_json) as RfiOfficialIssueResult)
+      : null;
   }
 
   async hasOfficialIssue(
@@ -121,9 +160,7 @@ export class D1RfiOfficialIssueRepository {
     return row?.name ?? null;
   }
 
-  async commit(
-    input: CommitRfiOfficialIssueInput,
-  ): Promise<RfiOfficialIssueResult> {
+  async commit(input: CommitRfiOfficialIssueInput): Promise<void> {
     const statements: D1PreparedStatement[] = [];
     const expectedFileCount = input.includedFiles.length + 1;
     const expectedRecipientCount = input.recipients.length + input.cc.length;
@@ -607,9 +644,9 @@ export class D1RfiOfficialIssueRepository {
       this.database
         .prepare(
           `INSERT INTO idempotency_keys
-            (organization_id, operation, idempotency_key, request_hash,
+            (organization_id, project_id, operation, idempotency_key, request_hash,
              resource_id, response_json, created_at, expires_at)
-           SELECT ?, 'rfi.issue', ?, ?, ?, json_object(
+           SELECT ?, ?, 'rfi.issue', ?, ?, ?, json_object(
              'rfiId', record.id,
              'recordId', record.id,
              'officialDisplayNumber', record.record_number,
@@ -624,6 +661,7 @@ export class D1RfiOfficialIssueRepository {
                'issueNumber', issuance.issue_number
              ),
              'issuedAt', issue.issued_at,
+             'responseDueDate', issue.response_due_date,
              'officialArtifact', json_object(
                'fileId', artifact.file_id,
                'role', artifact.file_role,
@@ -702,6 +740,7 @@ export class D1RfiOfficialIssueRepository {
         )
         .bind(
           input.organizationId,
+          input.projectId,
           input.idempotencyKey,
           input.requestHash,
           input.rfiId,
@@ -773,17 +812,160 @@ export class D1RfiOfficialIssueRepository {
     );
 
     await this.database.batch(statements);
-    const stored = await this.findIdempotentResult(
-      input.organizationId,
-      input.idempotencyKey,
-    );
-    if (!stored) {
-      throw new Error("The committed RFI issue result could not be loaded.");
-    }
-    return stored.result;
   }
 
-  async recordArtifactOrphan(input: {
+  async inspectCommitState(
+    input: CommitRfiOfficialIssueInput,
+  ): Promise<RfiOfficialCommitState> {
+    const row = await this.database
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM rfi_official_issues
+            WHERE id = ? AND organization_id = ? AND project_id = ? AND rfi_id = ?
+              AND artifact_file_id = ? AND artifact_storage_key = ?
+              AND artifact_sha256 = ?) AS issue_count,
+           (SELECT COUNT(*) FROM revision_files
+            WHERE id = ? AND organization_id = ? AND project_id = ? AND record_id = ?
+              AND storage_key = ? AND sha256 = ?) AS revision_file_count,
+           (SELECT COUNT(*) FROM issuance_files
+            WHERE organization_id = ? AND project_id = ? AND record_id = ?
+              AND file_id = ? AND storage_key = ? AND sha256 = ?) AS issuance_file_count,
+           (SELECT COUNT(*) FROM rfi_issue_file_snapshots
+            WHERE organization_id = ? AND project_id = ? AND rfi_id = ?
+              AND file_id = ? AND storage_key = ? AND sha256 = ?) AS snapshot_count,
+           (SELECT COUNT(*) FROM idempotency_keys
+            WHERE organization_id = ? AND project_id = ? AND operation = 'rfi.issue'
+              AND idempotency_key = ? AND resource_id = ?
+              AND request_hash = ?) AS idempotency_count,
+           (SELECT COUNT(*) FROM idempotency_keys
+            WHERE organization_id = ? AND operation = 'rfi.issue'
+              AND idempotency_key = ?) AS idempotency_any_count`,
+      )
+      .bind(
+        input.issueId,
+        input.organizationId,
+        input.projectId,
+        input.rfiId,
+        input.artifact.fileId,
+        input.artifact.storageKey,
+        input.artifact.sha256,
+        input.artifact.fileId,
+        input.organizationId,
+        input.projectId,
+        input.rfiId,
+        input.artifact.storageKey,
+        input.artifact.sha256,
+        input.organizationId,
+        input.projectId,
+        input.rfiId,
+        input.artifact.fileId,
+        input.artifact.storageKey,
+        input.artifact.sha256,
+        input.organizationId,
+        input.projectId,
+        input.rfiId,
+        input.artifact.fileId,
+        input.artifact.storageKey,
+        input.artifact.sha256,
+        input.organizationId,
+        input.projectId,
+        input.idempotencyKey,
+        input.rfiId,
+        input.requestHash,
+        input.organizationId,
+        input.idempotencyKey,
+      )
+      .first<{
+        issue_count: number;
+        revision_file_count: number;
+        issuance_file_count: number;
+        snapshot_count: number;
+        idempotency_count: number;
+        idempotency_any_count: number;
+      }>();
+    if (!row) return { status: "unknown" };
+    const counts = [
+      row.issue_count,
+      row.revision_file_count,
+      row.issuance_file_count,
+      row.snapshot_count,
+      row.idempotency_count,
+    ];
+    if (
+      counts.slice(0, 4).every((count) => count === 0) &&
+      row.idempotency_count === 0 &&
+      row.idempotency_any_count === 1
+    ) {
+      return { status: "conflict" };
+    }
+    if (counts.every((count) => count === 0)) return { status: "absent" };
+    if (counts.every((count) => count === 1)) {
+      const stored = await this.findIdempotentResult(
+        input.organizationId,
+        input.projectId,
+        input.rfiId,
+        input.idempotencyKey,
+      );
+      if (
+        stored &&
+        stored.projectId === input.projectId &&
+        stored.resourceId === input.rfiId &&
+        stored.requestHash === input.requestHash
+      ) {
+        return { status: "committed", result: stored.result };
+      }
+    }
+    return { status: "unknown" };
+  }
+
+  async artifactIsReferenced(input: {
+    organizationId: string;
+    projectId: string;
+    rfiId: string;
+    fileId: string;
+    storageKey: string;
+    sha256: string;
+  }): Promise<boolean> {
+    const row = await this.database
+      .prepare(
+        `SELECT (
+           EXISTS(SELECT 1 FROM rfi_official_issues
+             WHERE organization_id = ? AND project_id = ?
+               AND (artifact_file_id = ? OR artifact_storage_key = ?))
+           OR EXISTS(SELECT 1 FROM revision_files
+             WHERE organization_id = ? AND project_id = ?
+               AND (id = ? OR storage_key = ?))
+           OR EXISTS(SELECT 1 FROM issuance_files
+             WHERE organization_id = ? AND project_id = ?
+               AND (file_id = ? OR storage_key = ?))
+           OR EXISTS(SELECT 1 FROM rfi_issue_file_snapshots
+             WHERE organization_id = ? AND project_id = ?
+               AND (file_id = ? OR storage_key = ?))
+         ) AS referenced`,
+      )
+      .bind(
+        input.organizationId,
+        input.projectId,
+        input.fileId,
+        input.storageKey,
+        input.organizationId,
+        input.projectId,
+        input.fileId,
+        input.storageKey,
+        input.organizationId,
+        input.projectId,
+        input.fileId,
+        input.storageKey,
+        input.organizationId,
+        input.projectId,
+        input.fileId,
+        input.storageKey,
+      )
+      .first<{ referenced: number }>();
+    return row?.referenced === 1;
+  }
+
+  async recordArtifactReconciliation(input: {
     organizationId: string;
     projectId: string;
     rfiId: string;
@@ -791,14 +973,15 @@ export class D1RfiOfficialIssueRepository {
     sha256: string;
     byteSize: number;
     failureSummary: string;
+    kind: "compensation_delete_failed" | "commit_outcome_unknown";
   }): Promise<void> {
     await this.database
       .prepare(
         `INSERT OR IGNORE INTO rfi_artifact_orphans
           (id, organization_id, project_id, rfi_id, artifact_storage_key,
-           artifact_sha256, artifact_byte_size, failure_summary,
+           artifact_sha256, artifact_byte_size, reconciliation_kind, failure_summary,
            reconciliation_status, detected_at, reconciled_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL)`,
       )
       .bind(
         crypto.randomUUID(),
@@ -808,6 +991,7 @@ export class D1RfiOfficialIssueRepository {
         input.storageKey,
         input.sha256,
         input.byteSize,
+        input.kind,
         input.failureSummary.slice(0, 1000),
         new Date().toISOString(),
       )
