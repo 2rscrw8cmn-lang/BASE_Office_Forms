@@ -59,8 +59,10 @@ export class R2FileStorage implements FileStoragePort {
     await this.bucket.delete(key);
   }
 
-  async head(key: string): Promise<{ size: number } | null> {
+  async head(key: string): Promise<{ size: number; sha256?: string } | null> {
     const object = await this.bucket.head(key);
-    return object ? { size: object.size } : null;
+    if (!object) return null;
+    const sha256 = object.customMetadata?.sha256;
+    return sha256 ? { size: object.size, sha256 } : { size: object.size };
   }
 }

@@ -1,7 +1,7 @@
 # Data Model
 
-**Status:** Architecture v1.0 — implementation source of truth  
-**Version date:** 2026-07-19
+**Status:** Architecture v1.0 plus implemented RFI Slice 2A reconciliation
+**Version date:** 2026-07-25
 
 
 ## 1. Strategy
@@ -507,6 +507,33 @@ Columns:
 - created_at
 
 Unique: `(organization_id, key, operation)`.
+
+### 6.7 Implemented RFI official-issue tables (migration 0015)
+
+Migration `0015_rfi_official_issuance.sql` advances `app_meta.schema_version`
+to 13 and adds:
+
+- `rfi_official_issues`: one row per issued RFI, linking the stable Record,
+  authoritative shared Revision, generic issuance, exact template version,
+  generated artifact file, issuer, and request. It freezes the template
+  definition, render payload, renderer version, due date, storage metadata,
+  byte size, and SHA-256 values. Update/delete triggers make it immutable.
+- `rfi_issue_recipients`: ordered immutable To/CC project-contact snapshots
+  including name, company, type, email, phone, and structured address at issue.
+- `rfi_issue_file_snapshots`: ordered immutable included-file and
+  official-artifact snapshots, each tied to `revision_files`.
+- `idempotency_keys`: completed operation results keyed by
+  `(organization_id, operation, idempotency_key)`, with a request hash and
+  immutable response JSON. A unique operation/resource constraint prevents a
+  second successful issue for the same RFI.
+- `rfi_artifact_orphans`: mutable operational reconciliation rows for an R2
+  artifact that could not be deleted after a failed D1 commit.
+
+The existing `records`, `rfi_details`, `record_revisions`, `revision_files`,
+`project_record_type_sequences`, `issuances`, `issuance_files`, and
+`activity_events` remain authoritative. No second RFI spine is introduced.
+The existing current revision is internal revision 1; issue publishes it in
+place and assigns the user-facing label `Original Issue`.
 
 ## 7. Numbering rules
 

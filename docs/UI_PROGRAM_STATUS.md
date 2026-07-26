@@ -1,8 +1,13 @@
 # BASE UI Program Status
 
-**Status date:** 2026-07-24
-**Current phase:** UI-6B (native React Document Register) is implemented on `claude/ui-6b-document-register-evonty`, rebased onto `main` after UI-6A merged.
-**Active branch/PR:** `claude/ui-6b-document-register-evonty`; draft PR #47 against `main`. PR #36, PR #41, PR #43, PR #44, PR #45, and **PR #46 (UI-6A)** are merged to `main` (`main` is now `0b5ec89`). UI-6A merged as a **squash commit**, which broke the ancestry UI-6B had relied on while stacked; UI-6B was rebased (`--onto` the new `main`) to restore a clean, conflict-free diff. See §5F "Branch stacking and the post-squash rebase" for the full account.
+**Status date:** 2026-07-25
+**Current phase:** UI-6B is merged to `main` (`315de55`). UI-7 detail
+workspaces are proceeding separately; RFI Slice 2A is implementing the
+independent official-issuance backend contract.
+**Active branch/PR:** `feature/rfi-slice-2a-official-issuance` (draft PR
+against `main`; do not merge from this task). Discovery found no open UI-7 PR;
+the local `claude/ui-7-detail-workspaces` branch contains documentation-only
+work and is not the base of this branch.
 **Authority:** This is the living handoff for the UI foundation program. Update it in every UI-related PR.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
@@ -1191,13 +1196,12 @@ filters, first-use empty, filtered empty, and error states is committed under
 
 ### Next recommended action
 
-Review and merge UI-6A before UI-6B merges. UI-6B is now implemented on its own
-branch (§5F), stacked on this one; it did not modify Projects. Do not merge this
-PR without explicit approval.
+Historical closeout: UI-6A and UI-6B are both merged. The current next action
+is recorded in §8.
 
 ## 5F. UI-6B complete — native React Document Register
 
-### Branch stacking (read this first)
+### Historical branch stacking
 
 UI-6B was specified to start from a `main` containing UI-6A. When this phase
 began, `main` was at `86b11e1` (UI-5) and **UI-6A's PR #46 was open, not
@@ -1211,9 +1215,9 @@ Why: UI-6A modifies ten files UI-6B must also modify — `AppLayout.tsx`,
 Branching from `main` would have produced guaranteed conflicts with PR #46 and
 forced UI-6B to re-derive UI-6A work that is explicitly out of its scope.
 
-Consequences for review: until PR #46 merges, this PR's diff against `main`
-contains UI-6A's commits as well as UI-6B's. Review and merge UI-6A first, then
-UI-6B. UI-6B changes no Projects code.
+At review time, until PR #46 merged, this PR's diff against `main` contained
+UI-6A's commits as well as UI-6B's. UI-6B changed no Projects code. Both PRs
+have since merged.
 
 ### Confirmed starting point
 
@@ -1426,8 +1430,8 @@ new native feature; a bundle budget remains UI-10 scope.
 
 ### Next recommended action
 
-Review and merge UI-6A (PR #46), then review and merge UI-6B. Begin **UI-7
-Detail Workspaces** only after UI-6B is merged.
+Historical closeout: UI-6A and UI-6B are merged. UI-7 may continue separately,
+and RFI Slice 2A's backend contract is the current review target.
 
 ## 6. Phase status
 
@@ -1441,17 +1445,20 @@ Detail Workspaces** only after UI-6B is merged.
 | UI-4 — React shell                  | Complete; merged (`6976f16`, PR #44)                           | none                                |
 | UI-5 — RFI register                 | Complete; merged (`86b11e1`, PR #45)                           | none                                |
 | UI-6A — Projects register           | **Complete; merged** (`0b5ec89`, PR #46, squash)                | none                                 |
-| UI-6B — Document Register           | **Implemented; draft PR #47**, rebased onto `main` post-merge  | Review and merge UI-6B               |
-| UI-7 — Detail workspaces            | Not started — **the exact next phase**                         | Review and merge UI-6B first        |
+| UI-6B — Document Register           | **Complete; merged** (`315de55`, PR #47)                       | none                                 |
+| UI-7 — Detail workspaces            | In progress separately; not complete                           | Rebase onto stable backend contract  |
 | UI-8 — Dashboard/forms/admin        | Not started                                                    | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio             | Not started                                                    | Application foundation stable       |
 | UI-10 — Enforcement/cleanup         | Not started                                                    | Route parity and visual baselines   |
-| RFI Slice 2A — backend architecture | Not started; may begin after `main` is pulled and stable       | Independent of UI-3                 |
-| RFI Slice 2 — issuance UI           | Unblocked for components; still gated on review/merge          | UI-3 shared components now exist    |
+| RFI Slice 2A — backend architecture | Implemented on `feature/rfi-slice-2a-official-issuance`; review pending | Draft PR review and migration rehearsal |
+| RFI Slice 2 — issuance UI           | Not started; depends on accepted Slice 2A API contract         | Integrate after Slice 2A review      |
 
 ## 7. Current constraints and risks
 
-- Official RFI issuance remains incomplete and must fail closed.
+- Official RFI issuance is implemented on the Slice 2A branch but remains
+  unreleased until its migration and backend PR are reviewed and deployed.
+- Slice 2A supports `record_only` issuance only. Email, secure shares, external
+  response, response/close UI, and issuance UI remain deferred.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
@@ -1462,15 +1469,7 @@ Detail Workspaces** only after UI-6B is merged.
 
 ## 8. Next action
 
-UI-5 is complete and merged to `main` as `86b11e1` (PR #45). UI-6A is
-implemented on `agent/ui-6a-projects-register-react` (PR #46) and is **still
-open**. UI-6B is implemented on `claude/ui-6b-document-register-evonty`
-(draft PR #47), stacked on the UI-6A branch because UI-6A had not merged when
-UI-6B began.
-
-**UI-6A (PR #46) merged** as `0b5ec89`. UI-6B was rebased onto the new `main`
-and is ready for review (§5F). Review and merge UI-6B (PR #47) next. Only
-after UI-6B merges should **UI-7 Detail Workspaces** begin — the Record,
-Revision, and RFI detail routes are the exact next phase, and they remain
-compatibility-mounted until then. RFI Slice 2A backend architecture may
-proceed independently once `main` is pulled and stable.
+UI-6A and UI-6B are merged. Review RFI Slice 2A's isolated backend PR and run
+the rollout gates in `RFI_SLICE_2A_ROLLOUT.md`. UI-7 may rebase independently;
+its future Issue action must use the finalized contract in `API_CONTRACTS.md`
+and the `capabilities.issue` flag. Do not add issuance UI to this backend PR.

@@ -20,6 +20,10 @@ For PR #36 reconciliation, also read `RFI_SLICE_1_ROLLOUT.md` for the Pages
 preview database identity, populated 0014 rehearsal, fixture cleanup, and the
 human-approved production rollout plan.
 
+For RFI Slice 2A review and release, also read
+`RFI_SLICE_2A_ROLLOUT.md` for migration 0015 rehearsal, D1/R2 deployment order,
+rollback limits, and orphan reconciliation.
+
 1. `ARCHITECTURE_V1_ACCEPTANCE.md` — authority, binding rules, and acceptance gates.
 2. `PRODUCT_ARCHITECTURE.md` — product boundary, topology, modules, and release definition.
 3. `DOMAIN_MODEL.md` — exact meaning of projects, records, revisions, files, artifacts, and deliveries.

@@ -185,6 +185,25 @@ The official RFI number is assigned when the RFI is first issued.
 
 A draft may display “Unnumbered Draft.”
 
+The first official issue is a coordinated event, not a normal record update.
+It preserves the stable RFI/Record ID, atomically assigns the project-scoped
+number, transitions `ready_to_issue` to `open`, and publishes the authoritative
+shared revision. The shared model starts at internal revision 1, so the first
+issued RFI is presented to users as **Original Issue** rather than forcing an
+incompatible revision 0.
+
+An official RFI issue owns immutable evidence:
+
+- the exact published template version and definition;
+- the frozen render payload and renderer version;
+- the official PDF file metadata and checksum;
+- the included file snapshots;
+- To/CC contact snapshots;
+- the generic issuance identity, issuer, and issued timestamp.
+
+Later project, contact, template, renderer, response, or close changes do not
+regenerate or mutate that evidence.
+
 ## 12. Submittal record
 
 A submittal record represents the stable submittal item across revision cycles.
@@ -235,6 +254,8 @@ It contains:
 - returned files
 
 An RFI may have one main issued revision plus response and clarification events.
+The official issue promotes the existing authoritative revision rather than
+creating a competing RFI-only revision relationship.
 
 A submittal normally has multiple formal revisions.
 

@@ -463,11 +463,9 @@ Validates the draft and transitions to `ready_to_issue`.
 
 ### `POST /rfis/{rfiId}/issue`
 
-This route is fail-closed during Slice 1 and returns
-`RFI_ISSUANCE_NOT_AVAILABLE` without consuming a number or changing the record.
-It may be enabled only when the complete transaction below is implemented.
-
-Requires `Idempotency-Key`.
+Implemented by RFI Slice 2A at
+`POST /api/v2/projects/{projectId}/rfis/{rfiId}/issue`. Requires a non-empty
+`Idempotency-Key` header (maximum 200 characters).
 
 ```json
 {
@@ -479,17 +477,84 @@ Requires `Idempotency-Key`.
 }
 ```
 
-Server transaction:
+Only `record_only` is supported. Recipient IDs must be a non-empty unique list;
+CC and included-file lists must be unique, and To/CC cannot overlap.
+`responseDueDate` is a real `YYYY-MM-DD` calendar date. Unknown request fields
+are rejected.
 
-1. locks the project/record sequence;
-2. assigns the next RFI number;
-3. creates immutable revision 0;
-4. snapshots project and routing metadata needed for the document;
-5. renders the issued artifact;
-6. stores the artifact;
-7. creates issuance and activity events;
-8. optionally creates delivery records;
-9. returns the official record.
+Success returns the standard envelope with:
+
+```json
+{
+  "data": {
+    "rfiId": "rfi_uuid",
+    "recordId": "rfi_uuid",
+    "officialDisplayNumber": "RFI-001",
+    "status": "open",
+    "issuedRevision": {
+      "id": "revision_uuid",
+      "internalRevisionNumber": 1,
+      "userFacingVersion": "Original Issue"
+    },
+    "issuance": {
+      "id": "issuance_uuid",
+      "issueNumber": "ISS-001"
+    },
+    "issuedAt": "2026-07-25T20:00:00.000Z",
+    "officialArtifact": {
+      "fileId": "artifact_file_id",
+      "role": "generated_artifact",
+      "originalFilename": "RFI-001.pdf",
+      "mediaType": "application/pdf",
+      "byteSize": 12345,
+      "sha256": "64_hex_characters"
+    },
+    "includedFiles": [],
+    "recipients": {
+      "to": [
+        {
+          "projectContactId": "contact_uuid",
+          "contactName": "Project Architect",
+          "companyName": "Design Co",
+          "email": "architect@example.com"
+        }
+      ],
+      "cc": []
+    },
+    "capabilities": {
+      "issue": false,
+      "recordResponse": true,
+      "returnForClarification": false,
+      "close": false,
+      "reopen": false,
+      "void": true
+    },
+    "requestId": "request_uuid"
+  },
+  "meta": {
+    "requestId": "request_uuid"
+  }
+}
+```
+
+The response never exposes storage keys, raw snapshot JSON, or idempotency
+metadata. Same key/same canonical request returns the original `data`; same
+key/different request returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+Relevant errors:
+
+- `400 IDEMPOTENCY_KEY_REQUIRED`
+- `400 VALIDATION_FAILED` for malformed request/unsupported delivery
+- `401 AUTHENTICATION_REQUIRED`
+- concealed `404 PROJECT_NOT_FOUND` / `RFI_NOT_FOUND` where required
+- `409 RFI_ILLEGAL_TRANSITION`, `RFI_ALREADY_ISSUED`, or
+  `IDEMPOTENCY_KEY_REUSED`
+- `422 RFI_ISSUE_VALIDATION_FAILED` for an unusable exact template, routing,
+  project, responsible contact, or file relationship
+- `503 RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, or
+  `RFI_ISSUE_COMMIT_FAILED`
+- `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` when artifact compensation cannot
+  delete R2 and an orphan requires operator action
 
 ### `POST /rfis/{rfiId}/responses`
 

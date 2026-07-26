@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { testDatabase } from "../helpers/d1";
 
 describe("RFI document-control alignment after migration 0014", () => {
-  it("reports schema version 12", async () => {
+  it("reports current schema version 13", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(12);
+    expect(version?.schema_version).toBe(13);
   });
 
   it("stores common RFI state on records and RFI-only state in rfi_details", async () => {

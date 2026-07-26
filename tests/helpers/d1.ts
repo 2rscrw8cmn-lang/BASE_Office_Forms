@@ -24,8 +24,26 @@ export async function resetIdentityFoundation(): Promise<void> {
     env.DB.prepare("DROP TRIGGER IF EXISTS issuances_no_delete"),
     env.DB.prepare("DROP TRIGGER IF EXISTS issuance_files_no_update"),
     env.DB.prepare("DROP TRIGGER IF EXISTS issuance_files_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_official_issues_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_official_issues_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_issue_recipients_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_issue_recipients_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_issue_file_snapshots_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS rfi_issue_file_snapshots_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS idempotency_keys_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS idempotency_keys_no_delete"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issued_rfi_revision_no_update"),
+    env.DB.prepare("DROP TRIGGER IF EXISTS issued_rfi_revision_no_delete"),
+    env.DB.prepare(
+      "DROP TRIGGER IF EXISTS issued_rfi_record_identity_no_update",
+    ),
   ]);
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM idempotency_keys"),
+    env.DB.prepare("DELETE FROM rfi_issue_file_snapshots"),
+    env.DB.prepare("DELETE FROM rfi_issue_recipients"),
+    env.DB.prepare("DELETE FROM rfi_official_issues"),
+    env.DB.prepare("DELETE FROM rfi_artifact_orphans"),
     env.DB.prepare(
       "UPDATE records SET current_revision_id = NULL WHERE current_revision_id IS NOT NULL",
     ),
@@ -84,6 +102,78 @@ export async function resetIdentityFoundation(): Promise<void> {
       `CREATE TRIGGER issuance_files_no_delete
        BEFORE DELETE ON issuance_files
        BEGIN SELECT RAISE(ABORT, 'issuance files are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_official_issues_no_update
+       BEFORE UPDATE ON rfi_official_issues
+       BEGIN SELECT RAISE(ABORT, 'official RFI issues are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_official_issues_no_delete
+       BEFORE DELETE ON rfi_official_issues
+       BEGIN SELECT RAISE(ABORT, 'official RFI issues are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_issue_recipients_no_update
+       BEFORE UPDATE ON rfi_issue_recipients
+       BEGIN SELECT RAISE(ABORT, 'official RFI recipient snapshots are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_issue_recipients_no_delete
+       BEFORE DELETE ON rfi_issue_recipients
+       BEGIN SELECT RAISE(ABORT, 'official RFI recipient snapshots are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_issue_file_snapshots_no_update
+       BEFORE UPDATE ON rfi_issue_file_snapshots
+       BEGIN SELECT RAISE(ABORT, 'official RFI file snapshots are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER rfi_issue_file_snapshots_no_delete
+       BEFORE DELETE ON rfi_issue_file_snapshots
+       BEGIN SELECT RAISE(ABORT, 'official RFI file snapshots are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER idempotency_keys_no_update
+       BEFORE UPDATE ON idempotency_keys
+       BEGIN SELECT RAISE(ABORT, 'completed idempotency results are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER idempotency_keys_no_delete
+       BEFORE DELETE ON idempotency_keys
+       BEGIN SELECT RAISE(ABORT, 'completed idempotency results are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issued_rfi_revision_no_update
+       BEFORE UPDATE ON record_revisions
+       WHEN EXISTS (
+         SELECT 1 FROM rfi_official_issues issue
+         WHERE issue.revision_id = OLD.id
+       )
+       BEGIN SELECT RAISE(ABORT, 'issued RFI revisions are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issued_rfi_revision_no_delete
+       BEFORE DELETE ON record_revisions
+       WHEN EXISTS (
+         SELECT 1 FROM rfi_official_issues issue
+         WHERE issue.revision_id = OLD.id
+       )
+       BEGIN SELECT RAISE(ABORT, 'issued RFI revisions are immutable'); END`,
+    ),
+    env.DB.prepare(
+      `CREATE TRIGGER issued_rfi_record_identity_no_update
+       BEFORE UPDATE ON records
+       WHEN EXISTS (
+         SELECT 1 FROM rfi_official_issues issue
+         WHERE issue.rfi_id = OLD.id
+       ) AND (
+         NEW.sequence_no IS NOT OLD.sequence_no
+         OR NEW.record_number IS NOT OLD.record_number
+         OR NEW.current_revision_id IS NOT OLD.current_revision_id
+         OR NEW.issued_at IS NOT OLD.issued_at
+       )
+       BEGIN SELECT RAISE(ABORT, 'issued RFI identity is immutable'); END`,
     ),
   ]);
 }

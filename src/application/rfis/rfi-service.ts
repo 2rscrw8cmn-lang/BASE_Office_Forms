@@ -1,9 +1,12 @@
 import type { AppSession } from "../../auth/authentication-adapter";
 import {
-  RfiIssuanceUnavailableError,
   RfiNotFoundError,
   RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
+import type {
+  RfiIssueRequest,
+  RfiOfficialIssueResult,
+} from "../../domain/rfis/official-issue";
 import {
   assertCanUpdateDraft,
   closeStatus,
@@ -29,6 +32,7 @@ import {
 } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { ProjectService } from "../projects/project-service";
 import { RfiTemplateBindingService } from "./rfi-template-binding-service";
+import { RfiOfficialIssueService } from "./rfi-official-issue-service";
 
 export interface RfiMutationInput extends RfiWriteInput {
   correlationId: string;
@@ -66,6 +70,7 @@ export class RfiService {
     private readonly attachments: D1RfiAttachmentsRepository,
     private readonly templateBinding: RfiTemplateBindingService,
     private readonly contacts: D1ProjectContactsRepository,
+    private readonly officialIssuer: RfiOfficialIssueService,
   ) {}
 
   async list(actor: AppSession, projectId: string): Promise<Rfi[]> {
@@ -182,12 +187,18 @@ export class RfiService {
     actor: AppSession,
     projectId: string,
     rfiId: string,
+    idempotencyKey: string,
+    input: RfiIssueRequest,
     correlationId: string,
-  ): Promise<Rfi> {
-    await this.projects.requireRfiManagement(actor, projectId, "rfis:issue");
-    await this.find(actor, projectId, rfiId);
-    void correlationId;
-    throw new RfiIssuanceUnavailableError();
+  ): Promise<RfiOfficialIssueResult> {
+    return this.officialIssuer.issue(
+      actor,
+      projectId,
+      rfiId,
+      idempotencyKey,
+      input,
+      correlationId,
+    );
   }
 
   async respond(

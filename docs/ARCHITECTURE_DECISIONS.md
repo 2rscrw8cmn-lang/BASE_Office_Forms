@@ -228,6 +228,28 @@ well beyond expected RFI list sizes.
 proposal needs a fresh acceptance decision, assistive-technology evidence, a
 select-versus-edit interaction decision, and a bundle-splitting plan.
 
+## ADR-029 — Promote the shared RFI revision and commit R2 before D1 issue state
+
+**Decision:** The first official RFI issue promotes the existing authoritative
+shared revision 1 from `draft` to `published` and presents it as `Original
+Issue`. It does not introduce revision 0 or a second RFI revision spine.
+Official artifact generation uses a provider-neutral server renderer port.
+The operation writes and verifies the deterministic private R2 artifact before
+one guarded D1 batch commits numbering, revision, issuance, snapshots, activity,
+and idempotency.
+
+**Reason:** `records.current_revision_id` and the shared revision invariant are
+already authoritative. D1 and R2 cannot participate in one transaction, and an
+official D1 row must never point to an absent artifact. R2-first permits object
+verification before official state; deterministic keys and delete/orphan
+compensation make failure explicit and retry-safe.
+
+**Consequence:** The issue route is allowed only from `ready_to_issue`.
+Committed RFI and issuance numbers are never reused. A failed D1 batch deletes
+the new R2 object; failed deletion creates a durable reconciliation row.
+Official issue snapshots and completed idempotency results are immutable.
+`record_only` is the only Slice 2A delivery mode.
+
 ## Deferred decisions
 
 These choices are intentionally deferred until their roadmap phase:

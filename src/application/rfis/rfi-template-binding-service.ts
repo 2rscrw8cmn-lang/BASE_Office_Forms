@@ -12,6 +12,7 @@ export interface BoundRfiTemplate {
   key: string;
   name: string;
   versionNumber: number;
+  status: TemplateVersion["status"];
   definition: Record<string, unknown>;
 }
 
@@ -89,6 +90,7 @@ export class RfiTemplateBindingService {
       key: BASE_RFI_TEMPLATE_KEY,
       name: BASE_RFI_TEMPLATE_NAME,
       versionNumber: version.versionNumber,
+      status: version.status,
       definition: version.definition,
     };
   }

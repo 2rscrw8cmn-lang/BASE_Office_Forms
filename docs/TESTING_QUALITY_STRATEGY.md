@@ -397,6 +397,28 @@ Pages preview additionally requires an Access-authorized synthetic fixture and
 manual Dashboard, Project Overview, register, workspace, response, Records,
 navigation, mobile, Studio, and Document Library checks.
 
+### 12C. RFI Slice 2A official issuance coverage
+
+The Slice 2A gate includes:
+
+- deterministic server-PDF and canonical-idempotency unit tests;
+- empty-database and populated post-0014 migration rehearsals through schema
+  version 13 with foreign-key checks;
+- successful number/revision/artifact/issuance/file/recipient/activity/API
+  assertions and authorized artifact download;
+- authentication, role, tenant, project, contact, file, template, request, and
+  lifecycle validation;
+- same-key replay, changed-request conflict, same-RFI concurrency, and
+  same-project numbering concurrency;
+- injected renderer, R2 write/verify, sequence, revision, issuance, recipient,
+  activity, D1 commit, and compensation-delete failures;
+- post-issue project, RFI-detail, contact, template-version, and renderer
+  changes, plus database immutability-trigger assertions.
+
+No test may count an R2 object without committed D1 official state as a
+successful issue. Failed compensation must leave an explicit pending orphan
+row.
+
 ## 13. Performance targets
 
 Internal pilot targets under normal load:
@@ -420,6 +442,8 @@ Test failures at each issue-transaction boundary:
 - artifact upload fails;
 - delivery provider fails;
 - activity event insert fails.
+- recipient snapshot or guarded D1 batch fails;
+- R2 verification or compensation deletion fails.
 
 The design must either roll back the transaction or leave a recoverable explicit state. Silent partial success is prohibited.
 

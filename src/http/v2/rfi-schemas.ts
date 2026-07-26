@@ -1,5 +1,6 @@
 import type { RfiWriteInput } from "../../domain/rfis/rfi";
 import { isRfiAttachmentRole } from "../../domain/rfis/rfi";
+import type { RfiIssueRequest } from "../../domain/rfis/official-issue";
 import type { RfiResponseWriteInput } from "../../infrastructure/db/d1/rfi-responses-repository";
 import type { RfiAttachmentRole } from "../../domain/rfis/rfi";
 import { RequestValidationError } from "./project-schemas";
@@ -30,10 +31,21 @@ function optionalText(value: unknown, field: string): string | null {
 
 function optionalDate(value: unknown, field: string): string | null {
   const date = optionalText(value, field);
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (date && !isIsoDate(date)) {
     throw new RequestValidationError(`${field} must be an ISO date.`);
   }
   return date;
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
 }
 
 // A field is taken from the request when present, otherwise from the fallback
@@ -136,6 +148,71 @@ export function parseRfiResponse(value: unknown): RfiResponseWriteInput {
   return {
     response: requiredText(source.response, "response"),
     respondedBy: optionalText(source.respondedBy, "respondedBy"),
+  };
+}
+
+function uniqueIds(value: unknown, field: string, required: boolean): string[] {
+  if (!Array.isArray(value) || (required && value.length === 0)) {
+    throw new RequestValidationError(
+      `${field} must be ${required ? "a non-empty" : "an"} array of IDs.`,
+    );
+  }
+  const ids = value.map((item) => requiredText(item, field));
+  if (new Set(ids).size !== ids.length) {
+    throw new RequestValidationError(`${field} must not contain duplicates.`);
+  }
+  return ids;
+}
+
+export function parseRfiIssue(value: unknown): RfiIssueRequest {
+  const source = object(value);
+  const allowed = new Set([
+    "recipientProjectContactIds",
+    "ccProjectContactIds",
+    "responseDueDate",
+    "includedFileIds",
+    "deliveryMode",
+  ]);
+  if (Object.keys(source).some((key) => !allowed.has(key))) {
+    throw new RequestValidationError("One or more fields are not allowed.");
+  }
+  const recipients = uniqueIds(
+    source.recipientProjectContactIds,
+    "recipientProjectContactIds",
+    true,
+  );
+  const cc = uniqueIds(
+    source.ccProjectContactIds,
+    "ccProjectContactIds",
+    false,
+  );
+  if (cc.some((id) => recipients.includes(id))) {
+    throw new RequestValidationError(
+      "A project contact cannot be both a recipient and a CC.",
+    );
+  }
+  const responseDueDate = requiredText(
+    source.responseDueDate,
+    "responseDueDate",
+  );
+  if (!isIsoDate(responseDueDate)) {
+    throw new RequestValidationError("responseDueDate must be an ISO date.");
+  }
+  if (source.deliveryMode !== "record_only") {
+    throw new RequestValidationError(
+      "deliveryMode must be record_only for this release.",
+    );
+  }
+  return {
+    recipientProjectContactIds: recipients,
+    ccProjectContactIds: cc,
+    responseDueDate,
+    includedFileIds: uniqueIds(
+      source.includedFileIds,
+      "includedFileIds",
+      false,
+    ),
+    deliveryMode: "record_only",
   };
 }
 

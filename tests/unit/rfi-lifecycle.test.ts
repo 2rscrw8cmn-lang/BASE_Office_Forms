@@ -19,7 +19,6 @@ describe("RFI domain lifecycle", () => {
   it("allows the binding draft → ready_to_issue → open → response_received → closed flow", () => {
     assertCanUpdateDraft("draft");
     expect(markReadyStatus("draft")).toBe("ready_to_issue");
-    expect(issueStatus("draft")).toBe("open");
     expect(issueStatus("ready_to_issue")).toBe("open");
     expect(respondStatus("open")).toBe("response_received");
     expect(closeStatus("response_received")).toBe("closed");
@@ -38,6 +37,7 @@ describe("RFI domain lifecycle", () => {
   });
 
   it("rejects illegal status transitions", () => {
+    expect(() => issueStatus("draft")).toThrow(RfiIllegalTransitionError);
     expect(() => issueStatus("open")).toThrow(RfiIllegalTransitionError);
     expect(() => respondStatus("draft")).toThrow(RfiIllegalTransitionError);
     expect(() => closeStatus("open")).toThrow(RfiIllegalTransitionError);

@@ -1,10 +1,8 @@
 # Current Application Structure
 
-**Status:** Authenticated workspace inventory — the UI-4 React application shell
-(global composition, routing, session/project context, drawer, project tabs),
-the UI-3 BASE component library and UI Lab, the UI-5 native RFI register, and
-the UI-6A native Projects register and Create Project workflow
-**Updated:** 2026-07-24 (UI-6A)
+**Status:** Authenticated workspace plus RFI Slice 2A official-issuance backend
+inventory
+**Updated:** 2026-07-25 (RFI Slice 2A)
 
 ## Runtime shape
 
@@ -22,6 +20,40 @@ evidence. Pages preview still binds the isolated combined RFI D1 database
 through the root preview binding; retained UI-2 scripts use
 `wrangler.ui2.jsonc`, and the remote 0014 rehearsal uses the separate guarded
 `wrangler.rfi-rehearsal.jsonc`.
+
+### RFI Slice 2A — official issuance backend
+
+`POST /api/v2/projects/:projectId/rfis/:rfiId/issue` now coordinates one
+server-authoritative operation. It requires `Idempotency-Key`, accepts only
+`record_only` delivery, validates the exact ready RFI/current revision/template
+and private attachment objects, produces a deterministic PDF through
+`RfiArtifactRenderer`, writes and verifies the artifact in R2, and then commits
+the RFI number, promoted immutable revision, generic issuance/file snapshots,
+RFI render/template/recipient snapshots, activity, and idempotency result in
+one guarded D1 batch.
+
+The original shared revision remains internal revision number 1 and is promoted
+from `draft` to `published`; its user-facing label becomes `Original Issue`.
+`records.current_revision_id` remains authoritative. Migration
+`0015_rfi_official_issuance.sql` advances schema version to 13 and adds only
+official snapshot/idempotency/reconciliation state. It has not been applied to
+production by this implementation task.
+
+New backend boundaries:
+
+```text
+src/domain/rfis/official-issue.ts
+src/application/rfis/rfi-artifact-renderer.ts
+src/application/rfis/rfi-official-issue-service.ts
+src/infrastructure/rendering/rfi-pdf-artifact-renderer.ts
+src/infrastructure/db/d1/rfi-official-issue-repository.ts
+migrations/0015_rfi_official_issuance.sql
+```
+
+R2 is written before D1 because the services cannot share a transaction. A D1
+failure deletes the deterministic new artifact. If deletion fails,
+`rfi_artifact_orphans` durably records the object for operator reconciliation.
+The API never returns its storage key.
 
 The repository is a Cloudflare Pages application with static browser assets, a
 React/Vite application entry, Pages Functions, one D1 database binding, and one
@@ -1186,7 +1218,9 @@ Records → Revisions → Files spine. Each RFI uses a stable `records` identity
 one-to-one `rfi_details` extension, a current draft revision, and revision-scoped
 files. Issue remains fail-closed until the complete immutable-revision and
 official-artifact transaction is implemented; no Slice 1 request can consume a
-number or present a draft as Open. Project, contact, and RFI lifecycle mutations
+number or present a draft as Open. Slice 2A replaces the issue route's
+fail-closed behavior with the guarded operation described above. Project,
+contact, and RFI lifecycle mutations
 append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,

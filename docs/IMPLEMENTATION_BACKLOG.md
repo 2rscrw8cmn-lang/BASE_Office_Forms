@@ -149,14 +149,19 @@ Acceptance:
 
 ## Epic RFI-02 — RFI issue and artifact
 
-- RFI-02.1 Create RFI template version.
-- RFI-02.2 Implement project binding.
-- RFI-02.3 Implement issue transition.
-- RFI-02.4 Generate frozen render payload.
-- RFI-02.5 Generate issued artifact.
-- RFI-02.6 Snapshot recipients.
-- RFI-02.7 Add artifact download.
+- [x] RFI-02.1 Create RFI template version.
+- [x] RFI-02.2 Implement project binding.
+- [x] RFI-02.3 Implement issue transition (`record_only` backend).
+- [x] RFI-02.4 Generate frozen render payload.
+- [x] RFI-02.5 Generate and privately persist issued artifact.
+- [x] RFI-02.6 Snapshot recipients.
+- [x] RFI-02.7 Add authorized artifact download through the existing RFI file
+  route.
 - RFI-02.8 Add final-closed artifact option.
+
+Slice 2A closeout still requires PR review and the guarded rollout in
+`RFI_SLICE_2A_ROLLOUT.md`. Email/share delivery and issuance UI are separate
+work, not hidden completion criteria for the checked backend items.
 
 Acceptance:
 

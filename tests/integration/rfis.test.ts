@@ -6,6 +6,12 @@ import { ProjectRfisReadModelService } from "../../src/application/read-models/p
 import { RfiWorkspaceReadModelService } from "../../src/application/read-models/rfi-workspace-service";
 import { RfiAttachmentService } from "../../src/application/rfis/rfi-attachment-service";
 import { RfiService } from "../../src/application/rfis/rfi-service";
+import { RfiOfficialIssueService } from "../../src/application/rfis/rfi-official-issue-service";
+import type {
+  RenderedRfiArtifact,
+  RfiArtifactRenderer,
+} from "../../src/application/rfis/rfi-artifact-renderer";
+import type { FrozenRfiRenderPayload } from "../../src/domain/rfis/official-issue";
 import { RfiTemplateBindingService } from "../../src/application/rfis/rfi-template-binding-service";
 import type {
   FileObjectMetadata,
@@ -27,7 +33,12 @@ import { D1RfiAttachmentsRepository } from "../../src/infrastructure/db/d1/rfi-a
 import { D1RfiRecordsRepository } from "../../src/infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../src/infrastructure/db/d1/rfi-responses-repository";
 import { D1RfiWorkspaceReadRepository } from "../../src/infrastructure/db/d1/rfi-workspace-read-repository";
+import { D1RfiOfficialIssueRepository } from "../../src/infrastructure/db/d1/rfi-official-issue-repository";
+import { D1RecordRevisionsRepository } from "../../src/infrastructure/db/d1/record-revisions-repository";
+import { D1RecordRevisionSequencesRepository } from "../../src/infrastructure/db/d1/record-revision-sequences-repository";
+import { D1UsersRepository } from "../../src/infrastructure/db/d1/users-repository";
 import { D1TemplatesRepository } from "../../src/infrastructure/db/d1/templates-repository";
+import { RfiPdfArtifactRenderer } from "../../src/infrastructure/rendering/rfi-pdf-artifact-renderer";
 import type { V2RouteDependencies } from "../../src/http/v2/dependencies";
 import { invokeV2Api } from "../helpers/api";
 import { resetIdentityFoundation, testDatabase } from "../helpers/d1";
@@ -81,11 +92,27 @@ class FixtureAuthenticationAdapter implements AuthenticationAdapter {
 class FakeStorage implements FileStoragePort {
   private readonly objects = new Map<
     string,
-    { content: ArrayBuffer; contentType: string }
+    { content: ArrayBuffer; contentType: string; sha256: string }
   >();
+  failPut = false;
+  failHead = false;
+  failDelete = false;
+  corruptHead = false;
 
   reset(): void {
     this.objects.clear();
+    this.failPut = false;
+    this.failHead = false;
+    this.failDelete = false;
+    this.corruptHead = false;
+  }
+
+  get objectCount(): number {
+    return this.objects.size;
+  }
+
+  bytes(key: string): ArrayBuffer | null {
+    return this.objects.get(key)?.content ?? null;
   }
 
   put(
@@ -93,10 +120,15 @@ class FakeStorage implements FileStoragePort {
     content: ArrayBuffer,
     metadata: FileObjectMetadata,
   ): Promise<void> {
+    if (this.failPut) return Promise.reject(new Error("forced R2 put failure"));
     if (this.objects.has(key)) {
       return Promise.reject(new Error("object exists"));
     }
-    this.objects.set(key, { content, contentType: metadata.contentType });
+    this.objects.set(key, {
+      content,
+      contentType: metadata.contentType,
+      sha256: metadata.sha256,
+    });
     return Promise.resolve();
   }
 
@@ -112,12 +144,50 @@ class FakeStorage implements FileStoragePort {
   }
 
   delete(key: string): Promise<void> {
+    if (this.failDelete) {
+      return Promise.reject(new Error("forced R2 delete failure"));
+    }
     this.objects.delete(key);
     return Promise.resolve();
+  }
+
+  head(key: string): Promise<{ size: number; sha256: string } | null> {
+    if (this.failHead) {
+      return Promise.reject(new Error("forced R2 head failure"));
+    }
+    const object = this.objects.get(key);
+    return Promise.resolve(
+      object
+        ? {
+            size: object.content.byteLength + (this.corruptHead ? 1 : 0),
+            sha256: object.sha256,
+          }
+        : null,
+    );
   }
 }
 
 const storage = new FakeStorage();
+class TestRenderer implements RfiArtifactRenderer {
+  private readonly delegate = new RfiPdfArtifactRenderer();
+  fail = false;
+  versionOverride: string | null = null;
+
+  get rendererVersion(): string {
+    return this.versionOverride ?? this.delegate.rendererVersion;
+  }
+
+  reset(): void {
+    this.fail = false;
+    this.versionOverride = null;
+  }
+
+  render(payload: FrozenRfiRenderPayload): Promise<RenderedRfiArtifact> {
+    if (this.fail) return Promise.reject(new Error("forced render failure"));
+    return this.delegate.render(payload);
+  }
+}
+const renderer = new TestRenderer();
 
 function dependencies(): V2RouteDependencies {
   const database = testDatabase();
@@ -130,6 +200,22 @@ function dependencies(): V2RouteDependencies {
   const records = new D1RfiRecordsRepository(database, responses);
   const templateBinding = new RfiTemplateBindingService(
     new D1TemplatesRepository(database),
+  );
+  const revisions = new D1RecordRevisionsRepository(
+    database,
+    new D1RecordRevisionSequencesRepository(database),
+  );
+  const officialIssuer = new RfiOfficialIssueService(
+    projects,
+    records,
+    revisions,
+    attachmentsRepo,
+    new D1ProjectContactsRepository(database),
+    templateBinding,
+    new D1UsersRepository(database),
+    new D1RfiOfficialIssueRepository(database),
+    storage,
+    renderer,
   );
   return {
     authenticationAdapter: new FixtureAuthenticationAdapter(),
@@ -145,6 +231,7 @@ function dependencies(): V2RouteDependencies {
       attachmentsRepo,
       templateBinding,
       new D1ProjectContactsRepository(database),
+      officialIssuer,
     ),
     rfiAttachments: new RfiAttachmentService(
       projects,
@@ -294,6 +381,7 @@ async function createProject(number: string): Promise<ApiProject> {
     request("admin", "POST", {
       projectNumber: number,
       name: `Project ${number}`,
+      status: "active",
     }),
     dependencies(),
   );
@@ -322,12 +410,142 @@ async function createDraft(
   return body.data;
 }
 
-async function issue(projectId: string, rfiId: string): Promise<Response> {
+async function issue(
+  projectId: string,
+  rfiId: string,
+  body: unknown = {
+    recipientProjectContactIds: ["contact-recipient"],
+    ccProjectContactIds: [],
+    responseDueDate: "2026-08-01",
+    includedFileIds: [],
+    deliveryMode: "record_only",
+  },
+  options: { key?: string; session?: string } = {},
+): Promise<Response> {
+  const base = request(options.session ?? "admin", "POST", body);
   return invokeV2Api(
     `/api/v2/projects/${projectId}/rfis/${rfiId}/issue`,
+    {
+      ...base,
+      headers: {
+        ...(base.headers as Record<string, string>),
+        "idempotency-key": options.key ?? "issue-key-1",
+      },
+    },
+    dependencies(),
+  );
+}
+
+async function seedProjectContact(
+  projectId: string,
+  id: string,
+  name: string,
+  archived = false,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await testDatabase()
+    .prepare(
+      `INSERT INTO project_contacts
+        (id, organization_id, project_id, company_name, contact_name,
+         contact_type, email, created_at, updated_at, archived_at)
+       VALUES (?, 'org-a', ?, 'Design Co', ?, 'architect', ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      projectId,
+      name,
+      `${id}@example.test`,
+      now,
+      now,
+      archived ? now : null,
+    )
+    .run();
+}
+
+async function prepareIssuableRfi(
+  number: string,
+  options: { upload?: boolean; contactId?: string } = {},
+): Promise<{
+  project: ApiProject;
+  draft: ApiRfi;
+  fileId: string | null;
+  contactId: string;
+}> {
+  const project = await createProject(number);
+  const draft = await createDraft(project.id);
+  const contactId = options.contactId ?? "contact-recipient";
+  await seedProjectContact(project.id, contactId, "Project Architect");
+  const assigned = await patch(project.id, draft.id, {
+    responsiblePartyId: contactId,
+    lockVersion: draft.lockVersion,
+  });
+  expect(assigned.status).toBe(200);
+  const file = options.upload
+    ? await uploadRfiFile(project.id, draft.id)
+    : null;
+  const ready = await invokeV2Api(
+    `/api/v2/projects/${project.id}/rfis/${draft.id}/ready`,
     request("admin", "POST"),
     dependencies(),
   );
+  expect(ready.status).toBe(200);
+  return { project, draft, fileId: file?.id ?? null, contactId };
+}
+
+async function prepareRfiInProject(
+  project: ApiProject,
+  contactId: string,
+  subject: string,
+): Promise<ApiRfi> {
+  const draft = await createDraft(project.id, subject);
+  await seedProjectContact(project.id, contactId, `${subject} Architect`);
+  const assigned = await patch(project.id, draft.id, {
+    responsiblePartyId: contactId,
+    lockVersion: draft.lockVersion,
+  });
+  expect(assigned.status).toBe(200);
+  const ready = await invokeV2Api(
+    `/api/v2/projects/${project.id}/rfis/${draft.id}/ready`,
+    request("admin", "POST"),
+    dependencies(),
+  );
+  expect(ready.status).toBe(200);
+  return draft;
+}
+
+function issueBody(contactId: string, includedFileIds: string[] = []) {
+  return {
+    recipientProjectContactIds: [contactId],
+    ccProjectContactIds: [],
+    responseDueDate: "2026-08-01",
+    includedFileIds,
+    deliveryMode: "record_only",
+  };
+}
+
+async function uploadRfiFile(
+  projectId: string,
+  rfiId: string,
+  name = "support.pdf",
+): Promise<{ id: string; revisionId: string }> {
+  const form = new FormData();
+  form.append("role", "supporting_attachment");
+  form.append(
+    "file",
+    new File([new Uint8Array([1, 3, 5, 7, 9])], name, {
+      type: "application/pdf",
+    }),
+  );
+  const response = await invokeV2Api(
+    `/api/v2/projects/${projectId}/rfis/${rfiId}/attachments`,
+    { method: "POST", headers: { "x-test-session": "admin" }, body: form },
+    dependencies(),
+  );
+  expect(response.status).toBe(201);
+  const body = await readJson<{
+    data: { id: string; revisionId: string };
+  }>(response);
+  return body.data;
 }
 
 function patch(
@@ -361,14 +579,15 @@ describe("RFI register & workspace (Slice 1)", () => {
   beforeEach(async () => {
     await resetIdentityFoundation();
     storage.reset();
+    renderer.reset();
     await seed();
   });
 
-  it("applies corrective migration 0014 (schema version 12)", async () => {
+  it("applies RFI official issuance migration 0015 (schema version 13)", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(12);
+    expect(version?.schema_version).toBe(13);
   });
 
   it("creates an unnumbered draft bound to the default BASE RFI template", async () => {
@@ -742,44 +961,132 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(crossTenant.status).toBe(404);
   });
 
-  it("issues permanently numbered RFIs (draft → open) and blocks post-issue edits", async () => {
-    const project = await createProject("P-RFI-ISSUE-GATE");
-    const draft = await createDraft(project.id);
-    const issued = await issue(project.id, draft.id);
-    expect(issued.status).toBe(409);
-    const error = await readJson<{ error: { code: string } }>(issued);
-    expect(error.error.code).toBe("RFI_ISSUANCE_NOT_AVAILABLE");
+  it("issues a ready RFI as one immutable revision/artifact/issuance transaction", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-ISSUE");
+    await seedProjectContact(project.id, "contact-cc", "Owner Representative");
+    const issued = await issue(project.id, draft.id, {
+      recipientProjectContactIds: ["contact-recipient"],
+      ccProjectContactIds: ["contact-cc"],
+      responseDueDate: "2026-08-01",
+      includedFileIds: [],
+      deliveryMode: "record_only",
+    });
+    expect(issued.status).toBe(200);
+    const body = await readJson<{
+      data: {
+        rfiId: string;
+        officialDisplayNumber: string;
+        status: string;
+        issuedRevision: {
+          id: string;
+          internalRevisionNumber: number;
+          userFacingVersion: string;
+        };
+        issuance: { id: string; issueNumber: string };
+        officialArtifact: {
+          fileId: string;
+          mediaType: string;
+          sha256: string;
+          byteSize: number;
+        };
+        recipients: { to: { contactName: string }[]; cc: unknown[] };
+        capabilities: { issue: boolean; recordResponse: boolean };
+      };
+    }>(issued);
+    expect(body.data).toMatchObject({
+      rfiId: draft.id,
+      officialDisplayNumber: "RFI-001",
+      status: "open",
+      issuedRevision: {
+        id: draft.draftRevisionId,
+        internalRevisionNumber: 1,
+        userFacingVersion: "Original Issue",
+      },
+      recipients: {
+        to: [{ contactName: "Project Architect" }],
+        cc: [{ contactName: "Owner Representative" }],
+      },
+      capabilities: { issue: false, recordResponse: true },
+    });
+    expect(body.data.issuance.issueNumber).toBe("ISS-001");
+    expect(body.data.officialArtifact.mediaType).toBe("application/pdf");
+    expect(body.data.officialArtifact.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.data.officialArtifact.byteSize).toBeGreaterThan(0);
+    expect(storage.objectCount).toBe(1);
+    const download = await invokeV2Api(
+      `/api/v2/projects/${project.id}/rfis/${draft.id}/attachments/${body.data.officialArtifact.fileId}/content`,
+      request("admin"),
+      dependencies(),
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-type")).toBe("application/pdf");
+    expect((await download.arrayBuffer()).byteLength).toBe(
+      body.data.officialArtifact.byteSize,
+    );
+
     const record = await testDatabase()
       .prepare(
-        `SELECT record_number, sequence_no, workflow_status, issued_at
+        `SELECT record_number, sequence_no, workflow_status, issued_at,
+                current_revision_id
          FROM records WHERE id = ?`,
       )
       .bind(draft.id)
       .first<{
-        record_number: string | null;
-        sequence_no: number | null;
+        record_number: string;
+        sequence_no: number;
         workflow_status: string;
-        issued_at: string | null;
+        issued_at: string;
+        current_revision_id: string;
       }>();
-    expect(record).toEqual({
-      record_number: null,
-      sequence_no: null,
-      workflow_status: "draft",
-      issued_at: null,
+    expect(record).toMatchObject({
+      record_number: "RFI-001",
+      sequence_no: 1,
+      workflow_status: "open",
+      current_revision_id: draft.draftRevisionId,
     });
+    expect(record?.issued_at).toBeTruthy();
+    const counts = await testDatabase()
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM rfi_official_issues WHERE rfi_id = ?) issue_count,
+          (SELECT COUNT(*) FROM issuances WHERE record_id = ?) issuance_count,
+          (SELECT COUNT(*) FROM revision_files
+           WHERE record_id = ? AND role = 'generated_artifact') artifact_count,
+          (SELECT COUNT(*) FROM rfi_issue_recipients
+           WHERE rfi_id = ?) recipient_count,
+          (SELECT COUNT(*) FROM activity_events
+           WHERE object_id = ? AND action = 'rfi.issued') activity_count`,
+      )
+      .bind(draft.id, draft.id, draft.id, draft.id, draft.id)
+      .first<Record<string, number>>();
+    expect(counts).toEqual({
+      issue_count: 1,
+      issuance_count: 1,
+      artifact_count: 1,
+      recipient_count: 2,
+      activity_count: 1,
+    });
+
+    const postIssueEdit = await patch(project.id, draft.id, {
+      subject: "Must not mutate",
+      lockVersion: 3,
+    });
+    expect(postIssueEdit.status).toBe(409);
   });
 
-  it("does not consume a number across repeated issue retries", async () => {
-    const project = await createProject("P-RFI-ISSUE-RETRY");
-    const draft = await createDraft(project.id);
-    const attempts = await Promise.all([
-      issue(project.id, draft.id),
-      issue(project.id, draft.id),
-      issue(project.id, draft.id),
-    ]);
-    expect(attempts.map((response) => response.status)).toEqual([
-      409, 409, 409,
-    ]);
+  it("replays the same idempotency key without duplicating official state", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-ISSUE-RETRY");
+    const first = await issue(project.id, draft.id, undefined, {
+      key: "stable-key",
+    });
+    const replay = await issue(project.id, draft.id, undefined, {
+      key: "stable-key",
+    });
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    const firstBody = await readJson<{ data: unknown }>(first);
+    const replayBody = await readJson<{ data: unknown }>(replay);
+    expect(replayBody.data).toEqual(firstBody.data);
     const sequence = await testDatabase()
       .prepare(
         `SELECT last_number FROM project_record_type_sequences
@@ -787,7 +1094,713 @@ describe("RFI register & workspace (Slice 1)", () => {
       )
       .bind(project.id)
       .first<{ last_number: number }>();
-    expect(sequence).toBeNull();
+    expect(sequence?.last_number).toBe(1);
+    const counts = await testDatabase()
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM record_revisions WHERE record_id = ?) revisions,
+          (SELECT COUNT(*) FROM issuances WHERE record_id = ?) issuances,
+          (SELECT COUNT(*) FROM activity_events
+           WHERE object_id = ? AND action = 'rfi.issued') activities`,
+      )
+      .bind(draft.id, draft.id, draft.id)
+      .first<Record<string, number>>();
+    expect(counts).toEqual({ revisions: 1, issuances: 1, activities: 1 });
+    expect(storage.objectCount).toBe(1);
+  });
+
+  it("rejects a reused idempotency key when the request changes", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-IDEMPOTENCY");
+    expect(
+      (
+        await issue(project.id, draft.id, undefined, {
+          key: "changed-key",
+        })
+      ).status,
+    ).toBe(200);
+    const changed = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-09-02",
+        includedFileIds: [],
+        deliveryMode: "record_only",
+      },
+      { key: "changed-key" },
+    );
+    expect(changed.status).toBe(409);
+    expect(
+      (await readJson<{ error: { code: string } }>(changed)).error.code,
+    ).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  it("requires the idempotency header and record_only delivery", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-REQUEST");
+    const missing = await invokeV2Api(
+      `/api/v2/projects/${project.id}/rfis/${draft.id}/issue`,
+      request("admin", "POST", {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [],
+        deliveryMode: "record_only",
+      }),
+      dependencies(),
+    );
+    expect(missing.status).toBe(400);
+    expect(
+      (await readJson<{ error: { code: string } }>(missing)).error.code,
+    ).toBe("IDEMPOTENCY_KEY_REQUIRED");
+
+    const unsupported = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [],
+        deliveryMode: "email",
+      },
+      { key: "unsupported-delivery" },
+    );
+    expect(unsupported.status).toBe(400);
+
+    const invalidDate = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-02-31",
+        includedFileIds: [],
+        deliveryMode: "record_only",
+      },
+      { key: "invalid-date" },
+    );
+    expect(invalidDate.status).toBe(400);
+
+    const emptyRecipients = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: [],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [],
+        deliveryMode: "record_only",
+      },
+      { key: "empty-recipients" },
+    );
+    expect(emptyRecipients.status).toBe(400);
+
+    const overlappingRouting = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: ["contact-recipient"],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [],
+        deliveryMode: "record_only",
+      },
+      { key: "overlapping-routing" },
+    );
+    expect(overlappingRouting.status).toBe(400);
+  });
+
+  it("requires strict readiness, complete content, responsibility, and the exact published template", async () => {
+    const project = await createProject("P-RFI-ELIGIBILITY");
+    const draft = await createDraft(project.id);
+    await seedProjectContact(project.id, "contact-recipient", "Architect");
+
+    expect((await issue(project.id, draft.id)).status).toBe(409);
+
+    const assigned = await patch(project.id, draft.id, {
+      responsiblePartyId: "contact-recipient",
+      lockVersion: draft.lockVersion,
+    });
+    expect(assigned.status).toBe(200);
+    const ready = await invokeV2Api(
+      `/api/v2/projects/${project.id}/rfis/${draft.id}/ready`,
+      request("admin", "POST"),
+      dependencies(),
+    );
+    expect(ready.status).toBe(200);
+    await testDatabase()
+      .prepare(
+        "UPDATE template_versions SET status = 'retired' WHERE id = ? AND organization_id = 'org-a'",
+      )
+      .bind(draft.templateVersionId)
+      .run();
+    const retiredTemplate = await issue(project.id, draft.id, undefined, {
+      key: "retired-template",
+    });
+    expect(retiredTemplate.status).toBe(422);
+    expect(storage.objectCount).toBe(0);
+  });
+
+  it("rejects void, closed, already-issued, incomplete, and unresolved RFI state", async () => {
+    const nonReadyStates = ["void", "closed"] as const;
+    for (const status of nonReadyStates) {
+      const prepared = await prepareIssuableRfi(`P-RFI-STATE-${status}`, {
+        contactId: `contact-${status}`,
+      });
+      await testDatabase()
+        .prepare("UPDATE records SET workflow_status = ? WHERE id = ?")
+        .bind(status, prepared.draft.id)
+        .run();
+      expect(
+        (
+          await issue(
+            prepared.project.id,
+            prepared.draft.id,
+            issueBody(prepared.contactId),
+            { key: `state-${status}` },
+          )
+        ).status,
+      ).toBe(409);
+    }
+
+    for (const [name, sql] of [
+      ["title", "UPDATE records SET title = '' WHERE id = ?"],
+      ["question", "UPDATE rfi_details SET question = '' WHERE record_id = ?"],
+      [
+        "responsibility",
+        "UPDATE records SET current_responsible_contact_id = NULL WHERE id = ?",
+      ],
+    ] as const) {
+      const prepared = await prepareIssuableRfi(`P-RFI-INCOMPLETE-${name}`, {
+        contactId: `contact-incomplete-${name}`,
+      });
+      await testDatabase().prepare(sql).bind(prepared.draft.id).run();
+      expect(
+        (
+          await issue(
+            prepared.project.id,
+            prepared.draft.id,
+            issueBody(prepared.contactId),
+            { key: `incomplete-${name}` },
+          )
+        ).status,
+      ).toBe(422);
+    }
+
+    const issued = await prepareIssuableRfi("P-RFI-ALREADY-ISSUED", {
+      contactId: "contact-already-issued",
+    });
+    expect(
+      (
+        await issue(
+          issued.project.id,
+          issued.draft.id,
+          issueBody(issued.contactId),
+          { key: "already-first" },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await issue(
+          issued.project.id,
+          issued.draft.id,
+          issueBody(issued.contactId),
+          { key: "already-second" },
+        )
+      ).status,
+    ).toBe(409);
+  });
+
+  it("validates recipient project scope, active state, and selected revision files", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-RELATIONS");
+    const other = await createProject("P-RFI-RELATIONS-OTHER");
+    await seedProjectContact(other.id, "contact-other-project", "Other");
+    const otherDraft = await createDraft(other.id, "Other project RFI");
+    const otherFile = await uploadRfiFile(other.id, otherDraft.id);
+    await seedProjectContact(project.id, "contact-archived", "Archived", true);
+
+    for (const [key, contactId] of [
+      ["cross-project", "contact-other-project"],
+      ["archived", "contact-archived"],
+    ] as const) {
+      const response = await issue(
+        project.id,
+        draft.id,
+        {
+          recipientProjectContactIds: [contactId],
+          ccProjectContactIds: [],
+          responseDueDate: "2026-08-01",
+          includedFileIds: [],
+          deliveryMode: "record_only",
+        },
+        { key },
+      );
+      expect(response.status).toBe(422);
+    }
+
+    const objectsBefore = storage.objectCount;
+    const badFile = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [otherFile.id],
+        deliveryMode: "record_only",
+      },
+      { key: "bad-file" },
+    );
+    expect(badFile.status).toBe(422);
+    expect(storage.objectCount).toBe(objectsBefore);
+  });
+
+  it("snapshots included files and rejects missing or mismatched R2 objects", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-FILES", { upload: true });
+    const { project, draft, fileId } = prepared;
+    const success = await issue(
+      project.id,
+      draft.id,
+      {
+        recipientProjectContactIds: ["contact-recipient"],
+        ccProjectContactIds: [],
+        responseDueDate: "2026-08-01",
+        includedFileIds: [fileId],
+        deliveryMode: "record_only",
+      },
+      { key: "file-success" },
+    );
+    expect(success.status).toBe(200);
+    const result = await readJson<{
+      data: {
+        includedFiles: {
+          fileId: string;
+          role: string;
+          originalFilename: string;
+          mediaType: string;
+          byteSize: number;
+          sha256: string;
+        }[];
+      };
+    }>(success);
+    expect(result.data.includedFiles).toHaveLength(1);
+    expect(result.data.includedFiles[0]).toMatchObject({
+      fileId,
+      role: "supporting_attachment",
+      originalFilename: "support.pdf",
+      mediaType: "application/pdf",
+      byteSize: 5,
+    });
+    expect(result.data.includedFiles[0].sha256).toMatch(/^[a-f0-9]{64}$/);
+    const snapshots = await testDatabase()
+      .prepare(
+        `SELECT snapshot_kind, COUNT(*) count
+         FROM rfi_issue_file_snapshots
+         WHERE rfi_id = ? GROUP BY snapshot_kind ORDER BY snapshot_kind`,
+      )
+      .bind(draft.id)
+      .all<{ snapshot_kind: string; count: number }>();
+    expect(snapshots.results).toEqual([
+      { snapshot_kind: "included", count: 1 },
+      { snapshot_kind: "official_artifact", count: 1 },
+    ]);
+
+    const missingPrepared = await prepareIssuableRfi("P-RFI-FILE-MISSING", {
+      upload: true,
+      contactId: "contact-recipient-missing",
+    });
+    const row = await testDatabase()
+      .prepare("SELECT storage_key FROM revision_files WHERE id = ?")
+      .bind(missingPrepared.fileId)
+      .first<{ storage_key: string }>();
+    await storage.delete(row?.storage_key ?? "");
+    const missing = await issue(
+      missingPrepared.project.id,
+      missingPrepared.draft.id,
+      issueBody(missingPrepared.contactId, [missingPrepared.fileId as string]),
+      { key: "file-missing" },
+    );
+    expect(missing.status).toBe(503);
+  });
+
+  it("prevents simultaneous issue requests from creating duplicate official state", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-CONCURRENT");
+    const responses = await Promise.all([
+      issue(project.id, draft.id, undefined, { key: "concurrent-a" }),
+      issue(project.id, draft.id, undefined, { key: "concurrent-b" }),
+    ]);
+    expect(
+      responses.filter((response) => response.status === 200),
+    ).toHaveLength(1);
+    const counts = await testDatabase()
+      .prepare(
+        `SELECT
+          (SELECT COUNT(*) FROM rfi_official_issues WHERE rfi_id = ?) issues,
+          (SELECT COUNT(*) FROM issuances WHERE record_id = ?) issuances,
+          (SELECT COUNT(*) FROM activity_events
+           WHERE object_id = ? AND action = 'rfi.issued') activities`,
+      )
+      .bind(draft.id, draft.id, draft.id)
+      .first<Record<string, number>>();
+    expect(counts).toEqual({ issues: 1, issuances: 1, activities: 1 });
+    expect(storage.objectCount).toBe(1);
+  });
+
+  it("serializes concurrent project numbering without reusing or skipping a committed number", async () => {
+    const project = await createProject("P-RFI-NUMBER-CONCURRENT");
+    const firstDraft = await prepareRfiInProject(
+      project,
+      "contact-number-a",
+      "First concurrent RFI",
+    );
+    const secondDraft = await prepareRfiInProject(
+      project,
+      "contact-number-b",
+      "Second concurrent RFI",
+    );
+    const attempts = await Promise.all([
+      issue(project.id, firstDraft.id, issueBody("contact-number-a"), {
+        key: "number-a",
+      }),
+      issue(project.id, secondDraft.id, issueBody("contact-number-b"), {
+        key: "number-b",
+      }),
+    ]);
+    expect(attempts.filter((response) => response.status === 200)).toHaveLength(
+      1,
+    );
+    const failedIndex = attempts.findIndex(
+      (response) => response.status !== 200,
+    );
+    expect(failedIndex).toBeGreaterThanOrEqual(0);
+    const failedDraft = failedIndex === 0 ? firstDraft : secondDraft;
+    const failedContact =
+      failedIndex === 0 ? "contact-number-a" : "contact-number-b";
+    const retry = await issue(
+      project.id,
+      failedDraft.id,
+      issueBody(failedContact),
+      { key: failedIndex === 0 ? "number-a" : "number-b" },
+    );
+    expect(retry.status).toBe(200);
+
+    const numbers = await testDatabase()
+      .prepare(
+        `SELECT record_number FROM records
+         WHERE project_id = ? AND record_type_key = 'rfi'
+         ORDER BY sequence_no`,
+      )
+      .bind(project.id)
+      .all<{ record_number: string }>();
+    expect(numbers.results.map((row) => row.record_number)).toEqual([
+      "RFI-001",
+      "RFI-002",
+    ]);
+    const sequence = await testDatabase()
+      .prepare(
+        `SELECT last_number FROM project_record_type_sequences
+         WHERE organization_id = 'org-a' AND project_id = ?
+           AND record_type_key = 'rfi'`,
+      )
+      .bind(project.id)
+      .first<{ last_number: number }>();
+    expect(sequence?.last_number).toBe(2);
+    expect(storage.objectCount).toBe(2);
+  });
+
+  it("compensates the R2 artifact when any guarded D1 issue boundary fails", async () => {
+    const boundaries = [
+      {
+        name: "sequence",
+        sql: `CREATE TRIGGER fail_rfi_issue_boundary
+              BEFORE UPDATE ON project_record_type_sequences
+              BEGIN SELECT RAISE(ABORT, 'forced sequence failure'); END`,
+      },
+      {
+        name: "revision",
+        sql: `CREATE TRIGGER fail_rfi_issue_boundary
+              BEFORE UPDATE ON record_revisions
+              WHEN NEW.status = 'published'
+              BEGIN SELECT RAISE(ABORT, 'forced revision failure'); END`,
+      },
+      {
+        name: "issuance",
+        sql: `CREATE TRIGGER fail_rfi_issue_boundary
+              BEFORE INSERT ON issuances
+              BEGIN SELECT RAISE(ABORT, 'forced issuance failure'); END`,
+      },
+      {
+        name: "recipient",
+        sql: `CREATE TRIGGER fail_rfi_issue_boundary
+              BEFORE INSERT ON rfi_issue_recipients
+              BEGIN SELECT RAISE(ABORT, 'forced recipient failure'); END`,
+      },
+      {
+        name: "activity",
+        sql: `CREATE TRIGGER fail_rfi_issue_boundary
+              BEFORE INSERT ON activity_events
+              WHEN NEW.action = 'rfi.issued'
+              BEGIN SELECT RAISE(ABORT, 'forced activity failure'); END`,
+      },
+    ];
+
+    for (const boundary of boundaries) {
+      const { project, draft } = await prepareIssuableRfi(
+        `P-RFI-FAIL-${boundary.name}`,
+        { contactId: `contact-${boundary.name}` },
+      );
+      await testDatabase().prepare(boundary.sql).run();
+      try {
+        const response = await issue(
+          project.id,
+          draft.id,
+          issueBody(`contact-${boundary.name}`),
+          { key: `failure-${boundary.name}` },
+        );
+        expect(response.status, boundary.name).toBe(503);
+        expect(storage.objectCount, boundary.name).toBe(0);
+        const state = await testDatabase()
+          .prepare(
+            `SELECT workflow_status, record_number, issued_at
+             FROM records WHERE id = ?`,
+          )
+          .bind(draft.id)
+          .first<{
+            workflow_status: string;
+            record_number: string | null;
+            issued_at: string | null;
+          }>();
+        expect(state, boundary.name).toEqual({
+          workflow_status: "ready_to_issue",
+          record_number: null,
+          issued_at: null,
+        });
+      } finally {
+        await testDatabase()
+          .prepare("DROP TRIGGER IF EXISTS fail_rfi_issue_boundary")
+          .run();
+      }
+    }
+  });
+
+  it("fails safely before D1 for render, R2 write, and R2 verification errors", async () => {
+    const renderCase = await prepareIssuableRfi("P-RFI-RENDER-FAIL");
+    renderer.fail = true;
+    expect(
+      (
+        await issue(renderCase.project.id, renderCase.draft.id, undefined, {
+          key: "render-fail",
+        })
+      ).status,
+    ).toBe(503);
+    expect(storage.objectCount).toBe(0);
+    renderer.fail = false;
+
+    const putCase = await prepareIssuableRfi("P-RFI-PUT-FAIL", {
+      contactId: "contact-put-fail",
+    });
+    storage.failPut = true;
+    expect(
+      (
+        await issue(
+          putCase.project.id,
+          putCase.draft.id,
+          issueBody(putCase.contactId),
+          { key: "put-fail" },
+        )
+      ).status,
+    ).toBe(503);
+    expect(storage.objectCount).toBe(0);
+    storage.failPut = false;
+
+    const verifyCase = await prepareIssuableRfi("P-RFI-VERIFY-FAIL", {
+      contactId: "contact-verify-fail",
+    });
+    storage.corruptHead = true;
+    expect(
+      (
+        await issue(
+          verifyCase.project.id,
+          verifyCase.draft.id,
+          issueBody(verifyCase.contactId),
+          { key: "verify-fail" },
+        )
+      ).status,
+    ).toBe(503);
+    expect(storage.objectCount).toBe(0);
+  });
+
+  it("durably records an orphan when R2 compensation deletion fails", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-ORPHAN");
+    await testDatabase()
+      .prepare(
+        `CREATE TRIGGER fail_rfi_issue_commit
+         BEFORE INSERT ON rfi_official_issues
+         BEGIN SELECT RAISE(ABORT, 'forced commit failure'); END`,
+      )
+      .run();
+    storage.failDelete = true;
+    try {
+      const response = await issue(project.id, draft.id, undefined, {
+        key: "orphan-key",
+      });
+      expect(response.status).toBe(500);
+      const orphan = await testDatabase()
+        .prepare(
+          `SELECT reconciliation_status, artifact_byte_size
+           FROM rfi_artifact_orphans WHERE rfi_id = ?`,
+        )
+        .bind(draft.id)
+        .first<{
+          reconciliation_status: string;
+          artifact_byte_size: number;
+        }>();
+      expect(orphan?.reconciliation_status).toBe("pending");
+      expect(orphan?.artifact_byte_size).toBeGreaterThan(0);
+      expect(storage.objectCount).toBe(1);
+    } finally {
+      storage.failDelete = false;
+      await testDatabase()
+        .prepare("DROP TRIGGER IF EXISTS fail_rfi_issue_commit")
+        .run();
+    }
+  });
+
+  it("keeps the frozen artifact and snapshots unchanged after source edits", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-IMMUTABLE");
+    const response = await issue(project.id, draft.id, undefined, {
+      key: "immutable-key",
+    });
+    expect(response.status).toBe(200);
+    const issueRow = await testDatabase()
+      .prepare(
+        `SELECT artifact_storage_key, artifact_sha256, render_payload_json,
+                template_definition_json
+         FROM rfi_official_issues WHERE rfi_id = ?`,
+      )
+      .bind(draft.id)
+      .first<{
+        artifact_storage_key: string;
+        artifact_sha256: string;
+        render_payload_json: string;
+        template_definition_json: string;
+      }>();
+    const recipientBefore = await testDatabase()
+      .prepare(
+        `SELECT contact_name_snapshot, email_snapshot
+         FROM rfi_issue_recipients WHERE rfi_id = ?`,
+      )
+      .bind(draft.id)
+      .first<Record<string, string>>();
+    const bytesBefore = storage.bytes(issueRow?.artifact_storage_key ?? "");
+
+    await testDatabase()
+      .prepare(
+        `UPDATE projects SET name = 'Changed Project', updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(new Date().toISOString(), project.id)
+      .run();
+    await testDatabase()
+      .prepare(
+        `UPDATE project_contacts
+         SET contact_name = 'Changed Contact', email = 'changed@example.test',
+             updated_at = ?
+         WHERE id = 'contact-recipient'`,
+      )
+      .bind(new Date().toISOString())
+      .run();
+    await testDatabase()
+      .prepare(
+        `UPDATE rfi_details SET question = 'Changed question'
+         WHERE record_id = ?`,
+      )
+      .bind(draft.id)
+      .run();
+    const version = await testDatabase()
+      .prepare(
+        `SELECT template_id, version_number, definition_json
+         FROM template_versions WHERE id = ?`,
+      )
+      .bind(draft.templateVersionId)
+      .first<{
+        template_id: string;
+        version_number: number;
+        definition_json: string;
+      }>();
+    const now = new Date().toISOString();
+    await testDatabase().batch([
+      testDatabase()
+        .prepare("UPDATE template_versions SET status = 'retired' WHERE id = ?")
+        .bind(draft.templateVersionId),
+      testDatabase()
+        .prepare(
+          `INSERT INTO template_versions
+            (id, organization_id, template_id, version_number, definition_json,
+             status, created_by, created_at, published_at, published_by)
+           VALUES (?, 'org-a', ?, ?, ?, 'published', 'user-admin', ?, ?, 'user-admin')`,
+        )
+        .bind(
+          "template-version-after-rfi-issue",
+          version?.template_id,
+          (version?.version_number ?? 0) + 1,
+          version?.definition_json,
+          now,
+          now,
+        ),
+    ]);
+    renderer.versionOverride = "future-renderer/v99";
+
+    const issueAfter = await testDatabase()
+      .prepare(
+        `SELECT artifact_storage_key, artifact_sha256, render_payload_json,
+                template_definition_json
+         FROM rfi_official_issues WHERE rfi_id = ?`,
+      )
+      .bind(draft.id)
+      .first<typeof issueRow>();
+    const recipientAfter = await testDatabase()
+      .prepare(
+        `SELECT contact_name_snapshot, email_snapshot
+         FROM rfi_issue_recipients WHERE rfi_id = ?`,
+      )
+      .bind(draft.id)
+      .first<Record<string, string>>();
+    expect(issueAfter).toEqual(issueRow);
+    expect(recipientAfter).toEqual(recipientBefore);
+    expect(storage.bytes(issueRow?.artifact_storage_key ?? "")).toEqual(
+      bytesBefore,
+    );
+    await expect(
+      testDatabase()
+        .prepare(
+          "UPDATE rfi_official_issues SET response_due_date = '2027-01-01' WHERE rfi_id = ?",
+        )
+        .bind(draft.id)
+        .run(),
+    ).rejects.toThrow(/immutable/);
+    await expect(
+      testDatabase()
+        .prepare(
+          "UPDATE rfi_issue_recipients SET contact_name_snapshot = 'Mutated' WHERE rfi_id = ?",
+        )
+        .bind(draft.id)
+        .run(),
+    ).rejects.toThrow(/immutable/);
+    await expect(
+      testDatabase()
+        .prepare("UPDATE record_revisions SET title = 'Mutated' WHERE id = ?")
+        .bind(draft.draftRevisionId)
+        .run(),
+    ).rejects.toThrow(/immutable/);
+    await expect(
+      testDatabase()
+        .prepare("UPDATE records SET record_number = 'RFI-999' WHERE id = ?")
+        .bind(draft.id)
+        .run(),
+    ).rejects.toThrow(/immutable/);
   });
 
   it("hides incomplete issue and response capabilities from the workspace", async () => {
@@ -853,7 +1866,7 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(close.status).toBe(409);
   });
 
-  it("enforces project-role authorization while issue remains gated", async () => {
+  it("enforces project-role authorization before official issue validation", async () => {
     const project = await createProject("P-RFI-ROLE");
     const draft = await createDraft(project.id);
     const now = new Date().toISOString();
@@ -870,12 +1883,22 @@ describe("RFI register & workspace (Slice 1)", () => {
     );
     expect(contributorDenied.status).toBe(403);
 
-    const viewerDenied = await invokeV2Api(
-      `/api/v2/projects/${project.id}/rfis/${draft.id}/issue`,
-      request("viewer", "POST"),
-      dependencies(),
-    );
+    const viewerDenied = await issue(project.id, draft.id, undefined, {
+      key: "viewer-key",
+      session: "viewer",
+    });
     expect(viewerDenied.status).toBe(404);
+
+    const unauthenticated = await issue(project.id, draft.id, undefined, {
+      key: "unauthenticated-key",
+      session: "",
+    });
+    expect(unauthenticated.status).toBe(401);
+
+    const crossTenant = await issue("project-b", "other-rfi", undefined, {
+      key: "cross-tenant-key",
+    });
+    expect(crossTenant.status).toBe(404);
 
     await testDatabase()
       .prepare(
@@ -883,15 +1906,14 @@ describe("RFI register & workspace (Slice 1)", () => {
       )
       .bind("member-manager", project.id, now)
       .run();
-    const managerAllowed = await invokeV2Api(
-      `/api/v2/projects/${project.id}/rfis/${draft.id}/issue`,
-      request("manager", "POST"),
-      dependencies(),
-    );
+    const managerAllowed = await issue(project.id, draft.id, undefined, {
+      key: "manager-key",
+      session: "manager",
+    });
     expect(managerAllowed.status).toBe(409);
     const managerError = await readJson<{ error: { code: string } }>(
       managerAllowed,
     );
-    expect(managerError.error.code).toBe("RFI_ISSUANCE_NOT_AVAILABLE");
+    expect(managerError.error.code).toBe("RFI_ILLEGAL_TRANSITION");
   });
 });

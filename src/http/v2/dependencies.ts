@@ -12,6 +12,7 @@ import { RfiWorkspaceReadModelService } from "../../application/read-models/rfi-
 import { RfiService } from "../../application/rfis/rfi-service";
 import { RfiAttachmentService } from "../../application/rfis/rfi-attachment-service";
 import { RfiTemplateBindingService } from "../../application/rfis/rfi-template-binding-service";
+import { RfiOfficialIssueService } from "../../application/rfis/rfi-official-issue-service";
 import { RecordService } from "../../application/records/record-service";
 import { RevisionService } from "../../application/revisions/revision-service";
 import { FileService } from "../../application/files/file-service";
@@ -37,6 +38,7 @@ import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attac
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
 import { D1RfiResponsesRepository } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { D1RfiWorkspaceReadRepository } from "../../infrastructure/db/d1/rfi-workspace-read-repository";
+import { D1RfiOfficialIssueRepository } from "../../infrastructure/db/d1/rfi-official-issue-repository";
 import { D1RecordsRepository } from "../../infrastructure/db/d1/records-repository";
 import { D1RecordRevisionsRepository } from "../../infrastructure/db/d1/record-revisions-repository";
 import { D1RecordRevisionSequencesRepository } from "../../infrastructure/db/d1/record-revision-sequences-repository";
@@ -46,6 +48,7 @@ import { D1ProjectIssuanceSequencesRepository } from "../../infrastructure/db/d1
 import { D1TemplatesRepository } from "../../infrastructure/db/d1/templates-repository";
 import { D1UsersRepository } from "../../infrastructure/db/d1/users-repository";
 import { R2FileStorage } from "../../infrastructure/storage/r2-file-storage";
+import { RfiPdfArtifactRenderer } from "../../infrastructure/rendering/rfi-pdf-artifact-renderer";
 
 export interface V2Environment {
   DB: D1Database;
@@ -107,6 +110,18 @@ export function createV2RouteDependencies(
   );
   const files = new D1RevisionFilesRepository(environment.DB);
   const storage = new R2FileStorage(environment.FILES);
+  const rfiOfficialIssuer = new RfiOfficialIssueService(
+    projects,
+    rfiRecords,
+    revisions,
+    rfiAttachmentsRepository,
+    projectContactsRepository,
+    rfiTemplateBinding,
+    users,
+    new D1RfiOfficialIssueRepository(environment.DB),
+    storage,
+    new RfiPdfArtifactRenderer(),
+  );
   const sessions = new SessionResolutionService(users, memberships);
   const accessConfiguration = {
     teamDomain: environment.CF_ACCESS_TEAM_DOMAIN,
@@ -139,6 +154,7 @@ export function createV2RouteDependencies(
       rfiAttachmentsRepository,
       rfiTemplateBinding,
       projectContactsRepository,
+      rfiOfficialIssuer,
     ),
     rfiAttachments: new RfiAttachmentService(
       projects,

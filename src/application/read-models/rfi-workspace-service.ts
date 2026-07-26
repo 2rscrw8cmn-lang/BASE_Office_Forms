@@ -3,6 +3,8 @@ import { RfiNotFoundError } from "../../domain/rfis/errors";
 import {
   canAttach,
   canClose,
+  canIssue,
+  canMarkReady,
   canReopen,
   canRespond,
   canReturnForClarification,
@@ -80,7 +82,7 @@ export interface RfiWorkspaceReadModel {
   currentVersion: {
     id: string;
     label: string;
-    status: "draft";
+    status: "draft" | "published";
   };
   responsibleContacts: {
     id: string;
@@ -228,8 +230,14 @@ export class RfiWorkspaceReadModelService {
       },
       currentVersion: {
         id: rfi.draftRevisionId,
-        label: "Current Draft",
-        status: "draft",
+        label:
+          rfi.status === "draft" || rfi.status === "ready_to_issue"
+            ? "Current Draft"
+            : "Original Issue",
+        status:
+          rfi.status === "draft" || rfi.status === "ready_to_issue"
+            ? "draft"
+            : "published",
       },
       responsibleContacts,
       project: {
@@ -268,10 +276,8 @@ export class RfiWorkspaceReadModelService {
       capabilities: {
         updateDraft: canManage && canUpdateDraft(rfi.status),
         uploadAttachment: canManage && canAttach(rfi.status),
-        // Slice 1 deliberately exposes no issue/ready action. The complete
-        // immutable revision + artifact + recipient transaction lands in Slice 2.
-        markReady: false,
-        issue: false,
+        markReady: canManage && canMarkReady(rfi.status),
+        issue: canManage && canIssue(rfi.status),
         recordResponse: canManage && canRespond(rfi.status),
         returnForClarification:
           canManage && canReturnForClarification(rfi.status),

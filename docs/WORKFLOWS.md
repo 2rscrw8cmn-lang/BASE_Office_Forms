@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 ## 1. General workflow rules
 
 - Transitions are server actions, not arbitrary status edits.
@@ -164,25 +163,38 @@ Guard:
 
 Guard:
 
-- current state is `ready_to_issue` or authorized `draft`
-- idempotency key supplied
-- recipient routing valid
-- render succeeds
+- authenticated actor has project-scoped `rfis:issue`;
+- project is active;
+- current state is exactly `ready_to_issue` (direct issue from `draft` is not
+  permitted);
+- subject, question, responsible project contact, and at least one To recipient
+  are complete and active;
+- exact bound template version exists, validates, and is still `published`;
+- every included file belongs to the authoritative current RFI revision and
+  matches its D1 size/checksum and private R2 object;
+- `Idempotency-Key` is supplied and the request is valid;
+- delivery mode is `record_only`.
 
-Atomic effects:
+Coordinated effects:
 
-1. Assign next project RFI sequence if unnumbered.
-2. Set display number.
-3. Compile render payload.
-4. Create issued revision.
-5. Generate or queue issued PDF artifact.
-6. Record recipient snapshot.
-7. Set `issued_at`.
-8. Set state `open`.
-9. Write activity event.
-10. Optionally create delivery/share.
+1. Resolve the next project `rfi` record-type sequence without reserving it.
+2. Freeze exact template definition, project/RFI/contact/routing/due-date/file
+   data, renderer version, and checksums.
+3. Compile and generate the official PDF through the server artifact-renderer
+   boundary.
+4. Write the deterministic private R2 object and verify size/checksum.
+5. In one guarded D1 batch, allocate the number, promote the authoritative
+   shared revision 1 to `published` and label it `Original Issue`, attach the
+   generated artifact, create the generic issuance and file snapshots, store
+   frozen RFI/recipient/file snapshots, set `issued_at` and `open`, append
+   activity, and store the immutable idempotency result.
 
-Failure before completion must not consume a number unless the number and issue record were durably committed. If a number is consumed and later delivery fails, retain the number and show delivery failure.
+If R2 write/verification fails, no D1 official state is committed. If the D1
+batch fails, the new R2 object is deleted; failed deletion creates a pending
+`rfi_artifact_orphans` reconciliation row and returns an explicit error. A
+committed number is never reused. Same key/same request replays the original
+result; same key/different request conflicts. Email/share delivery is not part
+of Slice 2A.
 
 ### 5.5 Record response
 

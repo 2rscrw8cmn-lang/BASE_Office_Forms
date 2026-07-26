@@ -405,11 +405,11 @@ describe("records foundation API", () => {
     });
   });
 
-  it("creates, lists, retrieves, updates, and archives records with schema version 10", async () => {
+  it("creates, lists, retrieves, updates, and archives records with schema version 13", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(12);
+    expect(version?.schema_version).toBe(13);
     const project = await createProject("P-REC-1");
     const record = await createRecord(project.id);
     expect(record).toMatchObject({
