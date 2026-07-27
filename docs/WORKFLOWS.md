@@ -115,7 +115,7 @@ refreshed from confirmed server data before navigation.
 
 ```text
 draft
-→ ready_to_issue
+↔ ready_to_issue
 → open
 → response_received
 → closed
@@ -153,11 +153,29 @@ No official number is assigned.
 
 Guard:
 
-- project active
-- title and question complete
-- recipients resolved or explicitly overridden
-- attachments finalized
-- user has issue permission
+- current state is exactly `draft`;
+- subject and question are complete;
+- `responsiblePartyId` resolves to an active contact in the same project;
+- the exact bound template version exists, remains `published`, and is usable
+  by the official renderer contract;
+- user has `rfis:mark_ready`.
+
+These are the RFI-level facts that become locked. Ordinary PATCH editing is not
+permitted in `ready_to_issue`.
+
+### 5.3A Return to draft
+
+The intentional operator action **Return to draft** moves
+`ready_to_issue` back to `draft`. It requires `rfis:return_to_draft`, appends
+`rfi.returned_to_draft`, and is allowed only before any official issue or
+number allocation. The repository atomically requires no `record_number`,
+`sequence_no`, `issued_at`, `rfi_official_issues`, or `issuances` evidence. The
+returned draft can be edited and marked ready again after validation.
+
+Renderer, R2, D1, idempotency, or reconciliation failures do not automatically
+return an RFI to draft. Confirmed or potentially successful issue attempts stay
+ready/open according to authoritative D1 evidence so a safe retry or operator
+reconciliation cannot be confused with a content correction.
 
 ### 5.4 Issue
 

@@ -197,7 +197,13 @@ export class RfiOfficialIssueService {
         "The exact published RFI template version is unavailable.",
       );
     }
-    requireValidRendererDefinition(template.definition);
+    try {
+      requireValidRendererDefinition(template.definition);
+    } catch {
+      throw new RfiIssueValidationError(
+        "The exact published RFI template version is not usable for official issue.",
+      );
+    }
 
     const responsible = await this.resolveContact(
       actor.organizationId,

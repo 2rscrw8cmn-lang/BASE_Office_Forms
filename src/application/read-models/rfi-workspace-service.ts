@@ -8,6 +8,7 @@ import {
   canReopen,
   canRespond,
   canReturnForClarification,
+  canReturnToDraft,
   canUpdateDraft,
   canVoid,
 } from "../../domain/rfis/lifecycle";
@@ -27,12 +28,13 @@ import type {
 } from "../../infrastructure/db/d1/rfi-workspace-read-repository";
 import type { ProjectService } from "../projects/project-service";
 import type { RfiTemplateBindingService } from "../rfis/rfi-template-binding-service";
-import type { RfiOfficialIssueResult } from "../../domain/rfis/official-issue";
+import type { RfiOfficialIssueSummary } from "../../domain/rfis/official-issue";
 
 export interface RfiWorkspaceCapabilities {
   updateDraft: boolean;
   uploadAttachment: boolean;
   markReady: boolean;
+  returnToDraft: boolean;
   issue: boolean;
   recordResponse: boolean;
   returnForClarification: boolean;
@@ -120,7 +122,7 @@ export interface RfiWorkspaceReadModel {
     supporting_attachment: WorkspaceAttachment[];
     reference_drawing: WorkspaceAttachment[];
   };
-  officialIssue: RfiOfficialIssueResult | null;
+  officialIssue: RfiOfficialIssueSummary | null;
   responses: {
     id: string;
     response: string;
@@ -200,7 +202,7 @@ export class RfiWorkspaceReadModelService {
         rfi.templateVersionId,
       ),
       this.reads.listResponsibleContacts(actor.organizationId, project.id),
-      this.officialIssues.findOfficialIssueResult(
+      this.officialIssues.findOfficialIssueSummary(
         actor.organizationId,
         project.id,
         rfi.id,
@@ -305,6 +307,7 @@ export class RfiWorkspaceReadModelService {
         updateDraft: canManage && canUpdateDraft(rfi.status),
         uploadAttachment: canManage && canAttach(rfi.status),
         markReady: canManage && canMarkReady(rfi.status),
+        returnToDraft: canManage && canReturnToDraft(rfi.status),
         issue: canManage && canIssue(rfi.status),
         recordResponse: canManage && canRespond(rfi.status),
         returnForClarification:

@@ -457,20 +457,65 @@ Returns details, current revision, file summary, delivery summary, and capabilit
 
 ### `GET /projects/{projectId}/rfis/{rfiId}/workspace`
 
-Returns `officialIssue: null` before issue. After issue it returns the safe,
-reloadable official result: number/status, `Original Issue` revision, issuance,
-`issuedAt`, `responseDueDate`, artifact download file ID and checksum, included
-file snapshots, To/CC snapshots, and server-derived capabilities. It never
-returns R2 keys or raw snapshot/idempotency JSON. Workspace attachments are
-labeled `Current Draft` before issue and `Original Issue` after issue.
+Returns `officialIssue: null` before issue. After issue, `officialIssue` is a
+dedicated immutable `RfiOfficialIssueSummary`, not the `POST .../issue`
+response:
+
+```json
+{
+  "officialDisplayNumber": "RFI-001",
+  "issuedRevision": {
+    "id": "revision_uuid",
+    "internalRevisionNumber": 1,
+    "userFacingVersion": "Original Issue"
+  },
+  "issuance": { "id": "issuance_uuid", "issueNumber": "ISS-001" },
+  "issuedAt": "2026-07-25T20:00:00.000Z",
+  "responseDueDate": "2026-07-27",
+  "officialArtifact": { "fileId": "artifact_file_id", "sha256": "..." },
+  "includedFiles": [],
+  "recipients": { "to": [], "cc": [] },
+  "originalIssueRequestId": "request_uuid"
+}
+```
+
+It contains original-issue evidence only: official number, `Original Issue`
+revision, issuance, issue timestamp, response-due snapshot, artifact, included
+file snapshots, ordered To/CC snapshots, and the original request ID. It does
+not contain `status`, `capabilities`, `rfiId`, or `recordId`. Top-level
+`rfi.status` and top-level `capabilities` are the only authoritative current
+lifecycle projection after response, clarification, close, reopen, or void.
+The summary never returns R2 keys or raw snapshot/idempotency JSON. Workspace
+attachments are labeled `Current Draft` before issue and `Original Issue`
+after issue.
 
 ### `PATCH /rfis/{rfiId}`
 
-Updates a draft or fields explicitly mutable in the current state.
+Updates ordinary RFI content only while top-level status is exactly `draft`.
+`ready_to_issue` is locked and must first use **Return to draft**; the API never
+silently performs that transition from a PATCH.
 
 ### `POST /rfis/{rfiId}/ready`
 
-Validates the draft and transitions to `ready_to_issue`.
+Validates every RFI-level fact that becomes locked, then transitions
+`draft -> ready_to_issue`. Required facts are non-blank `subject` and
+`question`, a `responsiblePartyId` that resolves to an active contact in the
+same project, and the exact bound template version still published and accepted
+by the official renderer contract. Failure returns
+`422 RFI_READY_VALIDATION_FAILED`; the RFI remains editable in `draft`.
+
+### `POST /projects/{projectId}/rfis/{rfiId}/return-to-draft`
+
+User-facing action: **Return to draft**.
+
+Performs the intentional, server-authoritative
+`ready_to_issue -> draft` transition so content or routing prerequisites can be
+corrected. It requires `rfis:return_to_draft`, appends
+`rfi.returned_to_draft`, increments the RFI lock version, and is guarded in D1
+against any official issue, issuance, `record_number`, `sequence_no`, or
+`issued_at`. Issued/open RFIs cannot use it. Transient renderer, R2, D1,
+idempotency, or reconciliation failures do not invoke this endpoint and do not
+automatically change a ready RFI; the operator deliberately chooses the action.
 
 ### `POST /rfis/{rfiId}/issue`
 
@@ -549,6 +594,10 @@ Success returns the standard envelope with:
 }
 ```
 
+The immediate issue response remains `RfiOfficialIssueResult` for compatibility
+and may contain issue-time `status` and `capabilities`. It is not reused as the
+workspace's long-lived `officialIssue` projection.
+
 The response never exposes storage keys, raw snapshot JSON, or idempotency
 metadata. The canonical identity includes organization isolation plus
 `projectId` and `rfiId`. Same key/same resource/same request returns the
@@ -564,6 +613,7 @@ Relevant errors:
 - concealed `404 PROJECT_NOT_FOUND` / `RFI_NOT_FOUND` where required
 - `409 RFI_ILLEGAL_TRANSITION`, `RFI_ALREADY_ISSUED`, or
   `IDEMPOTENCY_KEY_REUSED`
+- `422 RFI_READY_VALIDATION_FAILED` from `POST .../ready`
 - `422 RFI_ISSUE_VALIDATION_FAILED` for an unusable exact template, routing,
   project, responsible contact, or file relationship
 - `503 RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, or

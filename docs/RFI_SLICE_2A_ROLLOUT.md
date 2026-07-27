@@ -27,6 +27,11 @@ Automated Worker/D1 migration coverage:
   unchanged, no official issue was invented, and `PRAGMA foreign_key_check`
   returns no rows.
 
+The application gate additionally proves that an incomplete or invalidly
+routed draft cannot be marked ready, a complete draft can be marked ready and
+intentionally returned to draft before issue, and a committed/numbered issue
+cannot race back to draft.
+
 Run locally:
 
 ```text
@@ -81,6 +86,10 @@ npm run check
      activity;
    - the promoted revision is the persisted `records.current_revision_id`;
    - no pending orphan row exists.
+     Before the pilot issue, verify **Return to draft** once on a separate
+     unnumbered ready fixture: the activity is written, PATCH editing works only
+     after return, and marking ready again succeeds. Never use this action to
+     recover a renderer, R2, D1, idempotency, or reconciliation failure.
 9. Monitor Worker exceptions, D1 constraint errors, issue request IDs, R2
    write/delete errors, and pending orphan rows before enabling broader use.
 
@@ -154,6 +163,10 @@ The latter may represent a successful issue and must be retained.
    the reason instead.
 6. Retry issue with the original idempotency key and unchanged request only
    after reconciliation.
+
+Do not use **Return to draft** as an automatic or operator shortcut for an
+uncertain issue outcome. It is guarded to pre-number, pre-official state and is
+only for intentional content or routing correction.
 
 If an official issue row does reference the key, stop: do not delete it. That
 is an integrity incident requiring investigation and a reviewed forward fix.

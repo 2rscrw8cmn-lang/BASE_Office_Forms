@@ -401,6 +401,12 @@ navigation, mobile, Studio, and Document Library checks.
 
 The Slice 2A gate includes:
 
+- mark-ready completeness, active same-project responsible-contact, and exact
+  usable template validation; complete ready success; draft-only PATCH
+  enforcement;
+- authorized `ready_to_issue -> draft`, edit-and-ready-again, issued/numbered
+  rejection, unauthorized rejection, activity, capability, and committed-issue
+  concurrency coverage;
 - strict template-compiler parity/rejection, multiline/long-token/page-break,
   deterministic server-PDF, and resource-scoped canonical-idempotency tests;
 - empty-database and populated post-0014 migration rehearsals through schema
@@ -412,8 +418,10 @@ The Slice 2A gate includes:
 - same-key replay, changed-request conflict, cross-RFI/project conflict,
   tenant isolation, manager non-disclosure, same-RFI concurrency, and
   same-project numbering concurrency;
-- workspace reload evidence, `Current Draft`/`Original Issue` labels, and
-  discoverable authorized artifact download identity;
+- workspace reload evidence, `Current Draft`/`Original Issue` labels,
+  discoverable authorized artifact download identity, and a dedicated immutable
+  `RfiOfficialIssueSummary` that excludes status/capabilities while top-level
+  lifecycle state advances;
 - included-object matching, missing, wrong, or unavailable SHA/head evidence;
 - injected renderer, R2 write/verify, sequence, revision, issuance, recipient,
   activity, D1 commit, post-commit response loss, authoritative query

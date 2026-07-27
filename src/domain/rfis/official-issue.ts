@@ -58,6 +58,32 @@ export interface RfiOfficialIssueResult {
   requestId: string;
 }
 
+/**
+ * Long-lived workspace evidence for the original issue. Current lifecycle
+ * state and capabilities deliberately remain outside this immutable snapshot.
+ */
+export interface RfiOfficialIssueSummary {
+  officialDisplayNumber: string;
+  issuedRevision: {
+    id: string;
+    internalRevisionNumber: number;
+    userFacingVersion: "Original Issue";
+  };
+  issuance: {
+    id: string;
+    issueNumber: string;
+  };
+  issuedAt: string;
+  responseDueDate: string;
+  officialArtifact: RfiIssueFileSummary;
+  includedFiles: RfiIssueFileSummary[];
+  recipients: {
+    to: RfiIssueRecipientSummary[];
+    cc: RfiIssueRecipientSummary[];
+  };
+  originalIssueRequestId: string;
+}
+
 export interface FrozenRfiRenderPayload {
   schemaVersion: "rfi-official-render.v1";
   rendererVersion: string;

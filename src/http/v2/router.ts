@@ -19,6 +19,7 @@ import {
   RfiIssueRequestError,
   RfiIssueStorageError,
   RfiIssueValidationError,
+  RfiReadyValidationError,
   RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
 import { RfiAttachmentRejectedError } from "../../infrastructure/db/d1/rfi-attachments-repository";
@@ -253,7 +254,7 @@ export async function routeV2Request(
     );
   }
   const rfiRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(workspace|issue|respond|close|reopen|ready|void|return))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(workspace|issue|respond|close|reopen|ready|return-to-draft|void|return))?)?$/,
   );
   if (rfiRoute && dependencies) {
     return handleRfiRoute(
@@ -637,6 +638,7 @@ const RFI_TRANSITION_ACTIONS = new Set([
   "close",
   "reopen",
   "ready",
+  "return-to-draft",
   "void",
   "return",
 ]);
@@ -764,14 +766,16 @@ async function handleRfiRoute(
             ? await rfis.reopen(session, projectId, rfiId, requestId)
             : action === "ready"
               ? await rfis.markReady(session, projectId, rfiId, requestId)
-              : action === "void"
-                ? await rfis.void(session, projectId, rfiId, requestId)
-                : await rfis.returnForClarification(
-                    session,
-                    projectId,
-                    rfiId,
-                    requestId,
-                  );
+              : action === "return-to-draft"
+                ? await rfis.returnToDraft(session, projectId, rfiId, requestId)
+                : action === "void"
+                  ? await rfis.void(session, projectId, rfiId, requestId)
+                  : await rfis.returnForClarification(
+                      session,
+                      projectId,
+                      rfiId,
+                      requestId,
+                    );
       return apiSuccess(context, serializeRfi(rfi));
     }
     return apiError(
@@ -1316,6 +1320,8 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 409, "RFI_ALREADY_ISSUED", error.message);
   if (error instanceof RfiIssueValidationError)
     return apiError(context, 422, "RFI_ISSUE_VALIDATION_FAILED", error.message);
+  if (error instanceof RfiReadyValidationError)
+    return apiError(context, 422, "RFI_READY_VALIDATION_FAILED", error.message);
   if (error instanceof RfiIssueRenderError)
     return apiError(context, 503, "RFI_ARTIFACT_RENDER_FAILED", error.message);
   if (error instanceof RfiIssueStorageError)

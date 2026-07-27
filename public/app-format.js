@@ -164,6 +164,7 @@ const ACTIVITY_LABELS = {
   "rfi.created": "RFI drafted",
   "rfi.updated": "RFI updated",
   "rfi.marked_ready": "RFI marked ready to issue",
+  "rfi.returned_to_draft": "RFI returned to draft",
   "rfi.issued": "RFI issued",
   "rfi.responded": "Response received",
   "rfi.returned_for_clarification": "Returned for clarification",

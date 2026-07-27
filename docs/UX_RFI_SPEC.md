@@ -158,7 +158,7 @@ write authority.
 Binding workflow states:
 
 ```
-draft → ready_to_issue → open → response_received → closed
+draft ↔ ready_to_issue → open → response_received → closed
 ```
 
 Additional states: `returned_for_clarification`, `void`. Overdue and due-soon are
@@ -166,6 +166,12 @@ Additional states: `returned_for_clarification`, `void`. Overdue and due-soon ar
 
 - Official numbering occurs only during **issue**, server-side and
   project-scoped (`RFI-001`). Issued revisions and artifacts are immutable.
+- **Mark ready** first validates the subject, question, active same-project
+  responsible contact, and exact usable published template binding. Ready
+  content is locked.
+- **Return to draft** is the explicit, capability-gated correction action
+  before issue/number allocation. It never runs automatically after render,
+  R2, D1, idempotency, or reconciliation failures.
 - Every transition validates current state and authorization, writes an activity
   event, and uses idempotency where required.
 
@@ -190,7 +196,7 @@ workspace; later slices build on the preserved architecture):
 
 All project/organization boundaries are enforced server-side. The browser uses
 normalized, server-derived capabilities (`createRfi`, `updateDraft`,
-`uploadAttachment`, `markReady`, `issue`, `recordResponse`,
+`uploadAttachment`, `markReady`, `returnToDraft`, `issue`, `recordResponse`,
 `returnForClarification`, `close`, `reopen`, `void`). Only capabilities that are
 actually implemented and authoritative are returned. Cross-tenant and
 inaccessible project/RFI results use the generic not-found behavior.

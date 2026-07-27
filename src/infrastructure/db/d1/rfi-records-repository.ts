@@ -602,6 +602,68 @@ export class D1RfiRecordsRepository {
     return updated;
   }
 
+  async returnToDraftWithActivity(
+    rfi: Rfi,
+    event: ActivityInput,
+  ): Promise<Rfi> {
+    const now = new Date().toISOString();
+    const nextLock = rfi.lockVersion + 1;
+    const results = await this.database.batch([
+      this.database
+        .prepare(
+          `UPDATE records SET workflow_status = 'draft',
+             lock_version = ?, updated_at = ?
+           WHERE id = ? AND organization_id = ? AND project_id = ?
+             AND record_type_key = 'rfi' AND workflow_status = 'ready_to_issue'
+             AND lock_version = ?
+             AND sequence_no IS NULL AND record_number IS NULL
+             AND issued_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM rfi_official_issues issue
+               WHERE issue.organization_id = records.organization_id
+                 AND issue.project_id = records.project_id
+                 AND issue.rfi_id = records.id
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM issuances issuance
+               WHERE issuance.organization_id = records.organization_id
+                 AND issuance.project_id = records.project_id
+                 AND issuance.record_id = records.id
+             )`,
+        )
+        .bind(
+          nextLock,
+          now,
+          rfi.id,
+          rfi.organizationId,
+          rfi.projectId,
+          rfi.lockVersion,
+        ),
+      eventStatement(
+        this.database,
+        {
+          ...event,
+          action: "rfi.returned_to_draft",
+          organizationId: rfi.organizationId,
+          objectId: rfi.id,
+          priorState: priorState(rfi),
+          newState: null,
+        },
+        rfi,
+      ),
+    ]);
+    if (results.some((result) => result.meta.changes !== 1)) {
+      await this.throwWriteFailure(rfi, "be returned to draft");
+    }
+    const updated = await this.findById(
+      rfi.organizationId,
+      rfi.projectId,
+      rfi.id,
+    );
+    if (!updated) throw new Error("Returned RFI draft could not be loaded.");
+    return updated;
+  }
+
   private async throwWriteFailure(
     rfi: Rfi,
     action: string,

@@ -29,6 +29,13 @@ export class RfiIssueValidationError extends Error {
   }
 }
 
+export class RfiReadyValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RfiReadyValidationError";
+  }
+}
+
 export class RfiIssueRequestError extends Error {
   constructor(message: string) {
     super(message);
@@ -96,6 +103,7 @@ export type RfiCapability =
   | "rfis:update_draft"
   | "rfis:upload_attachment"
   | "rfis:mark_ready"
+  | "rfis:return_to_draft"
   | "rfis:issue"
   | "rfis:respond"
   | "rfis:return_for_clarification"

@@ -211,6 +211,7 @@ Every service call checks:
 | Create project         |       Yes |         Yes |              No |            No |     No |
 | Edit project routing   |       Yes |         Yes |             Yes |            No |     No |
 | Create record draft    |       Yes |         Yes |             Yes |           Yes |     No |
+| Mark/return RFI draft  |       Yes |         Yes |             Yes |            No |     No |
 | Issue RFI              |       Yes |         Yes |             Yes |  Configurable |     No |
 | Submit submittal       |       Yes |         Yes |             Yes |  Configurable |     No |
 | Record response/review |       Yes |         Yes |             Yes | Assigned only |     No |
@@ -284,6 +285,12 @@ key/resource/request replays; cross-RFI/project reuse and changed input
 conflict. Server capability checks precede record disclosure, and all RFI,
 revision, contact, file, sequence, and issuance relationships remain
 organization/project scoped.
+
+`POST .../return-to-draft` is separately authorized through
+`rfis:return_to_draft`; browser presentation of `capabilities.returnToDraft`
+does not replace this check. Its D1 guard permits only an unnumbered
+`ready_to_issue` RFI with no official issue or issuance evidence. Issue
+failures never invoke it automatically.
 
 ## 7.2 Direct upload flow
 

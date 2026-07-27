@@ -207,6 +207,7 @@ const issueRepositoryControls = {
   failBeforeCommit: false,
   failAfterCommit: false,
   failInspection: false,
+  afterCommit: null as (() => Promise<void>) | null,
 };
 
 class TestOfficialIssueRepository extends D1RfiOfficialIssueRepository {
@@ -215,6 +216,7 @@ class TestOfficialIssueRepository extends D1RfiOfficialIssueRepository {
       throw new Error("forced pre-commit failure");
     }
     await super.commit(input);
+    await issueRepositoryControls.afterCommit?.();
     if (issueRepositoryControls.failAfterCommit) {
       throw new Error("forced ambiguous response after committed batch");
     }
@@ -406,6 +408,7 @@ interface WorkspaceModel {
     subject: string;
     drawingReferences: string | null;
     responsiblePartyId?: string | null;
+    lockVersion: number;
   };
   project: { name: string; projectNumber: string };
   organization: { name: string | null };
@@ -418,12 +421,21 @@ interface WorkspaceModel {
     officialDisplayNumber: string;
     responseDueDate: string;
     issuedRevision: { userFacingVersion: string };
+    issuance: { id: string; issueNumber: string };
     officialArtifact: { fileId: string; sha256: string };
     includedFiles: { fileId: string }[];
     recipients: { to: { contactName: string }[]; cc: unknown[] };
+    originalIssueRequestId: string;
   } | null;
   currentVersion?: { id: string; label: string; status: string };
-  capabilities?: { issue: boolean; recordResponse: boolean };
+  capabilities?: {
+    updateDraft: boolean;
+    markReady: boolean;
+    returnToDraft: boolean;
+    issue: boolean;
+    recordResponse: boolean;
+    close: boolean;
+  };
 }
 
 async function createProject(number: string): Promise<ApiProject> {
@@ -483,6 +495,30 @@ async function issue(
         "idempotency-key": options.key ?? "issue-key-1",
       },
     },
+    dependencies(),
+  );
+}
+
+function markReady(
+  projectId: string,
+  rfiId: string,
+  session = "admin",
+): Promise<Response> {
+  return invokeV2Api(
+    `/api/v2/projects/${projectId}/rfis/${rfiId}/ready`,
+    request(session, "POST"),
+    dependencies(),
+  );
+}
+
+function returnToDraft(
+  projectId: string,
+  rfiId: string,
+  session = "admin",
+): Promise<Response> {
+  return invokeV2Api(
+    `/api/v2/projects/${projectId}/rfis/${rfiId}/return-to-draft`,
+    request(session, "POST"),
     dependencies(),
   );
 }
@@ -634,6 +670,7 @@ describe("RFI register & workspace (Slice 1)", () => {
     issueRepositoryControls.failBeforeCommit = false;
     issueRepositoryControls.failAfterCommit = false;
     issueRepositoryControls.failInspection = false;
+    issueRepositoryControls.afterCommit = null;
     await seed();
   });
 
@@ -688,6 +725,270 @@ describe("RFI register & workspace (Slice 1)", () => {
       details_id: draft.id,
       revision_record_id: draft.id,
     });
+  });
+
+  it("does not mark an incomplete draft ready", async () => {
+    const project = await createProject("P-RFI-READY-INCOMPLETE");
+    const draft = await createDraft(project.id);
+    await seedProjectContact(
+      project.id,
+      "contact-ready-incomplete",
+      "Architect",
+    );
+    expect(
+      (
+        await patch(project.id, draft.id, {
+          responsiblePartyId: "contact-ready-incomplete",
+          lockVersion: draft.lockVersion,
+        })
+      ).status,
+    ).toBe(200);
+
+    for (const sql of [
+      "UPDATE records SET title = '' WHERE id = ?",
+      `UPDATE records SET title = 'Restored subject' WHERE id = ?`,
+      "UPDATE rfi_details SET question = '' WHERE record_id = ?",
+      `UPDATE rfi_details SET question = 'Restored question' WHERE record_id = ?`,
+      "UPDATE records SET current_responsible_contact_id = NULL WHERE id = ?",
+    ]) {
+      await testDatabase().prepare(sql).bind(draft.id).run();
+      if (sql.includes("Restored")) continue;
+      const response = await markReady(project.id, draft.id);
+      expect(response.status).toBe(422);
+      expect(
+        (await readJson<{ error: { code: string } }>(response)).error.code,
+      ).toBe("RFI_READY_VALIDATION_FAILED");
+    }
+    expect((await workspace(project.id, draft.id)).rfi.status).toBe("draft");
+  });
+
+  it("does not mark archived or cross-project responsible contacts ready", async () => {
+    const project = await createProject("P-RFI-READY-CONTACT");
+    const other = await createProject("P-RFI-READY-CONTACT-OTHER");
+
+    const archivedDraft = await createDraft(project.id, "Archived contact");
+    await seedProjectContact(project.id, "contact-ready-archived", "Architect");
+    const archivedAssignment = await patch(project.id, archivedDraft.id, {
+      responsiblePartyId: "contact-ready-archived",
+      lockVersion: archivedDraft.lockVersion,
+    });
+    expect(archivedAssignment.status).toBe(200);
+    await testDatabase()
+      .prepare(
+        "UPDATE project_contacts SET archived_at = ? WHERE id = 'contact-ready-archived'",
+      )
+      .bind(new Date().toISOString())
+      .run();
+    expect((await markReady(project.id, archivedDraft.id)).status).toBe(422);
+
+    const crossProjectDraft = await createDraft(
+      project.id,
+      "Cross-project contact",
+    );
+    await seedProjectContact(project.id, "contact-ready-cross", "Engineer");
+    const crossAssignment = await patch(project.id, crossProjectDraft.id, {
+      responsiblePartyId: "contact-ready-cross",
+      lockVersion: crossProjectDraft.lockVersion,
+    });
+    expect(crossAssignment.status).toBe(200);
+    await testDatabase()
+      .prepare(
+        "UPDATE project_contacts SET project_id = ? WHERE id = 'contact-ready-cross'",
+      )
+      .bind(other.id)
+      .run();
+    expect((await markReady(project.id, crossProjectDraft.id)).status).toBe(
+      422,
+    );
+  });
+
+  it("requires the exact usable template binding before marking ready", async () => {
+    const project = await createProject("P-RFI-READY-TEMPLATE");
+    const draft = await createDraft(project.id);
+    await seedProjectContact(project.id, "contact-ready-template", "Architect");
+    expect(
+      (
+        await patch(project.id, draft.id, {
+          responsiblePartyId: "contact-ready-template",
+          lockVersion: draft.lockVersion,
+        })
+      ).status,
+    ).toBe(200);
+    await testDatabase()
+      .prepare(
+        "UPDATE template_versions SET status = 'retired' WHERE id = ? AND organization_id = 'org-a'",
+      )
+      .bind(draft.templateVersionId)
+      .run();
+
+    expect((await markReady(project.id, draft.id)).status).toBe(422);
+    expect((await workspace(project.id, draft.id)).rfi.status).toBe("draft");
+  });
+
+  it("marks a complete draft ready and exposes Return to draft", async () => {
+    const project = await createProject("P-RFI-READY-COMPLETE");
+    const draft = await createDraft(project.id);
+    await seedProjectContact(project.id, "contact-ready", "Architect");
+    expect(
+      (
+        await patch(project.id, draft.id, {
+          responsiblePartyId: "contact-ready",
+          lockVersion: draft.lockVersion,
+        })
+      ).status,
+    ).toBe(200);
+
+    const response = await markReady(project.id, draft.id);
+    expect(response.status).toBe(200);
+    const model = await workspace(project.id, draft.id);
+    expect(model.rfi.status).toBe("ready_to_issue");
+    expect(model.capabilities).toMatchObject({
+      updateDraft: false,
+      markReady: false,
+      returnToDraft: true,
+      issue: true,
+    });
+  });
+
+  it("returns a ready RFI to draft before issuance", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-RETURN-DRAFT");
+
+    const response = await returnToDraft(project.id, draft.id);
+    expect(response.status).toBe(200);
+    const body = await readJson<{ data: ApiRfi }>(response);
+    expect(body.data.status).toBe("draft");
+    expect(body.data.rfiNumber).toBeNull();
+    const activity = await testDatabase()
+      .prepare(
+        "SELECT COUNT(*) count FROM activity_events WHERE object_id = ? AND action = 'rfi.returned_to_draft'",
+      )
+      .bind(draft.id)
+      .first<{ count: number }>();
+    expect(activity?.count).toBe(1);
+  });
+
+  it("guards Return to draft in the repository after number allocation", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RETURN-NUMBERED");
+    const records = new D1RfiRecordsRepository(
+      testDatabase(),
+      new D1RfiResponsesRepository(testDatabase()),
+    );
+    const ready = await records.findById(
+      "org-a",
+      prepared.project.id,
+      prepared.draft.id,
+    );
+    expect(ready?.status).toBe("ready_to_issue");
+    await testDatabase()
+      .prepare(
+        "UPDATE records SET sequence_no = 7, record_number = 'RFI-007' WHERE id = ?",
+      )
+      .bind(prepared.draft.id)
+      .run();
+
+    await expect(
+      records.returnToDraftWithActivity(ready as NonNullable<typeof ready>, {
+        actorUserId: "user-admin",
+        actorType: "user",
+        objectType: "rfi",
+        action: "rfi.returned_to_draft",
+        metadata: {},
+        correlationId: "number-guard-test",
+      }),
+    ).rejects.toThrow();
+    expect(
+      await testDatabase()
+        .prepare(
+          "SELECT workflow_status, record_number FROM records WHERE id = ?",
+        )
+        .bind(prepared.draft.id)
+        .first<{ workflow_status: string; record_number: string }>(),
+    ).toEqual({
+      workflow_status: "ready_to_issue",
+      record_number: "RFI-007",
+    });
+  });
+
+  it("edits a returned draft and marks it ready again", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-RETURN-EDIT");
+    const returned = await returnToDraft(project.id, draft.id);
+    const returnedBody = await readJson<{ data: ApiRfi }>(returned);
+
+    const edited = await patch(project.id, draft.id, {
+      subject: "Corrected before issue",
+      lockVersion: returnedBody.data.lockVersion,
+    });
+    expect(edited.status).toBe(200);
+    expect((await markReady(project.id, draft.id)).status).toBe(200);
+    const model = await workspace(project.id, draft.id);
+    expect(model.rfi).toMatchObject({
+      status: "ready_to_issue",
+      subject: "Corrected before issue",
+    });
+  });
+
+  it("does not allow ordinary PATCH editing while ready to issue", async () => {
+    const { project, draft } = await prepareIssuableRfi("P-RFI-READY-LOCKED");
+    const model = await workspace(project.id, draft.id);
+
+    const response = await patch(project.id, draft.id, {
+      subject: "Must first return to draft",
+      lockVersion: model.rfi.lockVersion,
+    });
+    expect(response.status).toBe(409);
+    expect((await workspace(project.id, draft.id)).rfi.subject).not.toBe(
+      "Must first return to draft",
+    );
+  });
+
+  it("does not return an issued/open RFI to draft", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RETURN-ISSUED");
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody(prepared.contactId),
+          { key: "return-issued" },
+        )
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (await returnToDraft(prepared.project.id, prepared.draft.id)).status,
+    ).toBe(409);
+    expect(
+      (await workspace(prepared.project.id, prepared.draft.id)).rfi.status,
+    ).toBe("open");
+  });
+
+  it("does not authorize contributors to Return to draft", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RETURN-DENIED");
+    await testDatabase()
+      .prepare(
+        `INSERT INTO project_memberships
+          (id, organization_id, project_id, user_id, role, status, created_at)
+         VALUES (?, 'org-a', ?, 'user-contributor', 'contributor', 'active', ?)`,
+      )
+      .bind(
+        "member-return-contributor",
+        prepared.project.id,
+        new Date().toISOString(),
+      )
+      .run();
+
+    expect(
+      (
+        await returnToDraft(
+          prepared.project.id,
+          prepared.draft.id,
+          "contributor",
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await workspace(prepared.project.id, prepared.draft.id)).rfi.status,
+    ).toBe("ready_to_issue");
   });
 
   it("returns one register read model with rows and capabilities", async () => {
@@ -1128,6 +1429,57 @@ describe("RFI register & workspace (Slice 1)", () => {
     expect(postIssueEdit.status).toBe(409);
   });
 
+  it("cannot return an RFI to draft while a committed issue response is pending", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RETURN-RACE");
+    let confirmCommitted = (): void => undefined;
+    let releaseCommit = (): void => undefined;
+    const committed = new Promise<void>((resolve) => {
+      confirmCommitted = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    issueRepositoryControls.afterCommit = async () => {
+      confirmCommitted();
+      await release;
+    };
+
+    const issuing = issue(
+      prepared.project.id,
+      prepared.draft.id,
+      issueBody(prepared.contactId),
+      { key: "return-race" },
+    );
+    await committed;
+    const returned = await returnToDraft(
+      prepared.project.id,
+      prepared.draft.id,
+    );
+    expect(returned.status).toBe(409);
+    releaseCommit();
+    expect((await issuing).status).toBe(200);
+    issueRepositoryControls.afterCommit = null;
+
+    const state = await testDatabase()
+      .prepare(
+        `SELECT workflow_status, record_number, sequence_no, issued_at
+         FROM records WHERE id = ?`,
+      )
+      .bind(prepared.draft.id)
+      .first<{
+        workflow_status: string;
+        record_number: string;
+        sequence_no: number;
+        issued_at: string;
+      }>();
+    expect(state).toMatchObject({
+      workflow_status: "open",
+      record_number: "RFI-001",
+      sequence_no: 1,
+    });
+    expect(state?.issued_at).toBeTruthy();
+  });
+
   it("replays the same idempotency key without duplicating official state", async () => {
     const { project, draft } = await prepareIssuableRfi("P-RFI-ISSUE-RETRY");
     const first = await issue(project.id, draft.id, undefined, {
@@ -1194,11 +1546,60 @@ describe("RFI register & workspace (Slice 1)", () => {
       includedFiles: [{ fileId: prepared.fileId }],
       recipients: { to: [{ contactName: "Project Architect" }] },
     });
+    expect(model.rfi.status).toBe("open");
+    expect(model.capabilities).toMatchObject({
+      issue: false,
+      recordResponse: true,
+    });
     expect(model.officialIssue?.officialArtifact.fileId).toBe(
       `${prepared.draft.id}:official-rfi-pdf`,
     );
+    expect(model.officialIssue?.originalIssueRequestId).toBeTruthy();
+    expect(model.officialIssue).not.toHaveProperty("status");
+    expect(model.officialIssue).not.toHaveProperty("capabilities");
+    expect(model.officialIssue).not.toHaveProperty("rfiId");
+    expect(model.officialIssue).not.toHaveProperty("recordId");
     expect(model.officialIssue).not.toHaveProperty("artifactStorageKey");
     expect(JSON.stringify(model.officialIssue)).not.toContain("storageKey");
+  });
+
+  it("keeps current workspace lifecycle separate from immutable issue evidence", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-EVIDENCE-CURRENT");
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody(prepared.contactId),
+          { key: "evidence-current" },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await invokeV2Api(
+          `/api/v2/projects/${prepared.project.id}/rfis/${prepared.draft.id}/respond`,
+          request("admin", "POST", {
+            response: "Use the structural engineer's revised detail.",
+          }),
+          dependencies(),
+        )
+      ).status,
+    ).toBe(200);
+
+    const model = await workspace(prepared.project.id, prepared.draft.id);
+    expect(model.rfi.status).toBe("response_received");
+    expect(model.capabilities).toMatchObject({
+      issue: false,
+      recordResponse: false,
+      close: true,
+    });
+    expect(model.officialIssue).toMatchObject({
+      officialDisplayNumber: "RFI-001",
+      issuedRevision: { userFacingVersion: "Original Issue" },
+    });
+    expect(model.officialIssue).not.toHaveProperty("status");
+    expect(model.officialIssue).not.toHaveProperty("capabilities");
   });
 
   it("rejects a reused idempotency key when the request changes", async () => {

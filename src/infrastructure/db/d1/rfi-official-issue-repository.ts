@@ -1,5 +1,6 @@
 import type {
   RfiOfficialIssueResult,
+  RfiOfficialIssueSummary,
   RfiIssueRecipientSummary,
 } from "../../../domain/rfis/official-issue";
 import type { ProjectAddress } from "../../../domain/projects/project";
@@ -102,11 +103,11 @@ export class D1RfiOfficialIssueRepository {
     };
   }
 
-  async findOfficialIssueResult(
+  async findOfficialIssueSummary(
     organizationId: string,
     projectId: string,
     rfiId: string,
-  ): Promise<RfiOfficialIssueResult | null> {
+  ): Promise<RfiOfficialIssueSummary | null> {
     const row = await this.database
       .prepare(
         `SELECT response_json FROM idempotency_keys
@@ -115,9 +116,26 @@ export class D1RfiOfficialIssueRepository {
       )
       .bind(organizationId, projectId, rfiId)
       .first<{ response_json: string }>();
-    return row
-      ? (JSON.parse(row.response_json) as RfiOfficialIssueResult)
-      : null;
+    if (!row) return null;
+    const result = JSON.parse(row.response_json) as RfiOfficialIssueResult;
+    return {
+      officialDisplayNumber: result.officialDisplayNumber,
+      issuedRevision: {
+        id: result.issuedRevision.id,
+        internalRevisionNumber: result.issuedRevision.internalRevisionNumber,
+        userFacingVersion: "Original Issue",
+      },
+      issuance: { ...result.issuance },
+      issuedAt: result.issuedAt,
+      responseDueDate: result.responseDueDate,
+      officialArtifact: { ...result.officialArtifact },
+      includedFiles: result.includedFiles.map((file) => ({ ...file })),
+      recipients: {
+        to: result.recipients.to.map((recipient) => ({ ...recipient })),
+        cc: result.recipients.cc.map((recipient) => ({ ...recipient })),
+      },
+      originalIssueRequestId: result.requestId,
+    };
   }
 
   async hasOfficialIssue(

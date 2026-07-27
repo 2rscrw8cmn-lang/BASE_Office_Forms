@@ -2,7 +2,7 @@
 
 **Status:** Authenticated workspace plus RFI Slice 2A official-issuance backend
 inventory
-**Updated:** 2026-07-25 (RFI Slice 2A)
+**Updated:** 2026-07-27 (RFI Slice 2A final review correction)
 
 ## Runtime shape
 
@@ -54,6 +54,16 @@ scripts/generate-rfi-official-sample.ts
 output/pdf/base-rfi-official-sample.pdf
 ```
 
+The pre-issue lifecycle now has a safe correction loop. `POST .../ready`
+validates subject, question, active same-project responsible contact, and the
+exact usable published template binding before locking the RFI.
+`POST .../return-to-draft` is the named, separately authorized
+`ready_to_issue -> draft` operation. `RfiService.returnToDraft()` and
+`D1RfiRecordsRepository.returnToDraftWithActivity()` require no consumed number
+or official issue/issuance evidence and append `rfi.returned_to_draft`.
+Ordinary PATCH editing remains draft-only; issue infrastructure failures never
+perform the reverse transition automatically.
+
 The checked-in sample PDF is generated from a fixed review payload and was
 rendered to page PNGs with Poppler for visual inspection; it is product-review
 evidence, not an official project record.
@@ -64,8 +74,13 @@ revision-file, issuance-file, file-snapshot, and idempotency evidence. A
 confirmed commit returns the stored result; confirmed absence permits a guarded
 delete; partial or unavailable evidence retains the object and records
 `commit_outcome_unknown`. No object referenced by official D1 state is deleted.
-The RFI workspace reloads the safe official issue snapshot, including its
-downloadable artifact file ID; APIs never return storage keys.
+The RFI workspace reloads `RfiOfficialIssueSummary`, a dedicated immutable
+original-issue evidence projection including the downloadable artifact file ID,
+issuance/revision identities, due-date/file/routing snapshots, and original
+request ID. It deliberately omits issue-time status and capabilities:
+top-level `rfi.status` and top-level `capabilities` are the only current
+lifecycle authority after response, clarification, close, reopen, or void.
+APIs never return storage keys.
 
 The repository is a Cloudflare Pages application with static browser assets, a
 React/Vite application entry, Pages Functions, one D1 database binding, and one
