@@ -122,6 +122,29 @@ binding directly from the register.
 Route-addressable and connected to the register (returning preserves prior
 search/filter/sort/scroll where practical, via browser history and URL state).
 
+**Implemented natively in UI-7.** The workspace composes the shared Record
+Workspace pattern (`WorkspacePage`) so an RFI, a document, and a revision read
+as one product, while keeping the RFI's own domain shape: its "current work" is
+its authoritative structured content rather than a file list. The Details /
+Preview mode switch is replaced by one page hierarchy — content, files, and
+response as primary sections, with the read-only template-bound document view
+and the activity timeline as secondary context. The document view is still
+rendered only on demand (inside a `Collapsible`), so the renderer never runs
+until it is asked for. While a user may edit the draft, Assigned to and Response
+due appear in the editor and not also in the metadata strip, so each fact keeps
+one authoritative location.
+
+**Desktop spatial correction (§5H).** On desktop the page is not one
+full-width stacked form: content, files, and response sit in a constrained
+main column, while status, number, current version, file count, updated/issued
+dates, and any lifecycle notice sit together in a compact context rail
+alongside it, with activity below them in the same rail. The rail is sticky
+only for the compact facts, never for activity, so a long history can never be
+pinned partly off-screen. Below ~960px the page collapses to one column in the
+same reading order (notice, metadata, content, files, response, activity), so
+nothing about the content model above changes — only where each part sits on
+a wide screen.
+
 Structure:
 
 - **Header**: RFI Number or "Unnumbered Draft", Subject, project identity,
@@ -144,6 +167,12 @@ Structure:
 - **Activity**: the timeline of meaningful events (created, subject changed,
   question changed, responsible party changed, response date changed, attachment
   added). Raw activity JSON is never exposed.
+- **Lifecycle actions**: Close, Reopen, Void, and the pre-issue **Return to
+  draft** correction are confirmed transitions driven by server capabilities.
+  The workspace does not add the separate full issuance dialog; it presents the
+  persisted original-issue evidence and official PDF after the Slice 2A server
+  operation completes. `returnForClarification` remains server-side only; its
+  browser surface is a Slice 3 decision.
 
 ## 7. Table/detail shared-data rule
 

@@ -325,7 +325,7 @@ each relevant role while retaining the list `data` array contract and legacy
 rollback tests. Deterministic evidence under `docs/evidence/ui-6a/` covers all
 required desktop/mobile and async/empty/error states.
 
-### 12A-iii. UI-6B Document Register coverage (implemented)
+### 12A-iii. UI-6B Document Register coverage (merged — `315de55`, PR #47)
 
 UI-6B adds 72 unit tests across three suites plus 2 shared `Drawer` tests.
 
@@ -386,6 +386,146 @@ Deterministic evidence under `docs/evidence/ui-6b/` covers all required
 desktop, tablet (834px), and mobile (390px, 360px) states. Each capture waits
 for a selector that only exists once the documented state has rendered, asserts
 its CSS viewport, and fails if the page overflows horizontally.
+
+### 12A-iv. UI-7 detail workspace coverage (implemented)
+
+UI-7 and its reviewed follow-up corrections now add 161 unit tests across six
+suites. All are DOM suites under Happy DOM except the parity suite, which is a
+pure Node comparison.
+
+`record-workspace-react.test.tsx` (21) covers the required workspace hierarchy
+and its order; Record identity in the header versus Record facts in the metadata
+strip (and the absence of revision facts there); no database id as user-facing
+identity; an honest "Unnumbered document"; a draft never standing in for the
+authoritative current revision, with the current version keeping its own panel;
+multiple drafts listed rather than reduced; file name/type/size and the
+authenticated content endpoint; draft-with-no-files distinguished from
+version-with-no-file; the absence of every mutation action when the server grants
+none; the archived lifecycle reason; publish offered only for a publishable
+draft that has a file; publication as a confirmed transition that sends nothing
+before confirmation and announces only after the server confirms; a failed
+publication keeping its confirmation and request ID; edit/archive/create-revision
+workflows including client validation that sends no request and creation that
+navigates only after confirmation and never supplies a revision number; and
+loading, generic 403/404 not-found, retry-with-request-id, and long-content
+states.
+
+`revision-workspace-react.test.tsx` (17) covers exact revision context and the
+breadcrumb trail to its document; current-version labelling and its absence for a
+draft; revision facts separate from record facts; the change summary as its own
+section; published, superseded, and archived immutability notices with archived
+taking precedence; upload to the exact revision announced only after
+confirmation; a disabled submit standing in for an impossible empty upload; the
+server-reconciled upload-failure path (refetch before retry, preserved filename,
+request ID); publish gating, confirmation, and 409 conflict recovery; and the
+async states.
+
+`rfi-workspace-react.test.tsx` (33) covers the shared hierarchy applied to a
+structured record; no official number before issue and never a database id;
+legacy-incomplete reconciliation labelling with no Issued date presented as
+fact; draft editing carrying `lockVersion` and never sending status or number;
+client validation without a request; 409 conflict reloading authoritative values
+into the editor; a 403 reporting lost permission without retrying; read-only
+content when `updateDraft` is false, with Assigned to / Response due moving into
+the metadata strip only then; role-explicit attachments with their exact draft
+revision and authenticated downloads; role-carrying upload and the reconciled
+retry; the response as its own section separated from the question, its absence
+for a draft, capability-gated recording, and the awaiting-response state; the
+deferred full issuance dialog; capability-gated Return to draft confirmation;
+published current-version compatibility; immutable original-issue evidence and
+the authorized official-PDF download after reload; confirmed close and
+destructive void; no actions at all when the server grants none; an honest
+document-view unavailable message; activity rendering only mapped labels and
+structured details (never raw JSON); and the async states.
+
+`workspace-route-integration.test.tsx` (9) proves each of the three routes
+mounts its native workspace and never loads its legacy controller, that the
+shell keeps exactly one `h1` and the correct descendant project tab, that no
+workspace read model is requested before project access is confirmed, that a
+403 project shows the shell's generic not-found before any workspace request,
+and that every migrated route still resolves to its `featureDescriptor` so the
+documented rollback path remains wired.
+
+`workspace-accessibility.test.tsx` (12) proves one `h2` identity title above
+`h3` sections with no feature-owned `h1`, a labelled breadcrumb trail with
+`aria-current`, named icon-only controls, textual status, validation messages
+associated to their field, keyboard opening of the overflow menu with focus
+restoration on Escape, focus trapped in and restored from both confirmation and
+form dialogs, a keyboard-operable document-view disclosure, and live
+announcements for saves, failures, and background refresh.
+
+`workspace-format-parity.test.ts` (66) compares every label the workspaces
+ported from `public/app-format.js` — media type, activity action, RFI field,
+attachment role, number label, actor, and activity detail — plus the file-size
+formatter carried inline by the legacy detail views, so the ported vocabulary
+cannot drift from the rollback modules while both exist.
+
+The legacy rollback suites (`record-detail-ui`, `revision-detail-ui`,
+`rfi-ui`) are retained unchanged. Four shell suites
+(`react-shell`, `react-shell-history-parity`,
+`react-shell-project-revalidation`, and the two register route-integration
+suites) were updated because their fixture route is no longer
+compatibility-mounted; they exercise the same shell behaviour through
+`project-overview`/`dashboard` or assert the native workspace.
+
+### 12A-v. UI-7 RFI workspace layout correction
+
+A follow-up correction (§5G/§5H in `UI_PROGRAM_STATUS.md`) replaced the RFI
+workspace's full-width stacked layout with an opt-in `WorkspacePage`
+`layout="rail"` mode and closed a dead-end "Document view" control and a
+`ButtonLink` modifier-click bug. It grows three of the six suites above by 8
+tests (151 → 159); the subsequent Slice 2A contract integration adds two RFI
+workspace tests (159 → 161):
+
+`rfi-workspace-react.test.tsx` (26 → 31) adds an "RFI workspace — rail
+layout" block: the workspace renders `.base-workspace--rail` with a
+`.base-workspace__grid` containing `.base-workspace__rail-top`,
+`.base-workspace__body`, and `.base-workspace__secondary` as siblings;
+editable-draft facts (Assigned to, Response due) are absent from
+`.base-workspace__rail-top`; the same facts appear there once the RFI is
+read-only; and activity renders inside `.base-workspace__secondary`, never
+`.base-workspace__body`. The prior single "document view" test is now two:
+one proving the no-renderer state renders no `Show document view` button at
+all (only the restrained note), and one proving the interactive
+`Collapsible` still opens and reports `aria-expanded` correctly once a
+`globalThis.BASE` renderer runtime is mocked.
+
+`record-workspace-react.test.tsx` (21 → 23) adds a "Record workspace —
+navigation safety" block: a plain click on the primary action's `ButtonLink`
+navigates through the shell, while a ctrl-clicked primary action leaves the
+native `MouseEvent.defaultPrevented` `false` and never calls `shell.navigate`
+— the regression check for the modifier-click fix, following the same
+pattern already used by `projects-register-react.test.tsx`.
+
+`workspace-accessibility.test.tsx` (12 → 13): the existing keyboard-operable
+Collapsible test now mocks a renderer runtime (the interactive control no
+longer exists without one), and a new test asserts the renderer-unavailable
+note has no interactive descendant (`button, a, [tabindex]`) — a control that
+can only report itself unavailable must not be focusable at all.
+
+`scripts/capture-ui7-evidence.mjs` grew from 27 to 29 captures: a
+`rfiWorkspaceFixture=long` fixture (long subject, three-paragraph question,
+eight-event activity list) captured at 1280px and 390px, exercising the
+constrained main column and the non-sticky activity rail under worst-case
+content; and the document-view capture's scenario was updated to assert no
+toggle exists in the unavailable state, rather than clicking one that no
+longer renders. `happy-dom` has no real layout engine, so the CSS
+grid/rail breakpoints and the "no horizontal overflow" requirement are
+verified by this capture script's existing `scrollWidth` assertion, not by a
+new unit test — a `document.documentElement.scrollWidth` check under
+`happy-dom` would not reflect real layout.
+
+The Slice 2A UI integration adds two more RFI workspace tests (31 → 33) for
+the server-authorized Return to draft confirmation and the persisted immutable
+`RfiOfficialIssueSummary`/official-PDF surface. The issued fixture uses a
+`published` `currentVersion`; its top-level `rfi.status` is deliberately
+different from the immutable evidence to prove current authority is not derived
+from the original issue.
+
+It also adds a thirtieth deterministic capture: an authorized ready RFI with
+the Return to draft confirmation open. The existing issued capture now waits
+for the persistent official-PDF download evidence instead of only a generic
+read-only facts surface.
 
 ### 12B. RFI Slice 1 reconciliation evidence
 

@@ -401,6 +401,19 @@ Field meanings:
 The response never exposes storage keys, R2 metadata, raw authorization
 internals, raw SQL fields, or activity JSON blobs.
 
+**Consumer note (UI-7).** The native Record, Revision, and RFI detail
+workspaces consume the existing workspace read models
+(`GET .../records/:recordId/workspace`,
+`GET .../records/:recordId/revisions/:revisionId/workspace`,
+`GET .../rfis/:rfiId/workspace`) and the existing mutation endpoints
+(`PATCH .../records/:recordId`, `POST .../archive`, `POST .../revisions`,
+`POST .../revisions/:revisionId/files`, `POST .../publish`,
+`PATCH .../rfis/:rfiId`, `POST .../respond`, `POST .../attachments`, and the
+`close`/`reopen`/`void` transitions) unchanged. No endpoint, response shape,
+field, or capability was added or altered for UI-7. `issue` and `ready` remain
+uncalled by the browser and fail closed server-side. `returnForClarification`
+remains implemented and returned as a capability with no browser surface.
+
 **Consumer note (UI-6B).** The native Document Register
 (`src/ui/features/records/`) replaced `public/records-view.js` on
 `/projects/:projectId/records` without changing this contract: no endpoint,

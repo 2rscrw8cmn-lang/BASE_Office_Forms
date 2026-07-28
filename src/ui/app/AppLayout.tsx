@@ -33,6 +33,9 @@ import { LegacyFeatureMount } from "./LegacyFeatureMount";
 import { RfiRegisterFeature } from "../features/rfis/RfiRegisterFeature";
 import { ProjectsRegisterFeature } from "../features/projects/ProjectsRegisterFeature";
 import { RecordsRegisterFeature } from "../features/records/RecordsRegisterFeature";
+import { RecordWorkspaceFeature } from "../features/record-workspace/RecordWorkspaceFeature";
+import { RevisionWorkspaceFeature } from "../features/record-workspace/RevisionWorkspaceFeature";
+import { RfiWorkspaceFeature } from "../features/rfi-workspace/RfiWorkspaceFeature";
 import {
   LoadingState,
   SessionErrorState,
@@ -323,15 +326,43 @@ export function AppLayout({ runtime }: { runtime: ShellRuntime }) {
         content = <LoadingState label="Loading project" />;
       } else if (route.id === "project-rfis") {
         // The RFI register is the first native React feature route (UI-5).
-        // The RFI workspace (route id "rfi-workspace") stays compatibility
-        // mounted below until UI-7.
         content = <RfiRegisterFeature key={projectId} projectId={projectId} />;
       } else if (route.id === "project-records") {
-        // The Document Register is native from UI-6B. The Record and Revision
-        // detail routes ("record-detail", "revision-detail") stay compatibility
-        // mounted below until UI-7.
+        // The Document Register is native from UI-6B.
         content = (
           <RecordsRegisterFeature key={projectId} projectId={projectId} />
+        );
+      } else if (route.id === "record-detail" && route.params.recordId) {
+        // UI-7: the three detail workspaces are native. Each is keyed by its
+        // full identity so navigating between records, revisions, or RFIs
+        // never reuses the previous one's component state.
+        content = (
+          <RecordWorkspaceFeature
+            key={`${projectId}:${route.params.recordId}`}
+            projectId={projectId}
+            recordId={route.params.recordId}
+          />
+        );
+      } else if (
+        route.id === "revision-detail" &&
+        route.params.recordId &&
+        route.params.revisionId
+      ) {
+        content = (
+          <RevisionWorkspaceFeature
+            key={`${projectId}:${route.params.recordId}:${route.params.revisionId}`}
+            projectId={projectId}
+            recordId={route.params.recordId}
+            revisionId={route.params.revisionId}
+          />
+        );
+      } else if (route.id === "rfi-workspace" && route.params.rfiId) {
+        content = (
+          <RfiWorkspaceFeature
+            key={`${projectId}:${route.params.rfiId}`}
+            projectId={projectId}
+            rfiId={route.params.rfiId}
+          />
         );
       } else if (descriptor) {
         content = (

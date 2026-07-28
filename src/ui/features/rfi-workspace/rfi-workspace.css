@@ -1,0 +1,214 @@
+/*
+ * Composition-only layout for the RFI workspace. Buttons, fields, badges,
+ * dialogs, collapsibles, focus rings, and every colour value stay owned by the
+ * shared component layer and the application token registry.
+ */
+
+.rfi-workspace {
+  padding: var(--app-space-4) var(--app-gutter) var(--app-space-8);
+}
+
+/* ---- Read-only content -------------------------------------------------- */
+
+.rfi-workspace-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-4);
+  margin: 0;
+}
+
+.rfi-workspace-fact.is-wide {
+  grid-column: 1 / -1;
+}
+
+.rfi-workspace-fact dt {
+  margin-bottom: 4px;
+  font-size: var(--app-text-2xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+}
+
+.rfi-workspace-fact dd {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  line-height: var(--app-line-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rfi-workspace-empty-value {
+  color: var(--app-text-muted);
+  font-style: italic;
+}
+
+.rfi-workspace-legacy {
+  color: var(--app-text-muted);
+  font-size: var(--app-text-xs);
+}
+
+/* ---- Editable content --------------------------------------------------- */
+
+.rfi-workspace-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+}
+
+.rfi-workspace-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rfi-workspace-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-4);
+}
+
+.rfi-workspace-form__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+  flex-wrap: wrap;
+}
+
+/* ---- Files -------------------------------------------------------------- */
+
+.rfi-workspace-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+  margin: 0 0 var(--app-space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.rfi-workspace-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  margin-top: var(--app-space-4);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) dashed var(--app-border-strong);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-sunken);
+}
+
+.rfi-workspace-upload__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: var(--app-space-4);
+}
+
+.rfi-workspace-upload__input {
+  padding: var(--app-space-2);
+}
+
+/* ---- Response ----------------------------------------------------------- */
+
+.rfi-workspace-response {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  margin-bottom: var(--app-space-4);
+  padding: var(--app-space-4);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-left: 3px solid var(--app-success);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+.rfi-workspace-response__text {
+  margin: 0;
+  font-size: var(--app-text-sm);
+  line-height: var(--app-line-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Document view ------------------------------------------------------ */
+
+.rfi-workspace-preview-note {
+  margin: 0;
+}
+
+.rfi-workspace-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+}
+
+.rfi-workspace-preview__meta {
+  margin: 0;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-workspace-preview__host {
+  overflow-x: auto;
+  padding: var(--app-space-3);
+  border: var(--app-border-width) solid var(--app-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+}
+
+/* ---- Activity and errors ------------------------------------------------ */
+
+.rfi-workspace-activity-detail {
+  color: var(--app-text-muted);
+}
+
+.rfi-workspace-error {
+  display: flex;
+  gap: var(--app-space-2);
+  padding: var(--app-space-3);
+  border: var(--app-border-width) solid var(--app-danger);
+  border-radius: var(--app-radius-md);
+  background: var(--app-danger-soft);
+  font-size: var(--app-text-sm);
+}
+
+.rfi-workspace-error p {
+  margin: 0 0 4px;
+}
+
+.rfi-workspace-error p:last-child {
+  margin-bottom: 0;
+}
+
+.rfi-workspace-request-id {
+  font-size: var(--app-text-xs);
+  color: var(--app-text-muted);
+}
+
+.rfi-workspace-request-id code {
+  font-family: var(--app-font-mono);
+}
+
+.rfi-workspace-alert__error {
+  display: block;
+  margin-top: var(--app-space-2);
+  color: var(--app-danger);
+}
+
+@media (max-width: 760px) {
+  .rfi-workspace-facts,
+  .rfi-workspace-field-row,
+  .rfi-workspace-upload__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rfi-workspace-upload {
+    padding: var(--app-space-3);
+  }
+
+  .rfi-workspace-form__actions .base-btn {
+    width: 100%;
+    min-height: var(--app-touch-target);
+  }
+}

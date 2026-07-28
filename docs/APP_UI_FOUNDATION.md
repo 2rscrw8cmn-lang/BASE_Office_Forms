@@ -256,6 +256,9 @@ Controls, block cards, settings groups, save state, menus, and dialogs use the a
 ### 6.1 Primitives
 
 - Button
+- ButtonLink (a real anchor wearing the Button appearance, for destinations
+  such as an authenticated download; features never assemble button classes
+  onto an `<a>` themselves)
 - IconButton
 - TextInput
 - TextArea
@@ -304,6 +307,14 @@ Radix may provide behavior, but BASE owns the rendered styling and component con
 - ErrorState
 - PermissionState
 - FormDialog
+- WorkspacePage (with WorkspaceNotice) — the detail-route counterpart to
+  RegisterPage; owns the §5.2 hierarchy and its loading/ready/missing/error
+  states so a workspace never rebuilds them. Takes an opt-in
+  `layout="stacked" | "rail"` (default `"stacked"`); `"rail"` keeps notice and
+  metadata together in a compact, desktop-sticky context rail beside a
+  constrained main column, with secondary content (activity) in the same rail
+  but never sticky, collapsing to one column at narrow widths in the same
+  reading order
 - WorkspaceSection
 - Breadcrumbs
 

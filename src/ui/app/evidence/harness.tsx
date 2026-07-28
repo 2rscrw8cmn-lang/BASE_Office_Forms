@@ -43,6 +43,16 @@ const projectScenario = params.get("projectScenario") ?? "none";
 const recordFixture = params.get("recordFixture") ?? "populated";
 const recordScenario = params.get("recordScenario") ?? "none";
 const recordCreateMode = params.get("recordCreateMode") ?? "success";
+// UI-7 evidence mounts the three real detail workspaces. `workspaceFixture`
+// selects the authorized server read model (which decides the lifecycle state
+// and therefore the capabilities on screen); `workspaceScenario` drives the
+// confirmations, dialogs, and failure surfaces through real DOM events, so the
+// captures stay deterministic without any static demo markup.
+const workspaceFixture = params.get("workspaceFixture") ?? "published";
+const workspaceScenario = params.get("workspaceScenario") ?? "none";
+const workspaceUploadMode = params.get("workspaceUploadMode") ?? "success";
+const rfiWorkspaceFixture = params.get("rfiWorkspaceFixture") ?? "draft";
+const rfiWorkspaceScenario = params.get("rfiWorkspaceScenario") ?? "none";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -347,6 +357,399 @@ function isRfiItemUrl(url: string) {
   return /\/api\/v2\/projects\/[^/?]+\/rfis\/[^/?]+$/.test(url);
 }
 
+/* ---------------------------------------------------- UI-7 workspace models */
+
+function workspaceFile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "file-1",
+    originalFilename: "level-2-framing-plan.pdf",
+    mediaType: "application/pdf",
+    byteSize: 2_400_000,
+    uploadedAt: "2026-07-20T09:00:00Z",
+    ...overrides,
+  };
+}
+
+function workspaceRevision(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "revision-1",
+    revisionNumber: 1,
+    revisionLabel: null,
+    title: "Level 2 Framing Plan",
+    description: null,
+    discipline: "structural",
+    source: null,
+    changeSummary: "Issued for construction.",
+    status: "published",
+    createdAt: "2026-06-02T09:00:00Z",
+    fileCount: 1,
+    files: [workspaceFile()],
+    issuanceCount: 1,
+    isCurrent: true,
+    capabilities: { uploadFile: false, publishRevision: false },
+    ...overrides,
+  };
+}
+
+const PUBLISHED_REVISION = workspaceRevision();
+const SUPERSEDED_REVISION = workspaceRevision({
+  id: "revision-0",
+  revisionNumber: 1,
+  status: "superseded",
+  isCurrent: false,
+  changeSummary: "Original permit set.",
+  createdAt: "2026-05-04T09:00:00Z",
+  issuanceCount: 0,
+});
+const CURRENT_REVISION = workspaceRevision({
+  id: "revision-2",
+  revisionNumber: 2,
+  revisionLabel: "B",
+  status: "published",
+  isCurrent: true,
+  changeSummary: "Revised beam layout at grid C-4 per RFI-014.",
+  createdAt: "2026-07-02T09:00:00Z",
+});
+const DRAFT_REVISION = workspaceRevision({
+  id: "revision-3",
+  revisionNumber: 3,
+  revisionLabel: null,
+  status: "draft",
+  isCurrent: false,
+  changeSummary: "Coordination updates pending structural review.",
+  createdAt: "2026-07-22T09:00:00Z",
+  issuanceCount: 0,
+  capabilities: { uploadFile: true, publishRevision: true },
+});
+const EMPTY_DRAFT_REVISION = workspaceRevision({
+  ...DRAFT_REVISION,
+  id: "revision-4",
+  files: [],
+  fileCount: 0,
+});
+
+function workspaceRecordModel() {
+  return {
+    id: "record-1",
+    projectId: "p1",
+    recordType: "drawing",
+    recordNumber: "A-101",
+    title: "Level 2 Framing Plan",
+    description:
+      "Structural framing plan for the second floor, including the revised beam layout at grid C-4.",
+    discipline: "structural",
+    source: "Meridian Design Group",
+    status: workspaceFixture === "archived" ? "archived" : "active",
+    archivedAt: workspaceFixture === "archived" ? "2026-07-15T09:00:00Z" : null,
+    createdAt: "2026-05-04T09:00:00Z",
+    updatedAt: "2026-07-22T09:00:00Z",
+  };
+}
+
+function currentRecordWorkspace() {
+  const active = workspaceFixture !== "archived";
+  const revisions =
+    workspaceFixture === "no-revision"
+      ? []
+      : workspaceFixture === "draft"
+        ? [DRAFT_REVISION, CURRENT_REVISION, SUPERSEDED_REVISION]
+        : workspaceFixture === "empty-draft"
+          ? [EMPTY_DRAFT_REVISION]
+          : [CURRENT_REVISION, SUPERSEDED_REVISION];
+  return {
+    record: workspaceRecordModel(),
+    revisions,
+    totalFileCount: revisions.reduce((sum, item) => sum + item.fileCount, 0),
+    currentRevision: revisions.find((item) => item.isCurrent) ?? null,
+    capabilities: {
+      updateRecord: active,
+      archiveRecord: active,
+      createRevision: active,
+    },
+  };
+}
+
+function currentRevisionWorkspace() {
+  const revision =
+    workspaceFixture === "draft" || workspaceFixture === "empty-draft"
+      ? workspaceFixture === "empty-draft"
+        ? EMPTY_DRAFT_REVISION
+        : DRAFT_REVISION
+      : workspaceFixture === "superseded"
+        ? SUPERSEDED_REVISION
+        : PUBLISHED_REVISION;
+  return {
+    record: workspaceRecordModel(),
+    revision,
+    currentRevisionId: revision.isCurrent ? revision.id : CURRENT_REVISION.id,
+  };
+}
+
+const RFI_ATTACHMENTS = [
+  {
+    id: "attachment-1",
+    role: "supporting_attachment",
+    revisionId: "rfi-draft-1",
+    revisionLabel: "Current Draft",
+    originalFilename: "ceiling-coordination-sketch.pdf",
+    mediaType: "application/pdf",
+    byteSize: 812_000,
+    uploadedBy: "user-1",
+    uploadedAt: "2026-07-19T09:00:00Z",
+  },
+  {
+    id: "attachment-2",
+    role: "reference_drawing",
+    revisionId: "rfi-draft-1",
+    revisionLabel: "Current Draft",
+    originalFilename: "A2-11-reflected-ceiling.pdf",
+    mediaType: "application/pdf",
+    byteSize: 1_450_000,
+    uploadedBy: "user-1",
+    uploadedAt: "2026-07-19T10:30:00Z",
+  },
+];
+
+const LONG_RFI_SUBJECT =
+  "Resolve conflicting ceiling height, duct clearance, acoustic soffit, and sprinkler head layout requirements across the second-floor corridor between grid lines C and G, including coordination with the adjacent classroom wing";
+const LONG_RFI_QUESTION = [
+  "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run -- please confirm which elevation governs.",
+  "In addition, the sprinkler shop drawings (F-201) show heads centered on a 4'-0\" grid that conflicts with the soffit return at three locations near column lines D and F; if the soffit governs, those heads will need to be relocated and the fire-protection engineer will need to reissue calculations for the affected zone.",
+  "Please also confirm whether the acoustic treatment above the soffit needs to extend into the adjacent classroom wing, since the existing RCP only shows it terminating at the corridor line and the specification section referenced below implies continuous treatment across the corridor-to-classroom transition.",
+].join(" ");
+
+function currentRfiWorkspace() {
+  const long = rfiWorkspaceFixture === "long";
+  const issued =
+    ["issued", "responded", "legacy"].includes(rfiWorkspaceFixture) && !long;
+  const legacy = rfiWorkspaceFixture === "legacy";
+  const responded = rfiWorkspaceFixture === "responded";
+  const ready = rfiWorkspaceFixture === "ready";
+  return {
+    rfi: {
+      id: "rfi-1",
+      rfiNumber: issued ? "RFI-014" : null,
+      legacyReference: null,
+      status: responded
+        ? "response_received"
+        : issued
+          ? "open"
+          : ready
+            ? "ready_to_issue"
+            : "draft",
+      subject: long
+        ? LONG_RFI_SUBJECT
+        : "Resolve conflicting ceiling height requirements at the second-floor corridor",
+      question: long
+        ? LONG_RFI_QUESTION
+        : "The mechanical drawings show a hard lid at 9'-0\" AFF for duct clearance above the corridor, but the reflected ceiling plan calls for an acoustic soffit at 8'-6\" AFF along the same run — please confirm which elevation governs.",
+      contractorSuggestion:
+        "Hold the acoustic soffit at 8'-6\" and reroute the duct above the adjacent classroom.",
+      drawingReferences: long
+        ? "A2.31, A2.32, A2.33, M4.02, M4.03, F-201, F-202"
+        : "A2.31, A2.32, M4.02",
+      specificationReferences: "09 51 13, 23 31 13",
+      responsibleParty: RFI_CONTACT.name,
+      responsiblePartyId: RFI_CONTACT.id,
+      responsiblePartyLegacyText: null,
+      submittedBy: null,
+      requestedResponseDate: "2026-08-05",
+      costImpact: responded ? "No cost impact" : null,
+      scheduleImpact: responded ? "No schedule impact" : null,
+      issuedAt: issued ? "2026-07-10T09:00:00Z" : null,
+      responseReceivedAt: responded ? "2026-07-18T09:00:00Z" : null,
+      closedAt: null,
+      lockVersion: 1,
+      createdAt: "2026-07-01T09:00:00Z",
+      updatedAt: "2026-07-22T09:00:00Z",
+      isOverdue: false,
+      dueSoon: true,
+      issuanceReconciliationState: legacy ? "legacy_incomplete" : "not_issued",
+    },
+    currentVersion: {
+      id: "rfi-draft-1",
+      label: issued ? "Original Issue" : "Current Draft",
+      status: issued ? "published" : "draft",
+    },
+    responsibleContacts: [
+      RFI_CONTACT,
+      { id: "contact-2", name: "Sam Engineer", companyName: "Northline MEP" },
+    ],
+    project: {
+      id: "p1",
+      projectNumber: "24-018",
+      name: "Riverside Medical Center",
+      status: "active",
+      timezone: "America/New_York",
+      address: {
+        line1: null,
+        line2: null,
+        city: "Orlando",
+        region: "FL",
+        postalCode: null,
+        country: null,
+      },
+    },
+    organization: { id: "org-1", name: "BASE Construction Group" },
+    template: null,
+    attachments: {
+      supporting_attachment: [RFI_ATTACHMENTS[0]],
+      reference_drawing: [RFI_ATTACHMENTS[1]],
+    },
+    officialIssue:
+      issued && !legacy
+        ? {
+            officialDisplayNumber: "RFI-014",
+            issuedRevision: {
+              id: "rfi-draft-1",
+              internalRevisionNumber: 1,
+              userFacingVersion: "Original Issue" as const,
+            },
+            issuance: { id: "issuance-1", issueNumber: "ISS-014" },
+            issuedAt: "2026-07-10T09:00:00Z",
+            responseDueDate: "2026-08-05",
+            officialArtifact: {
+              fileId: "official-rfi-pdf",
+              role: "generated_artifact",
+              originalFilename: "RFI-014.pdf",
+              mediaType: "application/pdf",
+              byteSize: 42_000,
+              sha256: "0".repeat(64),
+            },
+            includedFiles: [],
+            recipients: { to: [], cc: [] },
+            originalIssueRequestId: "req-original-issue",
+          }
+        : null,
+    responses: responded
+      ? [
+          {
+            id: "response-1",
+            response:
+              "Hold the acoustic soffit at 8'-6\" AFF. Reroute the supply duct above the adjacent classroom as suggested; no structural change is required.",
+            respondedBy: "Alex Architect",
+            createdAt: "2026-07-18T09:00:00Z",
+          },
+        ]
+      : [],
+    activity: long
+      ? [
+          {
+            action: "rfi.created",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-01T09:00:00Z",
+            changedFields: [],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-02T11:15:00Z",
+            changedFields: [],
+            role: "supporting_attachment",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-05T09:00:00Z",
+            changedFields: ["question", "drawingReferences"],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-08T14:45:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "system",
+            actorDisplayName: null,
+            createdAt: "2026-07-12T09:00:00Z",
+            changedFields: ["requestedResponseDate"],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-15T10:30:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-19T10:30:00Z",
+            changedFields: ["subject"],
+            role: null,
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-22T09:00:00Z",
+            changedFields: ["subject", "requestedResponseDate"],
+            role: null,
+          },
+        ]
+      : [
+          {
+            action: "rfi.created",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-01T09:00:00Z",
+            changedFields: [],
+            role: null,
+          },
+          {
+            action: "rfi.attachment_added",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-19T10:30:00Z",
+            changedFields: [],
+            role: "reference_drawing",
+          },
+          {
+            action: "rfi.updated",
+            actorType: "user",
+            actorDisplayName: "Dana Project Manager",
+            createdAt: "2026-07-22T09:00:00Z",
+            changedFields: ["subject", "requestedResponseDate"],
+            role: null,
+          },
+        ],
+    capabilities: {
+      updateDraft: !issued,
+      uploadAttachment: !issued,
+      markReady: false,
+      returnToDraft: ready,
+      issue: false,
+      recordResponse: issued && !responded,
+      returnForClarification: false,
+      close: responded,
+      reopen: false,
+      void: !legacy,
+    },
+  };
+}
+
+function isRecordWorkspaceUrl(url: string) {
+  return /\/api\/v2\/projects\/[^/?]+\/records\/[^/?]+\/workspace$/.test(url);
+}
+function isRevisionWorkspaceUrl(url: string) {
+  return /\/records\/[^/?]+\/revisions\/[^/?]+\/workspace$/.test(url);
+}
+function isRfiWorkspaceUrl(url: string) {
+  return /\/rfis\/[^/?]+\/workspace$/.test(url);
+}
+
 globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
   const url =
     typeof input === "string"
@@ -409,6 +812,94 @@ globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
         201,
       ),
     );
+  }
+
+  // --- UI-7 detail workspaces --------------------------------------------
+  if (isRevisionWorkspaceUrl(url) && method === "GET") {
+    if (workspaceFixture === "error") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "REVISION_UNAVAILABLE",
+              message: "The revision could not be loaded.",
+              requestId: "req-ui7-revision",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response({
+        data: currentRevisionWorkspace(),
+        meta: { requestId: "req-ui7-revision" },
+      }),
+    );
+  }
+
+  if (isRecordWorkspaceUrl(url) && method === "GET") {
+    if (workspaceFixture === "error") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RECORD_UNAVAILABLE",
+              message: "The document could not be loaded.",
+              requestId: "req-ui7-record",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response({
+        data: currentRecordWorkspace(),
+        meta: { requestId: "req-ui7-record" },
+      }),
+    );
+  }
+
+  if (isRfiWorkspaceUrl(url) && method === "GET") {
+    if (rfiWorkspaceFixture === "error") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RFI_UNAVAILABLE",
+              message: "The RFI could not be loaded.",
+              requestId: "req-ui7-rfi",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(
+      response({
+        data: currentRfiWorkspace(),
+        meta: { requestId: "req-ui7-rfi" },
+      }),
+    );
+  }
+
+  if (/\/revisions\/[^/?]+\/files$/.test(url) && method === "POST") {
+    if (workspaceUploadMode === "failure") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "FILE_UNAVAILABLE",
+              message: "The file could not be stored.",
+              requestId: "req-ui7-upload",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    return Promise.resolve(response({ data: { id: "file-new" } }, 201));
   }
 
   if (isRecordListUrl(url) && method === "GET") {
@@ -856,3 +1347,123 @@ async function runRecordScenario() {
 }
 
 void runRecordScenario();
+
+/*
+ * UI-7 detail-workspace scenarios. Each drives the REAL workspace through real
+ * DOM events -- an overflow menu item, a confirmation, a file selection -- so a
+ * screenshot documents the production component in that state rather than a
+ * hand-built mock of it.
+ */
+async function runWorkspaceScenario() {
+  if (workspaceScenario === "none") return;
+
+  if (workspaceScenario === "publish-confirm") {
+    const publish = (await waitForSelector(
+      "[data-publish-revision]",
+    )) as HTMLButtonElement;
+    publish.click();
+    await waitForSelector('[role="alertdialog"]');
+    return;
+  }
+
+  if (workspaceScenario === "upload-failure") {
+    const file = (await waitForSelector(
+      "[data-revision-file]",
+    )) as HTMLInputElement;
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(["evidence"], "level-2-framing-rev-c.pdf", {
+        type: "application/pdf",
+      }),
+    );
+    file.files = transfer.files;
+    file.dispatchEvent(new Event("change", { bubbles: true }));
+    (
+      (await waitForSelector("[data-upload-submit]")) as HTMLButtonElement
+    ).click();
+    const alert = await waitForSelector(".revision-upload__error");
+    alert.scrollIntoView({ block: "center", behavior: "instant" });
+    return;
+  }
+
+  if (
+    workspaceScenario === "edit-dialog" ||
+    workspaceScenario === "archive-confirm" ||
+    workspaceScenario === "create-revision"
+  ) {
+    const actions = (await waitForSelector(
+      "[data-record-actions]",
+    )) as HTMLButtonElement;
+    openMenuTrigger(actions);
+    const menu = await waitForSelector(".base-menu");
+    if (workspaceScenario === "edit-dialog") {
+      const items = [...menu.querySelectorAll<HTMLElement>(".base-menu__item")];
+      items
+        .find((item) => item.textContent.includes("Edit document details"))
+        ?.click();
+      await waitForSelector("[data-record-title]");
+      return;
+    }
+    if (workspaceScenario === "create-revision") {
+      const items = [...menu.querySelectorAll<HTMLElement>(".base-menu__item")];
+      items
+        .find((item) => item.textContent.includes("Create draft revision"))
+        ?.click();
+      await waitForSelector("[data-revision-summary]");
+      return;
+    }
+    const items = [...menu.querySelectorAll<HTMLElement>(".base-menu__item")];
+    items
+      .find((item) => item.textContent.includes("Archive document"))
+      ?.click();
+    await waitForSelector('[role="alertdialog"]');
+  }
+}
+
+void runWorkspaceScenario();
+
+async function runRfiWorkspaceScenario() {
+  if (rfiWorkspaceScenario === "none") return;
+
+  if (rfiWorkspaceScenario === "preview") {
+    // This dev harness never loads a renderer runtime, matching the
+    // authenticated app -- so the document-view note renders directly, with
+    // no "Show document view" toggle to click through to a dead end.
+    await waitForSelector("[data-preview-unavailable]");
+    return;
+  }
+
+  if (rfiWorkspaceScenario === "void-confirm") {
+    const actions = (await waitForSelector(
+      "[data-rfi-actions]",
+    )) as HTMLButtonElement;
+    openMenuTrigger(actions);
+    const menu = await waitForSelector(".base-menu");
+    [...menu.querySelectorAll<HTMLElement>(".base-menu__item")]
+      .find((item) => item.textContent.includes("Void RFI"))
+      ?.click();
+    await waitForSelector('[role="alertdialog"]');
+    return;
+  }
+
+  if (rfiWorkspaceScenario === "return-to-draft-confirm") {
+    (
+      (await waitForSelector(
+        '[data-transition="return-to-draft"]',
+      )) as HTMLButtonElement
+    ).click();
+    await waitForSelector('[role="alertdialog"]');
+    return;
+  }
+
+  if (rfiWorkspaceScenario === "validation-error") {
+    const subject = (await waitForSelector(
+      '[data-rfi-field="subject"]',
+    )) as HTMLInputElement;
+    setNativeValue(subject, "");
+    ((await waitForSelector("[data-save-draft]")) as HTMLButtonElement).click();
+    await waitForSelector('[role="alert"], .base-field__error');
+  }
+}
+
+void runRfiWorkspaceScenario();

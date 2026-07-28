@@ -1,8 +1,9 @@
 # Current Application Structure
 
-**Status:** Authenticated workspace plus RFI Slice 2A official-issuance backend
-inventory
-**Updated:** 2026-07-27 (RFI Slice 2A final review correction)
+**Status:** Authenticated workspace with the accepted RFI Slice 2A
+official-issuance backend and UI-7 native detail workspaces. Only the Work
+Dashboard and Project Overview remain compatibility-mounted.
+**Updated:** 2026-07-28 (UI-7 rebase and Slice 2A contract integration)
 
 ## Runtime shape
 
@@ -21,66 +22,39 @@ through the root preview binding; retained UI-2 scripts use
 `wrangler.ui2.jsonc`, and the remote 0014 rehearsal uses the separate guarded
 `wrangler.rfi-rehearsal.jsonc`.
 
-### RFI Slice 2A — official issuance backend
+### RFI Slice 2A — accepted official-issuance backend
 
-`POST /api/v2/projects/:projectId/rfis/:rfiId/issue` now coordinates one
+`POST /api/v2/projects/:projectId/rfis/:rfiId/issue` is a guarded,
 server-authoritative operation. It requires `Idempotency-Key`, accepts only
-`record_only` delivery, validates the exact ready RFI/current revision/template
-and private attachment objects (size and SHA-256 are both mandatory), produces a
-deterministic PDF through the strict `base-rfi-official-document/v1` compiler,
-writes and verifies the artifact in R2, and then commits
-the RFI number, promoted immutable revision, generic issuance/file snapshots,
-RFI render/template/recipient snapshots, activity, and idempotency result in
-one guarded D1 batch.
+`record_only` delivery, validates the exact ready RFI/current
+revision/template and private attachment objects (including mandatory size and
+SHA-256), generates a deterministic PDF with the strict
+`base-rfi-official-document/v1` compiler, writes and verifies the R2 artifact,
+then commits the number, promoted immutable revision, issuance/file snapshots,
+render/template/recipient snapshots, activity, and idempotency result in one
+guarded D1 batch.
 
-The original shared revision remains internal revision number 1 and is promoted
-from `draft` to `published`; its user-facing label becomes `Original Issue`.
-`records.current_revision_id` remains authoritative. Migration
-`0015_rfi_official_issuance.sql` advances schema version to 13 and adds only
-official snapshot/idempotency/reconciliation state. It has not been applied to
-production by this implementation task.
+The original shared revision is promoted from `draft` to `published`; its
+user-facing label is `Original Issue`. `records.current_revision_id` remains
+authoritative. Migration `0015_rfi_official_issuance.sql` advances the schema to
+version 13 and adds only official snapshot, idempotency, and reconciliation
+state.
 
-New backend boundaries:
+The pre-issue lifecycle has a safe correction loop. `POST .../ready` validates
+subject, question, an active same-project responsible contact, and the exact
+usable published template binding before locking an RFI. `POST
+.../return-to-draft` is the separately authorized `ready_to_issue -> draft`
+operation. It requires no consumed number or official issue/issuance evidence;
+ordinary PATCH editing remains draft-only, and issue infrastructure failures
+never reverse the transition automatically.
 
-```text
-src/domain/rfis/official-issue.ts
-src/domain/rfis/base-rfi-official-document.ts
-src/application/rfis/rfi-artifact-renderer.ts
-src/application/rfis/rfi-official-issue-service.ts
-src/infrastructure/rendering/rfi-pdf-artifact-renderer.ts
-src/infrastructure/db/d1/rfi-official-issue-repository.ts
-migrations/0015_rfi_official_issuance.sql
-scripts/generate-rfi-official-sample.ts
-output/pdf/base-rfi-official-sample.pdf
-```
-
-The pre-issue lifecycle now has a safe correction loop. `POST .../ready`
-validates subject, question, active same-project responsible contact, and the
-exact usable published template binding before locking the RFI.
-`POST .../return-to-draft` is the named, separately authorized
-`ready_to_issue -> draft` operation. `RfiService.returnToDraft()` and
-`D1RfiRecordsRepository.returnToDraftWithActivity()` require no consumed number
-or official issue/issuance evidence and append `rfi.returned_to_draft`.
-Ordinary PATCH editing remains draft-only; issue infrastructure failures never
-perform the reverse transition automatically.
-
-The checked-in sample PDF is generated from a fixed review payload and was
-rendered to page PNGs with Poppler for visual inspection; it is product-review
-evidence, not an official project record.
-
-R2 is written before D1 because the services cannot share a transaction. After
-any ambiguous D1 error, the repository queries authoritative issue,
-revision-file, issuance-file, file-snapshot, and idempotency evidence. A
-confirmed commit returns the stored result; confirmed absence permits a guarded
-delete; partial or unavailable evidence retains the object and records
-`commit_outcome_unknown`. No object referenced by official D1 state is deleted.
-The RFI workspace reloads `RfiOfficialIssueSummary`, a dedicated immutable
-original-issue evidence projection including the downloadable artifact file ID,
+The workspace exposes `officialIssue` as `RfiOfficialIssueSummary`: immutable
+original-issue evidence containing the downloadable artifact file ID,
 issuance/revision identities, due-date/file/routing snapshots, and original
-request ID. It deliberately omits issue-time status and capabilities:
-top-level `rfi.status` and top-level `capabilities` are the only current
-lifecycle authority after response, clarification, close, reopen, or void.
-APIs never return storage keys.
+request ID. It intentionally excludes issue-time status and capabilities.
+Top-level `rfi.status` and top-level `capabilities` are the sole current
+lifecycle authority after any later response, clarification, close, reopen, or
+void. APIs never return storage keys.
 
 The repository is a Cloudflare Pages application with static browser assets, a
 React/Vite application entry, Pages Functions, one D1 database binding, and one
@@ -89,8 +63,11 @@ it owns global composition, routing, session/organization and project context,
 navigation, the mobile drawer, project tabs, page containers, focus, and route
 announcements. Feature screens that have not yet been migrated to React are
 mounted, unchanged, through a compatibility bridge that loads their existing
-browser controllers (`public/*-view.js`). `public/app-shell.js` and its self-boot
-are retained only as a rollback path (see the UI-4 shell section below).
+browser controllers (`public/*-view.js`). As of UI-7 the only screens still on
+that bridge are the Work Dashboard and Project Overview; every project register
+and every detail workspace is native React. `public/app-shell.js` and its
+self-boot are retained only as a rollback path (see the UI-4 shell section
+below).
 
 ```text
 Browser
@@ -150,6 +127,29 @@ Browser
 │   ├── format.ts                                controlled type/discipline labels, revision naming, dates
 │   ├── types.ts                                 Records read-model and create-input types
 │   └── records.css                              composition-only, token-based layout CSS
+├── src/ui/features/record-workspace/         (UI-7) native Record and Revision workspaces
+│   ├── RecordWorkspaceFeature.tsx              record identity, current work, version history
+│   ├── RevisionWorkspaceFeature.tsx            exact revision context, files, publish
+│   ├── RevisionFiles.tsx                       shared FileRow list + authenticated downloads
+│   ├── RevisionUploadPanel.tsx                 draft upload with server-reconciled retry
+│   ├── RecordDialogs.tsx                       edit details / archive / create draft revision
+│   ├── PublishRevisionDialog.tsx               confirmed official publish transition
+│   ├── useRecordWorkspace.ts                   record + revision TanStack Query hooks
+│   ├── api.ts                                   typed workspace/patch/archive/publish/upload calls
+│   ├── format.ts                                revision naming, media-type, size, issuance labels
+│   ├── types.ts                                 Record/Revision/File workspace read-model types
+│   └── record-workspace.css                     composition-only, token-based layout CSS
+├── src/ui/features/rfi-workspace/            (UI-7) native RFI workspace
+│   ├── RfiWorkspaceFeature.tsx                 identity, transitions, sections, activity
+│   ├── RfiContentPanel.tsx                     draft editor / read-only content, lockVersion
+│   ├── RfiResponsePanel.tsx                    response editor and recorded response
+│   ├── RfiAttachmentsPanel.tsx                 role-explicit attachments + upload
+│   ├── RfiTemplatePreview.tsx                  read-only template-bound document view
+│   ├── useRfiWorkspace.ts                      TanStack Query hook, key ["rfi-workspace", …]
+│   ├── api.ts                                   typed workspace/patch/respond/attachment/transition
+│   ├── format.ts                                ported activity/role/field vocabulary + dates
+│   ├── types.ts                                 RFI workspace read-model types
+│   └── rfi-workspace.css                        composition-only, token-based layout CSS
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
 ├── src/ui/components/index.ts                 BASE component library barrel + CSS import
@@ -171,10 +171,12 @@ Browser
 ├── public/project-overview-view.js            Project Overview feature module
 ├── public/records-view.js                     (rollback/reference only, UI-6B) legacy Records register
 ├── public/add-document-form.js                (rollback/reference only, UI-6B) legacy Add Document dialog
-├── public/record-detail-view.js               Document-first Record workspace
-├── public/revision-detail-view.js             Revision file/publish workspace
+├── public/record-detail-view.js               (rollback/reference only, UI-7) legacy Record workspace
+├── public/record-detail-dialogs.js            (rollback/reference only, UI-7) legacy record dialogs
+├── public/revision-detail-view.js             (rollback/reference only, UI-7) legacy Revision workspace
 ├── public/rfis-view.js                        (rollback/reference only, UI-5) legacy RFI register
-├── public/rfi-workspace-view.js                RFI workspace feature module (still compat-mounted)
+├── public/rfi-workspace-view.js               (rollback/reference only, UI-7) legacy RFI workspace
+├── public/rfi-template-preview.js             (rollback/reference only, UI-7) legacy renderer binding
 ├── public/record-options.js                    Shared controlled discipline vocabulary
 ├── public/library.html and public/home.js     preserved shared-library home
 ├── public/builder.html and public/studio.js  definition editor
@@ -526,8 +528,9 @@ mobile, with the selected link scrolled into view after route changes.
 `/projects/:projectId/overview`, `/projects/:projectId/records`, and
 `/projects/:projectId/records/:recordId` are now
 real, authenticated, data-backed screens instead of placeholders. `/projects`
-is native React as of UI-6A and `/projects/:projectId/records` as of UI-6B (see
-their sections below); the rest still mount their legacy controllers. The
+is native React as of UI-6A, `/projects/:projectId/records` as of UI-6B, and
+`/projects/:projectId/records/:recordId` as of UI-7 (see their sections below);
+`/dashboard` and the Project Overview still mount their legacy controllers. The
 `/projects/:projectId` → `.../overview` normalization is unchanged, and record
 revision, issuance, RFI, Team, and Administration destinations remain
 intentional placeholders reached through the same canonical routes.
@@ -796,8 +799,7 @@ natively instead of through `LegacyFeatureMount`: `AppLayout.tsx` special-cases
 `route.id === "project-rfis"` to render `<RfiRegisterFeature projectId={…}>`
 (`src/ui/features/rfis/`) once the project context is `ready`, exactly like
 every other project route. `/projects/:projectId/rfis/:rfiId` (the RFI
-workspace) is unchanged and still resolves through `LegacyFeatureMount` →
-`public/rfi-workspace-view.js`; it migrates in UI-7.
+workspace) became native in UI-7 — see "The detail workspaces" below.
 
 The feature loads the same single read model as the legacy controller,
 `GET /api/v2/projects/:projectId/rfis` (`{ project, rfis, responsibleContacts,
@@ -892,6 +894,98 @@ package); `.node-version`, package engines, and CI require Node 22.22.0.
 `public/rfis-view.js` and its existing test coverage
 (`tests/unit/rfi-ui.test.ts`) are retained unchanged as rollback/reference
 coverage; removing them is a later cleanup-phase decision.
+
+## The detail workspaces (UI-7, native React)
+
+`/projects/:projectId/records/:recordId`,
+`/projects/:projectId/records/:recordId/revisions/:revisionId`, and
+`/projects/:projectId/rfis/:rfiId` are native React as of UI-7. `AppLayout.tsx`
+special-cases `route.id === "record-detail" | "revision-detail" |
+"rfi-workspace"` and renders `<RecordWorkspaceFeature>`,
+`<RevisionWorkspaceFeature>`, or `<RfiWorkspaceFeature>` once the project
+context is `ready`, keyed by the full identity in the path so navigating
+between two records, revisions, or RFIs never reuses the previous one's
+component state. No route, API, capability, or read model changed.
+
+### The shared Record Workspace pattern
+
+`WorkspacePage` (`src/ui/components/patterns/WorkspacePage.tsx`) is the
+detail-route counterpart to `RegisterPage` and owns the binding hierarchy from
+`APP_UI_FOUNDATION.md` §5.2 exactly once: breadcrumbs, an identity header with
+one primary current action plus an overflow menu, an optional lifecycle
+`WorkspaceNotice`, the `MetadataStrip`, the current-work/content body, and
+secondary history/activity. It renders exactly one of `loading`, `ready`,
+`missing`, or `error`. `WorkspaceSection` gained an optional `headingLevel`, so
+sections inside a workspace are `h3` under the identity `h2` and the outline
+stays honest — the shell still owns the only `h1`. `ButtonLink` was added to the
+primitives so a download or workspace destination keeps real anchor semantics
+instead of a button wearing a link's job, and `useReturnFocus` centralises focus
+restoration for overlays opened programmatically rather than from a Radix
+trigger.
+
+### Record workspace
+
+Record facts (discipline, total files, source, created, updated) live in the
+metadata strip; revision facts (change summary, created, files, issuance) live
+in the revision panels, so record and revision metadata never share one
+unlabeled list. A draft never impersonates the authoritative current revision:
+when both exist the draft is shown as **Current work** and the published version
+keeps its own **Current version** panel, with older published/superseded
+revisions in the secondary **Version history**. Multiple drafts are listed
+rather than silently reduced to one. Edit details, Archive, and Create draft
+revision run through the shared `FormDialog`/`AlertDialog`; archiving and
+publishing are explicit confirmations, never ordinary saves. An archived record
+states the lifecycle reason instead of quietly dropping its actions.
+
+### Revision workspace
+
+The identity header names the exact version, its status, and whether it is the
+document's current version; the breadcrumb keeps the owning document one click
+away. Published and superseded versions state that they are immutable, and an
+archived document's notice takes precedence over the revision's own. Upload
+appears only when the server returns `revision.capabilities.uploadFile`, and
+Publish only when `publishRevision` is true *and* the draft has at least one
+file — otherwise the workspace explains the requirement rather than offering a
+disabled control. A failed upload refetches the workspace *before* offering a
+retry, so the file list on screen is confirmed server truth and a repeat attempt
+cannot silently attach a second copy; this is the UI-6B staged-work rule applied
+to a single-stage sequence.
+
+### RFI workspace
+
+The RFI is a structured record, so its "current work" is its authoritative
+content rather than a file list. Response content is a separate section from the
+question and is never merged into it. Attachments carry an explicit role
+(supporting attachment / reference drawing) and their exact draft revision.
+Draft editing is one form gated on `capabilities.updateDraft`, carries the
+server's `lockVersion`, and on `409 RFI_VERSION_CONFLICT` reloads the
+authoritative values and asks for a deliberate retry; a 403 says permission was
+lost rather than retrying. While the draft is editable, Assigned to and Response
+due live in the editor and are omitted from the metadata strip, so each fact has
+exactly one authoritative location. Close, Reopen, Void, and the intentional
+pre-issue **Return to draft** correction are confirmed transitions from
+top-level server capabilities. The full issuance dialog remains out of scope.
+After reload, `officialIssue` renders its immutable Original Issue evidence and
+authorized official-PDF download; it never supplies current status or actions,
+which remain top-level `rfi.status` and `capabilities`. A legacy RFI that
+consumed a number without a complete issuance is labelled "Needs issue repair"
+with the reconciliation notice instead of being presented as issued. The
+template-bound document view is read-only, rendered on demand inside a
+`Collapsible` through `createRendererPreviewAdapter`, and states plainly that
+the controlled renderer is not loaded in the authenticated workspace when
+`globalThis.BASE` is absent (unchanged from the legacy workspace — see "Known
+limitations" in `UI_PROGRAM_STATUS.md` §5G).
+
+### Rollback
+
+`public/record-detail-view.js`, `public/record-detail-dialogs.js`,
+`public/revision-detail-view.js`, `public/rfi-workspace-view.js`, and
+`public/rfi-template-preview.js` remain in the tree with their existing test
+coverage (`tests/unit/record-detail-ui.test.ts`,
+`tests/unit/revision-detail-ui.test.ts`, `tests/unit/rfi-ui.test.ts`), and their
+`featureDescriptor` entries are unchanged. Removing the three `route.id`
+branches in `AppLayout.tsx` returns each route to its legacy controller with no
+data migration and no API change.
 
 Published Library templates remain reusable masters only. The repository has no
 project-form-instance entity, no persisted template-version reference on a
@@ -1243,11 +1337,9 @@ project-membership authorization. PR 4 adds `src/domain/rfis`,
 `src/application/rfis`, and RFI-specific repositories over the shared
 Records → Revisions → Files spine. Each RFI uses a stable `records` identity, a
 one-to-one `rfi_details` extension, a current draft revision, and revision-scoped
-files. Issue remains fail-closed until the complete immutable-revision and
-official-artifact transaction is implemented; no Slice 1 request can consume a
-number or present a draft as Open. Slice 2A replaces the issue route's
-fail-closed behavior with the guarded operation described above. Project,
-contact, and RFI lifecycle mutations
+files. Slice 2A now supplies the guarded immutable-revision and official-artifact
+transaction; Slice 1's former fail-closed issuance boundary remains historical,
+not current behavior. Project, contact, and RFI lifecycle mutations
 append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,

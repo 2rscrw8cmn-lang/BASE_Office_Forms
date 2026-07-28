@@ -10,14 +10,18 @@
  * container (so it rereads the URL) without recreating it (no new factory
  * call) or reloading it (no new data fetch).
  *
- * Registers leave this compatibility path one phase at a time: the RFI
- * register (`project-rfis`) in UI-5, `/projects` in UI-6A, and the Document
- * Register (`project-records`) in UI-6B. Each has its own native coverage --
- * see `tests/unit/records-register-react.test.tsx` and
- * `tests/unit/records-register-route-integration.test.tsx` for UI-6B.
- * `record-detail` (the Record workspace, compatibility-mounted until UI-7)
- * is now the representative URL-reading controller, so these suites exercise
- * the shell's remount mechanism through it.
+ * Screens leave this compatibility path one phase at a time: the RFI register
+ * (`project-rfis`) in UI-5, `/projects` in UI-6A, the Document Register
+ * (`project-records`) in UI-6B, and the Record, Revision, and RFI detail
+ * workspaces in UI-7. Each has its own native coverage -- see
+ * `tests/unit/records-register-react.test.tsx`,
+ * `tests/unit/record-workspace-react.test.tsx`, and
+ * `tests/unit/workspace-route-integration.test.tsx`.
+ *
+ * `project-overview` and `dashboard` are the compatibility-mounted screens that
+ * remain, so these suites exercise the shell's remount mechanism through them.
+ * The mechanism itself is unchanged and still guards every controller that has
+ * not been migrated yet.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
@@ -96,20 +100,20 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1?status=open",
+      "/projects/p1/overview?status=open",
       harness.runtime,
     );
 
     await screen.findByText(/status=open/);
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(1);
 
-    shell.goTo("/projects/p1/records/r1?status=draft");
+    shell.goTo("/projects/p1/overview?status=draft");
     await waitFor(() => {
       expect(screen.getByText(/status=draft/)).toBeInTheDocument();
     });
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(2);
     expect(harness.destroyCallCount).toBe(0);
@@ -118,7 +122,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     await waitFor(() => {
       expect(screen.getByText(/status=open/)).toBeInTheDocument();
     });
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(3);
     expect(harness.destroyCallCount).toBe(0);
@@ -128,7 +132,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1?status=open&sort=updated",
+      "/projects/p1/overview?status=open&sort=updated",
       harness.runtime,
     );
 
@@ -136,7 +140,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       expect(harness.mountedParams).toContain("status=open hash=none");
     });
 
-    shell.goTo("/projects/p1/records/r1?status=closed&sort=number");
+    shell.goTo("/projects/p1/overview?status=closed&sort=number");
     await waitFor(() => {
       expect(harness.mountedParams).toContain("status=closed hash=none");
     });
@@ -145,7 +149,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     await waitFor(() => {
       expect(harness.mountedParams.at(-1)).toBe("status=open hash=none");
     });
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
   });
 
@@ -153,7 +157,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1#a",
+      "/projects/p1/overview#a",
       harness.runtime,
     );
 
@@ -161,11 +165,11 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       expect(harness.mountedParams).toContain("status=none hash=#a");
     });
 
-    shell.goTo("/projects/p1/records/r1#b");
+    shell.goTo("/projects/p1/overview#b");
     await waitFor(() => {
       expect(harness.mountedParams).toContain("status=none hash=#b");
     });
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.destroyCallCount).toBe(0);
   });
@@ -174,13 +178,13 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const harness = urlAwareRuntime();
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1?status=open",
+      "/projects/p1/overview?status=open",
       harness.runtime,
     );
     await screen.findByText(/status=open/);
 
     for (const query of ["draft", "closed", "void", "open"]) {
-      shell.goTo(`/projects/p1/records/r1?status=${query}`);
+      shell.goTo(`/projects/p1/overview?status=${query}`);
       await waitFor(() => {
         expect(
           screen.getByText(new RegExp(`status=${query}`)),
@@ -188,7 +192,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
       });
     }
 
-    expect(harness.factoryCalls).toEqual(["record-detail"]);
+    expect(harness.factoryCalls).toEqual(["overview"]);
     expect(harness.reloadCallCount).toBe(1);
     expect(harness.mountCallCount).toBe(5); // 1 initial + 4 query-only remounts
     expect(harness.destroyCallCount).toBe(0);
@@ -196,16 +200,16 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
 
   it("still destroys the old controller on a genuine path navigation", async () => {
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
-    const recordDetailRuntime = urlAwareRuntime();
-    const overviewFactoryCalls: FeatureKind[] = [];
+    const overviewRuntime = urlAwareRuntime();
+    const dashboardFactoryCalls: FeatureKind[] = [];
     const combinedRuntime: ShellRuntime = {
-      getApiClient: recordDetailRuntime.runtime.getApiClient,
+      getApiClient: overviewRuntime.runtime.getApiClient,
       loadFeatureFactory: (kind) => {
-        if (kind === "overview") {
-          overviewFactoryCalls.push(kind);
+        if (kind === "dashboard") {
+          dashboardFactoryCalls.push(kind);
           return Promise.resolve((deps: FeatureControllerDeps) => ({
             mount(container: HTMLElement) {
-              container.innerHTML = `<h1 id="page-title" tabindex="-1">FEATURE:overview</h1>`;
+              container.innerHTML = `<h1 id="page-title" tabindex="-1">FEATURE:dashboard</h1>`;
             },
             reload() {
               deps.requestRender();
@@ -216,28 +220,28 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
             },
           }));
         }
-        return recordDetailRuntime.runtime.loadFeatureFactory(kind);
+        return overviewRuntime.runtime.loadFeatureFactory(kind);
       },
     };
 
     const shell = renderShellWithNavigation(
-      "/projects/p1/records/r1?status=open",
+      "/projects/p1/overview?status=open",
       combinedRuntime,
     );
     await screen.findByText(/status=open/);
-    expect(recordDetailRuntime.factoryCalls).toEqual(["record-detail"]);
+    expect(overviewRuntime.factoryCalls).toEqual(["overview"]);
 
-    shell.goTo("/projects/p1/overview");
-    await screen.findByText("FEATURE:overview");
+    shell.goTo("/dashboard");
+    await screen.findByText("FEATURE:dashboard");
 
-    expect(recordDetailRuntime.destroyCallCount).toBe(1);
-    expect(overviewFactoryCalls).toEqual(["overview"]);
+    expect(overviewRuntime.destroyCallCount).toBe(1);
+    expect(dashboardFactoryCalls).toEqual(["dashboard"]);
   });
 
   it("supports browser Back/Forward across two different feature routes", async () => {
     installFetch({ session: () => READY_SESSION(), project: READY_PROJECT });
     const overviewFactoryCalls: FeatureKind[] = [];
-    const recordDetailFactoryCalls: FeatureKind[] = [];
+    const dashboardFactoryCalls: FeatureKind[] = [];
     const runtime: ShellRuntime = {
       getApiClient: () =>
         Promise.resolve({
@@ -246,7 +250,7 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
         } as LegacyApiClient),
       loadFeatureFactory: (kind) => {
         if (kind === "overview") overviewFactoryCalls.push(kind);
-        if (kind === "record-detail") recordDetailFactoryCalls.push(kind);
+        if (kind === "dashboard") dashboardFactoryCalls.push(kind);
         return Promise.resolve((deps: FeatureControllerDeps) => ({
           mount(container: HTMLElement) {
             container.innerHTML = `<h1 id="page-title" tabindex="-1">FEATURE:${kind}</h1>`;
@@ -265,16 +269,16 @@ describe("Same-route URL-history parity for compatibility-mounted controllers", 
     const shell = renderShellWithNavigation("/projects/p1/overview", runtime);
     await screen.findByText("FEATURE:overview");
 
-    shell.goTo("/projects/p1/records/r1");
-    await screen.findByText("FEATURE:record-detail");
+    shell.goTo("/dashboard");
+    await screen.findByText("FEATURE:dashboard");
 
     shell.back();
     await screen.findByText("FEATURE:overview");
 
     shell.forward();
-    await screen.findByText("FEATURE:record-detail");
+    await screen.findByText("FEATURE:dashboard");
 
     expect(overviewFactoryCalls.length).toBeGreaterThanOrEqual(2);
-    expect(recordDetailFactoryCalls.length).toBeGreaterThanOrEqual(2);
+    expect(dashboardFactoryCalls.length).toBeGreaterThanOrEqual(2);
   });
 });

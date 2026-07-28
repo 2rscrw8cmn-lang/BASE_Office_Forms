@@ -24,10 +24,10 @@ UI-1     Audit, design contract, and decisions                 [complete]
 UI-2     Application/document CSS separation + React/Vite foundation [complete: PR #41 review/merge]
 UI-3     BASE component library + UI Lab
 UI-4     React application shell and route parity
-UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45]
-UI-6A    Projects register + Create Project workflow          [implemented: PR #46, open]
-UI-6B    Document Register + Add Document workflow            [implemented: PR #47, stacked on UI-6A]
-UI-7     RFI, Record, and Revision workspaces
+UI-5     RFI register as a native React feature (controlled table, no Tabulator) [complete: PR #45 merged]
+UI-6A    Projects register + Create Project workflow          [complete: PR #46 merged]
+UI-6B    Document Register + Add Document workflow            [complete: PR #47 merged, main 315de55]
+UI-7     RFI, Record, and Revision workspaces                 [implemented: draft PR #48]
 UI-8     Dashboard, forms, Team, and Administration
 UI-9     Document Library and Studio application controls
 UI-10    Drift prevention, E2E, visual regression, and cleanup
@@ -449,10 +449,12 @@ detail routes remain compatibility-mounted until UI-7. The register uses the
 existing `GET /api/v2/projects/:projectId/records` response unchanged,
 including its server-derived `capabilities.createRecord`.
 
-**Branch stacking.** UI-6B was specified to start from a `main` containing
-UI-6A, but UI-6A's PR #46 was still open when UI-6B began, and UI-6A modifies
-ten files UI-6B must also modify. UI-6B therefore branches from
-`agent/ui-6a-projects-register-react`. Merge UI-6A first, then UI-6B. See
+**Branch stacking (historical).** UI-6B was specified to start from a `main`
+containing UI-6A, but UI-6A's PR #46 was still open when UI-6B began, and UI-6A
+modifies ten files UI-6B must also modify, so UI-6B branched from
+`agent/ui-6a-projects-register-react` and was later rebased onto `main`. Both
+PRs are now merged (UI-6A `0b5ec89`, UI-6B `315de55`); this is closed history,
+retained as the lesson on stacking against a squash-merged base. See
 `docs/UI_PROGRAM_STATUS.md` §5F.
 
 **Add Document staging is the reusable lesson.** A multi-step server workflow
@@ -510,6 +512,40 @@ Unify detail routes around the Record Workspace pattern.
 - issued/published revisions immutable;
 - current files and change summary;
 - issue/publish actions never represented as ordinary save.
+
+**Delivered.** All three detail routes are native React and compose one shared
+`WorkspacePage` pattern (`src/ui/components/patterns/WorkspacePage.tsx`), the
+detail-route counterpart to `RegisterPage`. Record facts and revision facts stay
+in separate labelled locations; a draft never impersonates the authoritative
+current revision; published, superseded, and archived states state their own
+immutability; publish/archive/close/reopen/void are confirmed transitions rather
+than saves; and issuance is still not exposed. See `UI_PROGRAM_STATUS.md` §5G.
+
+**The reusable lessons.**
+
+1. *One page pattern per route family.* A detail route composes `WorkspacePage`
+   the same way a register composes `RegisterPage`. Later detail surfaces
+   (submittals, issuances) reuse it rather than rebuilding the hierarchy.
+2. *Each fact has one authoritative location.* Where a fact becomes editable it
+   moves into the editor and leaves the metadata strip, instead of appearing
+   twice — see the RFI workspace's Assigned to / Response due.
+3. *Reconcile before retrying.* A failed upload refetches its workspace before
+   offering a retry, so an operator decides against confirmed server truth and a
+   repeat attempt cannot duplicate server state. This extends the UI-6B staged
+   Add Document rule to single-stage work.
+4. *A shared page pattern needs a layout escape hatch, not a fork.* The RFI
+   workspace's initial full-width stacked form was a visual-review regression
+   against the legacy workspace's constrained-column-plus-rail layout. Rather
+   than forking a second detail-page component, `WorkspacePage` gained one
+   opt-in `layout="rail"` mode that repositions the same `notice`/`metadata`/
+   `secondary` props into a context rail; `layout="stacked"` (default) stayed
+   byte-for-byte what Record/Revision already used. See §5H in
+   `UI_PROGRAM_STATUS.md`.
+5. *An expandable control must not be able to open onto "unavailable."* The
+   Document view toggle opened even when the renderer runtime was absent, so it
+   could only ever reveal the same "not loaded" sentence — a dead end
+   disguised as a feature. The fix checks availability before deciding whether
+   to render the toggle at all, not inside the toggle's content.
 
 ### Exit gate
 
