@@ -66,7 +66,9 @@ Mutable draft resources expose `lockVersion`. Update requests must provide eithe
 - `If-Match: "<lockVersion>"`; or
 - `lockVersion` in the request body where headers are impractical.
 
-Official transitions require `Idempotency-Key`. Replaying the same key with the same request returns the original result. Reusing the key with a different payload returns `409 IDEMPOTENCY_KEY_REUSED`.
+Official transitions require `Idempotency-Key`. Replay requires the same
+tenant, operation, resource identity, and canonical request. Reusing the key
+for another resource or changed input returns `409 IDEMPOTENCY_KEY_REUSED`.
 
 ## 4. Identity
 
@@ -453,21 +455,73 @@ Creates an unnumbered draft.
 
 Returns details, current revision, file summary, delivery summary, and capabilities.
 
+### `GET /projects/{projectId}/rfis/{rfiId}/workspace`
+
+Returns `officialIssue: null` before issue. After issue, `officialIssue` is a
+dedicated immutable `RfiOfficialIssueSummary`, not the `POST .../issue`
+response:
+
+```json
+{
+  "officialDisplayNumber": "RFI-001",
+  "issuedRevision": {
+    "id": "revision_uuid",
+    "internalRevisionNumber": 1,
+    "userFacingVersion": "Original Issue"
+  },
+  "issuance": { "id": "issuance_uuid", "issueNumber": "ISS-001" },
+  "issuedAt": "2026-07-25T20:00:00.000Z",
+  "responseDueDate": "2026-07-27",
+  "officialArtifact": { "fileId": "artifact_file_id", "sha256": "..." },
+  "includedFiles": [],
+  "recipients": { "to": [], "cc": [] },
+  "originalIssueRequestId": "request_uuid"
+}
+```
+
+It contains original-issue evidence only: official number, `Original Issue`
+revision, issuance, issue timestamp, response-due snapshot, artifact, included
+file snapshots, ordered To/CC snapshots, and the original request ID. It does
+not contain `status`, `capabilities`, `rfiId`, or `recordId`. Top-level
+`rfi.status` and top-level `capabilities` are the only authoritative current
+lifecycle projection after response, clarification, close, reopen, or void.
+The summary never returns R2 keys or raw snapshot/idempotency JSON. Workspace
+attachments are labeled `Current Draft` before issue and `Original Issue`
+after issue.
+
 ### `PATCH /rfis/{rfiId}`
 
-Updates a draft or fields explicitly mutable in the current state.
+Updates ordinary RFI content only while top-level status is exactly `draft`.
+`ready_to_issue` is locked and must first use **Return to draft**; the API never
+silently performs that transition from a PATCH.
 
 ### `POST /rfis/{rfiId}/ready`
 
-Validates the draft and transitions to `ready_to_issue`.
+Validates every RFI-level fact that becomes locked, then transitions
+`draft -> ready_to_issue`. Required facts are non-blank `subject` and
+`question`, a `responsiblePartyId` that resolves to an active contact in the
+same project, and the exact bound template version still published and accepted
+by the official renderer contract. Failure returns
+`422 RFI_READY_VALIDATION_FAILED`; the RFI remains editable in `draft`.
+
+### `POST /projects/{projectId}/rfis/{rfiId}/return-to-draft`
+
+User-facing action: **Return to draft**.
+
+Performs the intentional, server-authoritative
+`ready_to_issue -> draft` transition so content or routing prerequisites can be
+corrected. It requires `rfis:return_to_draft`, appends
+`rfi.returned_to_draft`, increments the RFI lock version, and is guarded in D1
+against any official issue, issuance, `record_number`, `sequence_no`, or
+`issued_at`. Issued/open RFIs cannot use it. Transient renderer, R2, D1,
+idempotency, or reconciliation failures do not invoke this endpoint and do not
+automatically change a ready RFI; the operator deliberately chooses the action.
 
 ### `POST /rfis/{rfiId}/issue`
 
-This route is fail-closed during Slice 1 and returns
-`RFI_ISSUANCE_NOT_AVAILABLE` without consuming a number or changing the record.
-It may be enabled only when the complete transaction below is implemented.
-
-Requires `Idempotency-Key`.
+Implemented by RFI Slice 2A at
+`POST /api/v2/projects/{projectId}/rfis/{rfiId}/issue`. Requires a non-empty
+`Idempotency-Key` header (maximum 200 characters).
 
 ```json
 {
@@ -479,17 +533,93 @@ Requires `Idempotency-Key`.
 }
 ```
 
-Server transaction:
+Only `record_only` is supported. Recipient IDs must be a non-empty unique list;
+CC and included-file lists must be unique, and To/CC cannot overlap.
+`responseDueDate` is a real `YYYY-MM-DD` calendar date. Unknown request fields
+are rejected.
 
-1. locks the project/record sequence;
-2. assigns the next RFI number;
-3. creates immutable revision 0;
-4. snapshots project and routing metadata needed for the document;
-5. renders the issued artifact;
-6. stores the artifact;
-7. creates issuance and activity events;
-8. optionally creates delivery records;
-9. returns the official record.
+Success returns the standard envelope with:
+
+```json
+{
+  "data": {
+    "rfiId": "rfi_uuid",
+    "recordId": "rfi_uuid",
+    "officialDisplayNumber": "RFI-001",
+    "status": "open",
+    "issuedRevision": {
+      "id": "revision_uuid",
+      "internalRevisionNumber": 1,
+      "userFacingVersion": "Original Issue"
+    },
+    "issuance": {
+      "id": "issuance_uuid",
+      "issueNumber": "ISS-001"
+    },
+    "issuedAt": "2026-07-25T20:00:00.000Z",
+    "responseDueDate": "2026-07-27",
+    "officialArtifact": {
+      "fileId": "artifact_file_id",
+      "role": "generated_artifact",
+      "originalFilename": "RFI-001.pdf",
+      "mediaType": "application/pdf",
+      "byteSize": 12345,
+      "sha256": "64_hex_characters"
+    },
+    "includedFiles": [],
+    "recipients": {
+      "to": [
+        {
+          "projectContactId": "contact_uuid",
+          "contactName": "Project Architect",
+          "companyName": "Design Co",
+          "email": "architect@example.com"
+        }
+      ],
+      "cc": []
+    },
+    "capabilities": {
+      "issue": false,
+      "recordResponse": true,
+      "returnForClarification": false,
+      "close": false,
+      "reopen": false,
+      "void": true
+    },
+    "requestId": "request_uuid"
+  },
+  "meta": {
+    "requestId": "request_uuid"
+  }
+}
+```
+
+The immediate issue response remains `RfiOfficialIssueResult` for compatibility
+and may contain issue-time `status` and `capabilities`. It is not reused as the
+workspace's long-lived `officialIssue` projection.
+
+The response never exposes storage keys, raw snapshot JSON, or idempotency
+metadata. The canonical identity includes organization isolation plus
+`projectId` and `rfiId`. Same key/same resource/same request returns the
+original `data`; using the key for another RFI/project or changed input returns
+`409 IDEMPOTENCY_KEY_REUSED` without disclosing the other resource.
+
+Relevant errors:
+
+- `400 IDEMPOTENCY_KEY_REQUIRED`
+- `400 VALIDATION_FAILED` for malformed request, unsupported delivery, or an
+  `Idempotency-Key` longer than 200 characters
+- `401 AUTHENTICATION_REQUIRED`
+- concealed `404 PROJECT_NOT_FOUND` / `RFI_NOT_FOUND` where required
+- `409 RFI_ILLEGAL_TRANSITION`, `RFI_ALREADY_ISSUED`, or
+  `IDEMPOTENCY_KEY_REUSED`
+- `422 RFI_READY_VALIDATION_FAILED` from `POST .../ready`
+- `422 RFI_ISSUE_VALIDATION_FAILED` for an unusable exact template, routing,
+  project, responsible contact, or file relationship
+- `503 RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, or
+  `RFI_ISSUE_COMMIT_FAILED`
+- `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` when commit evidence is partial or
+  unavailable, or guarded compensation cannot delete R2
 
 ### `POST /rfis/{rfiId}/responses`
 

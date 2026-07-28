@@ -11,7 +11,15 @@ import {
   RfiIllegalTransitionError,
   RfiAuthorizationError,
   RfiConflictError,
-  RfiIssuanceUnavailableError,
+  RfiAlreadyIssuedError,
+  RfiIssueCompensationError,
+  RfiIssueIdempotencyConflictError,
+  RfiIssuePersistenceError,
+  RfiIssueRenderError,
+  RfiIssueRequestError,
+  RfiIssueStorageError,
+  RfiIssueValidationError,
+  RfiReadyValidationError,
   RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
 import { RfiAttachmentRejectedError } from "../../infrastructure/db/d1/rfi-attachments-repository";
@@ -82,6 +90,7 @@ import {
 import {
   parseRfiAttachmentUpload,
   parseRfiCreate,
+  parseRfiIssue,
   parseRfiResponse,
   parseRfiUpdate,
 } from "./rfi-schemas";
@@ -245,7 +254,7 @@ export async function routeV2Request(
     );
   }
   const rfiRoute = pathname.match(
-    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(workspace|issue|respond|close|reopen|ready|void|return))?)?$/,
+    /^\/api\/v2\/projects\/([^/]+)\/rfis(?:\/([^/]+)(?:\/(workspace|issue|respond|close|reopen|ready|return-to-draft|void|return))?)?$/,
   );
   if (rfiRoute && dependencies) {
     return handleRfiRoute(
@@ -629,6 +638,7 @@ const RFI_TRANSITION_ACTIONS = new Set([
   "close",
   "reopen",
   "ready",
+  "return-to-draft",
   "void",
   "return",
 ]);
@@ -726,18 +736,38 @@ async function handleRfiRoute(
         response: serializeRfiResponse(result.response),
       });
     }
+    if (action === "issue") {
+      const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+      if (!idempotencyKey) {
+        return apiError(
+          context,
+          400,
+          "IDEMPOTENCY_KEY_REQUIRED",
+          "An Idempotency-Key header is required.",
+        );
+      }
+      const result = await rfis.issue(
+        authenticated.session,
+        projectId,
+        rfiId,
+        idempotencyKey,
+        parseRfiIssue(await parseJsonRequest(request)),
+        context.requestId,
+      );
+      return apiSuccess(context, result);
+    }
     if (action && RFI_TRANSITION_ACTIONS.has(action)) {
       const session = authenticated.session;
       const requestId = context.requestId;
       const rfi =
-        action === "issue"
-          ? await rfis.issue(session, projectId, rfiId, requestId)
-          : action === "close"
-            ? await rfis.close(session, projectId, rfiId, requestId)
-            : action === "reopen"
-              ? await rfis.reopen(session, projectId, rfiId, requestId)
-              : action === "ready"
-                ? await rfis.markReady(session, projectId, rfiId, requestId)
+        action === "close"
+          ? await rfis.close(session, projectId, rfiId, requestId)
+          : action === "reopen"
+            ? await rfis.reopen(session, projectId, rfiId, requestId)
+            : action === "ready"
+              ? await rfis.markReady(session, projectId, rfiId, requestId)
+              : action === "return-to-draft"
+                ? await rfis.returnToDraft(session, projectId, rfiId, requestId)
                 : action === "void"
                   ? await rfis.void(session, projectId, rfiId, requestId)
                   : await rfis.returnForClarification(
@@ -1282,8 +1312,29 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     return apiError(context, 409, "RFI_ILLEGAL_TRANSITION", error.message);
   if (error instanceof RfiConflictError)
     return apiError(context, 409, "RFI_VERSION_CONFLICT", error.message);
-  if (error instanceof RfiIssuanceUnavailableError)
-    return apiError(context, 409, "RFI_ISSUANCE_NOT_AVAILABLE", error.message);
+  if (error instanceof RfiIssueIdempotencyConflictError)
+    return apiError(context, 409, "IDEMPOTENCY_KEY_REUSED", error.message);
+  if (error instanceof RfiIssueRequestError)
+    return apiError(context, 400, "VALIDATION_FAILED", error.message);
+  if (error instanceof RfiAlreadyIssuedError)
+    return apiError(context, 409, "RFI_ALREADY_ISSUED", error.message);
+  if (error instanceof RfiIssueValidationError)
+    return apiError(context, 422, "RFI_ISSUE_VALIDATION_FAILED", error.message);
+  if (error instanceof RfiReadyValidationError)
+    return apiError(context, 422, "RFI_READY_VALIDATION_FAILED", error.message);
+  if (error instanceof RfiIssueRenderError)
+    return apiError(context, 503, "RFI_ARTIFACT_RENDER_FAILED", error.message);
+  if (error instanceof RfiIssueStorageError)
+    return apiError(context, 503, "RFI_STORAGE_UNAVAILABLE", error.message);
+  if (error instanceof RfiIssueCompensationError)
+    return apiError(
+      context,
+      500,
+      "RFI_ARTIFACT_RECONCILIATION_REQUIRED",
+      error.message,
+    );
+  if (error instanceof RfiIssuePersistenceError)
+    return apiError(context, 503, "RFI_ISSUE_COMMIT_FAILED", error.message);
   if (error instanceof RfiResponsibleContactError)
     return apiError(
       context,

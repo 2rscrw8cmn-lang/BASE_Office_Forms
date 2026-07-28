@@ -1,8 +1,7 @@
 # Data Model
 
-**Status:** Architecture v1.0 — implementation source of truth  
-**Version date:** 2026-07-19
-
+**Status:** Architecture v1.0 plus implemented RFI Slice 2A reconciliation
+**Version date:** 2026-07-25
 
 ## 1. Strategy
 
@@ -18,61 +17,61 @@ All organization-owned tables include `organization_id`.
 
 ### 2.1 organizations
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT PK | UUID |
-| name | TEXT | Required |
-| slug | TEXT | Unique |
-| status | TEXT | active, suspended |
-| settings_json | TEXT | Non-security preferences |
-| created_at | TEXT | ISO timestamp |
-| updated_at | TEXT | ISO timestamp |
+| Column        | Type    | Notes                    |
+| ------------- | ------- | ------------------------ |
+| id            | TEXT PK | UUID                     |
+| name          | TEXT    | Required                 |
+| slug          | TEXT    | Unique                   |
+| status        | TEXT    | active, suspended        |
+| settings_json | TEXT    | Non-security preferences |
+| created_at    | TEXT    | ISO timestamp            |
+| updated_at    | TEXT    | ISO timestamp            |
 
 ### 2.2 users
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT PK | UUID |
-| identity_subject | TEXT | Unique provider subject |
-| email | TEXT | Normalized |
-| display_name | TEXT | |
-| status | TEXT | active, disabled |
-| created_at | TEXT | |
-| updated_at | TEXT | |
+| Column           | Type    | Notes                   |
+| ---------------- | ------- | ----------------------- |
+| id               | TEXT PK | UUID                    |
+| identity_subject | TEXT    | Unique provider subject |
+| email            | TEXT    | Normalized              |
+| display_name     | TEXT    |                         |
+| status           | TEXT    | active, disabled        |
+| created_at       | TEXT    |                         |
+| updated_at       | TEXT    |                         |
 
 ### 2.3 organization_memberships
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT PK | |
-| organization_id | TEXT FK | |
-| user_id | TEXT FK | |
-| role | TEXT | org_admin, document_control_admin, project_manager, contributor, viewer |
-| status | TEXT | active, invited, disabled |
-| created_at | TEXT | |
+| Column          | Type    | Notes                                                                   |
+| --------------- | ------- | ----------------------------------------------------------------------- |
+| id              | TEXT PK |                                                                         |
+| organization_id | TEXT FK |                                                                         |
+| user_id         | TEXT FK |                                                                         |
+| role            | TEXT    | org_admin, document_control_admin, project_manager, contributor, viewer |
+| status          | TEXT    | active, invited, disabled                                               |
+| created_at      | TEXT    |                                                                         |
 
 Unique: `(organization_id, user_id)`.
 
 ### 2.4 projects
 
-| Column | Type | Notes |
-|---|---|---|
-| id | TEXT PK | |
-| organization_id | TEXT FK | Tenant boundary |
-| name | TEXT | Full project name |
-| short_name | TEXT | Project display code |
-| internal_project_no | TEXT | BASE number |
-| client_project_no | TEXT | Optional |
-| architect_project_no | TEXT | Optional |
-| owner_project_no | TEXT | Optional |
-| status | TEXT | planning, bidding, construction, closeout, archived |
-| address_json | TEXT | Structured address |
-| start_date | TEXT | |
-| end_date | TEXT | |
-| routing_json | TEXT | Default recipients and rules |
-| created_at | TEXT | |
-| updated_at | TEXT | |
-| archived_at | TEXT | Nullable |
+| Column               | Type    | Notes                                               |
+| -------------------- | ------- | --------------------------------------------------- |
+| id                   | TEXT PK |                                                     |
+| organization_id      | TEXT FK | Tenant boundary                                     |
+| name                 | TEXT    | Full project name                                   |
+| short_name           | TEXT    | Project display code                                |
+| internal_project_no  | TEXT    | BASE number                                         |
+| client_project_no    | TEXT    | Optional                                            |
+| architect_project_no | TEXT    | Optional                                            |
+| owner_project_no     | TEXT    | Optional                                            |
+| status               | TEXT    | planning, bidding, construction, closeout, archived |
+| address_json         | TEXT    | Structured address                                  |
+| start_date           | TEXT    |                                                     |
+| end_date             | TEXT    |                                                     |
+| routing_json         | TEXT    | Default recipients and rules                        |
+| created_at           | TEXT    |                                                     |
+| updated_at           | TEXT    |                                                     |
+| archived_at          | TEXT    | Nullable                                            |
 
 Unique where populated: `(organization_id, internal_project_no)`.
 
@@ -507,6 +506,36 @@ Columns:
 - created_at
 
 Unique: `(organization_id, key, operation)`.
+
+### 6.7 Implemented RFI official-issue tables (migration 0015)
+
+Migration `0015_rfi_official_issuance.sql` advances `app_meta.schema_version`
+to 13 and adds:
+
+- `rfi_official_issues`: one row per issued RFI, linking the stable Record,
+  authoritative shared Revision, generic issuance, exact template version,
+  generated artifact file, issuer, and request. It freezes the template
+  definition, render payload, renderer version, due date, storage metadata,
+  byte size, and SHA-256 values. Update/delete triggers make it immutable.
+- `rfi_issue_recipients`: ordered immutable To/CC project-contact snapshots
+  including name, company, type, email, phone, and structured address at issue.
+- `rfi_issue_file_snapshots`: ordered immutable included-file and
+  official-artifact snapshots, each tied to `revision_files`.
+- `idempotency_keys`: completed operation results keyed by
+  `(organization_id, operation, idempotency_key)`, with a request hash and
+  immutable response JSON. `project_id` and `resource_id` scope and verify the
+  canonical resource identity; cross-resource key reuse conflicts. A unique
+  operation/resource constraint prevents a second successful issue for the
+  same RFI.
+- `rfi_artifact_orphans`: mutable operational reconciliation rows for an R2
+  artifact requiring either `compensation_delete_failed` or
+  `commit_outcome_unknown` handling.
+
+The existing `records`, `rfi_details`, `record_revisions`, `revision_files`,
+`project_record_type_sequences`, `issuances`, `issuance_files`, and
+`activity_events` remain authoritative. No second RFI spine is introduced.
+The existing current revision is internal revision 1; issue publishes it in
+place and assigns the user-facing label `Original Issue`.
 
 ## 7. Numbering rules
 

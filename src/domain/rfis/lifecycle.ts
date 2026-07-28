@@ -47,8 +47,21 @@ export function markReadyStatus(status: RfiStatus): RfiStatus {
   return "ready_to_issue";
 }
 
+export function canReturnToDraft(status: RfiStatus): boolean {
+  return status === "ready_to_issue";
+}
+
+export function returnToDraftStatus(status: RfiStatus): RfiStatus {
+  if (!canReturnToDraft(status)) {
+    throw new RfiIllegalTransitionError(status, "be returned to draft");
+  }
+  return "draft";
+}
+
 export function canIssue(status: RfiStatus): boolean {
-  return status === "draft" || status === "ready_to_issue";
+  // Official issue is deliberately strict: a draft must pass the explicit
+  // ready transition before it can consume a number or create an artifact.
+  return status === "ready_to_issue";
 }
 
 export function issueStatus(status: RfiStatus): RfiStatus {

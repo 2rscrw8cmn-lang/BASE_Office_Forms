@@ -397,6 +397,42 @@ Pages preview additionally requires an Access-authorized synthetic fixture and
 manual Dashboard, Project Overview, register, workspace, response, Records,
 navigation, mobile, Studio, and Document Library checks.
 
+### 12C. RFI Slice 2A official issuance coverage
+
+The Slice 2A gate includes:
+
+- mark-ready completeness, active same-project responsible-contact, and exact
+  usable template validation; complete ready success; draft-only PATCH
+  enforcement;
+- authorized `ready_to_issue -> draft`, edit-and-ready-again, issued/numbered
+  rejection, unauthorized rejection, activity, capability, and committed-issue
+  concurrency coverage;
+- strict template-compiler parity/rejection, multiline/long-token/page-break,
+  deterministic server-PDF, and resource-scoped canonical-idempotency tests;
+- empty-database and populated post-0014 migration rehearsals through schema
+  version 13 with foreign-key checks;
+- successful number/revision/artifact/issuance/file/recipient/activity/API
+  assertions and authorized artifact download;
+- authentication, role, tenant, project, contact, file, template, request, and
+  lifecycle validation;
+- same-key replay, changed-request conflict, cross-RFI/project conflict,
+  tenant isolation, manager non-disclosure, same-RFI concurrency, and
+  same-project numbering concurrency;
+- workspace reload evidence, `Current Draft`/`Original Issue` labels,
+  discoverable authorized artifact download identity, and a dedicated immutable
+  `RfiOfficialIssueSummary` that excludes status/capabilities while top-level
+  lifecycle state advances;
+- included-object matching, missing, wrong, or unavailable SHA/head evidence;
+- injected renderer, R2 write/verify, sequence, revision, issuance, recipient,
+  activity, D1 commit, post-commit response loss, authoritative query
+  success/absence/unavailability, and compensation-delete failures;
+- post-issue project, RFI-detail, contact, template-version, and renderer
+  changes, plus database immutability-trigger assertions.
+
+No successful or potentially successful issue may lose its artifact. A
+confirmed absent commit may compensate; partial/unavailable evidence must
+retain the object and leave explicit pending reconciliation.
+
 ## 13. Performance targets
 
 Internal pilot targets under normal load:
@@ -420,6 +456,8 @@ Test failures at each issue-transaction boundary:
 - artifact upload fails;
 - delivery provider fails;
 - activity event insert fails.
+- recipient snapshot or guarded D1 batch fails;
+- R2 verification or compensation deletion fails.
 
 The design must either roll back the transaction or leave a recoverable explicit state. Silent partial success is prohibited.
 

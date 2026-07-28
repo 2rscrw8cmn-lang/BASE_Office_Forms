@@ -158,7 +158,7 @@ write authority.
 Binding workflow states:
 
 ```
-draft → ready_to_issue → open → response_received → closed
+draft ↔ ready_to_issue → open → response_received → closed
 ```
 
 Additional states: `returned_for_clarification`, `void`. Overdue and due-soon are
@@ -166,15 +166,26 @@ Additional states: `returned_for_clarification`, `void`. Overdue and due-soon ar
 
 - Official numbering occurs only during **issue**, server-side and
   project-scoped (`RFI-001`). Issued revisions and artifacts are immutable.
+- **Mark ready** first validates the subject, question, active same-project
+  responsible contact, and exact usable published template binding. Ready
+  content is locked.
+- **Return to draft** is the explicit, capability-gated correction action
+  before issue/number allocation. It never runs automatically after render,
+  R2, D1, idempotency, or reconciliation failures.
 - Every transition validates current state and authorization, writes an activity
   event, and uses idempotency where required.
 
 Sequence across the vertical slice (this slice delivers the register + draft
 workspace; later slices build on the preserved architecture):
 
-- **Slice 2 — Issue**: ready-to-issue validation, sequential numbering,
+- **Slice 2A backend — Issue (implemented, review/rollout pending)**:
+  ready-to-issue validation, sequential numbering,
   project/routing snapshot, immutable issued revision, generated official PDF,
-  issuance record.
+  issuance record, durable idempotency, and D1/R2 compensation. The shared
+  revision is presented as `Original Issue`; only `record_only` is supported.
+- **Slice 2B UI/delivery**: capability-gated Issue dialog and result/artifact
+  presentation against the Slice 2A API contract. Email/share delivery remains
+  later work.
 - **Slice 3 — Response/Close**: response text/responder/returned date, response
   attachments, immutable response snapshot, cost/schedule impacts, close /
   clarification / reopen / void.
@@ -185,7 +196,7 @@ workspace; later slices build on the preserved architecture):
 
 All project/organization boundaries are enforced server-side. The browser uses
 normalized, server-derived capabilities (`createRfi`, `updateDraft`,
-`uploadAttachment`, `markReady`, `issue`, `recordResponse`,
+`uploadAttachment`, `markReady`, `returnToDraft`, `issue`, `recordResponse`,
 `returnForClarification`, `close`, `reopen`, `void`). Only capabilities that are
 actually implemented and authoritative are returned. Cross-tenant and
 inaccessible project/RFI results use the generic not-found behavior.
@@ -209,11 +220,13 @@ always conveyed with text (never color alone).
    Migration 0014 preserves the prior RFI id as the record id and records a
    permanent reconciliation map.
 
-2. **Issuance boundary.** Slice 1 does not expose issue or ready actions. The
-   server fails issue closed without assigning a number or changing workflow
-   state until Slice 2 can atomically create the immutable issued revision,
-   artifact, recipients, timestamp, and activity event. Previously consumed
-   legacy numbers remain preserved but are labelled as requiring reconciliation.
+2. **Issuance boundary.** Slice 2A enables the server issue operation only from
+   `ready_to_issue`. It atomically commits the immutable promoted revision,
+   artifact metadata, generic issuance/file snapshots, frozen
+   template/render/recipient snapshots, timestamp, activity, number, and
+   idempotency result after private R2 verification. The future UI exposes the
+   action only when `capabilities.issue` is true. Previously consumed legacy
+   numbers remain preserved.
 
 3. **Template governance.** Full Phase-3 template governance (versioned template
    migrations, template lifecycle management, per-project template selection) is

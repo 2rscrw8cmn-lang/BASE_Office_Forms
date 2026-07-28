@@ -22,11 +22,71 @@ export class RfiConflictError extends Error {
   }
 }
 
-export class RfiIssuanceUnavailableError extends Error {
+export class RfiIssueValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RfiIssueValidationError";
+  }
+}
+
+export class RfiReadyValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RfiReadyValidationError";
+  }
+}
+
+export class RfiIssueRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RfiIssueRequestError";
+  }
+}
+
+export class RfiIssueIdempotencyConflictError extends Error {
   constructor() {
+    super("This Idempotency-Key was already used with a different request.");
+    this.name = "RfiIssueIdempotencyConflictError";
+  }
+}
+
+export class RfiAlreadyIssuedError extends Error {
+  constructor() {
+    super("This RFI already has an official issuance.");
+    this.name = "RfiAlreadyIssuedError";
+  }
+}
+
+export class RfiIssueStorageError extends Error {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "RfiIssueStorageError";
+  }
+}
+
+export class RfiIssueRenderError extends Error {
+  constructor(readonly cause?: unknown) {
+    super("The official RFI artifact could not be generated.");
+    this.name = "RfiIssueRenderError";
+  }
+}
+
+export class RfiIssuePersistenceError extends Error {
+  constructor(readonly cause?: unknown) {
+    super("The official RFI issuance could not be committed.");
+    this.name = "RfiIssuePersistenceError";
+  }
+}
+
+export class RfiIssueCompensationError extends Error {
+  constructor(readonly cause?: unknown) {
     super(
-      "RFI issuance is unavailable until the immutable revision and official artifact transaction is complete.",
+      "The issuance outcome is uncertain and its artifact requires reconciliation.",
     );
+    this.name = "RfiIssueCompensationError";
   }
 }
 
@@ -43,6 +103,7 @@ export type RfiCapability =
   | "rfis:update_draft"
   | "rfis:upload_attachment"
   | "rfis:mark_ready"
+  | "rfis:return_to_draft"
   | "rfis:issue"
   | "rfis:respond"
   | "rfis:return_for_clarification"

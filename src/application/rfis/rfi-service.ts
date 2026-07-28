@@ -1,9 +1,14 @@
 import type { AppSession } from "../../auth/authentication-adapter";
 import {
-  RfiIssuanceUnavailableError,
+  RfiAlreadyIssuedError,
   RfiNotFoundError,
+  RfiReadyValidationError,
   RfiResponsibleContactError,
 } from "../../domain/rfis/errors";
+import type {
+  RfiIssueRequest,
+  RfiOfficialIssueResult,
+} from "../../domain/rfis/official-issue";
 import {
   assertCanUpdateDraft,
   closeStatus,
@@ -11,6 +16,7 @@ import {
   reopenStatus,
   respondStatus,
   returnForClarificationStatus,
+  returnToDraftStatus,
   voidStatus,
 } from "../../domain/rfis/lifecycle";
 import type {
@@ -23,12 +29,14 @@ import type {
 import { D1RfiAttachmentsRepository } from "../../infrastructure/db/d1/rfi-attachments-repository";
 import { D1ProjectContactsRepository } from "../../infrastructure/db/d1/project-contacts-repository";
 import { D1RfiRecordsRepository } from "../../infrastructure/db/d1/rfi-records-repository";
+import { requireValidRendererDefinition } from "../../rendering/renderer-definition";
 import {
   D1RfiResponsesRepository,
   type RfiResponseWriteInput,
 } from "../../infrastructure/db/d1/rfi-responses-repository";
 import { ProjectService } from "../projects/project-service";
 import { RfiTemplateBindingService } from "./rfi-template-binding-service";
+import { RfiOfficialIssueService } from "./rfi-official-issue-service";
 
 export interface RfiMutationInput extends RfiWriteInput {
   correlationId: string;
@@ -66,6 +74,7 @@ export class RfiService {
     private readonly attachments: D1RfiAttachmentsRepository,
     private readonly templateBinding: RfiTemplateBindingService,
     private readonly contacts: D1ProjectContactsRepository,
+    private readonly officialIssuer: RfiOfficialIssueService,
   ) {}
 
   async list(actor: AppSession, projectId: string): Promise<Rfi[]> {
@@ -167,27 +176,76 @@ export class RfiService {
     rfiId: string,
     correlationId: string,
   ): Promise<Rfi> {
-    return this.transition(
+    await this.projects.requireRfiManagement(
       actor,
       projectId,
-      rfiId,
       "rfis:mark_ready",
-      markReadyStatus,
-      "rfi.marked_ready",
-      correlationId,
     );
+    const rfi = await this.find(actor, projectId, rfiId);
+    const toStatus = markReadyStatus(rfi.status);
+    await this.validateReadyToIssue(actor, projectId, rfi);
+    return this.records.transitionWithActivity(
+      rfi,
+      toStatus,
+      "rfi.marked_ready",
+      {
+        actorUserId: actor.userId,
+        actorType: "user",
+        objectType: "rfi",
+        action: "rfi.marked_ready",
+        metadata: {},
+        correlationId,
+      },
+    );
+  }
+
+  async returnToDraft(
+    actor: AppSession,
+    projectId: string,
+    rfiId: string,
+    correlationId: string,
+  ): Promise<Rfi> {
+    await this.projects.requireRfiManagement(
+      actor,
+      projectId,
+      "rfis:return_to_draft",
+    );
+    const rfi = await this.find(actor, projectId, rfiId);
+    returnToDraftStatus(rfi.status);
+    if (
+      rfi.rfiNumber ||
+      rfi.issuedNumberSequence !== null ||
+      rfi.issuedAt ||
+      rfi.issuanceReconciliationState !== "not_issued"
+    ) {
+      throw new RfiAlreadyIssuedError();
+    }
+    return this.records.returnToDraftWithActivity(rfi, {
+      actorUserId: actor.userId,
+      actorType: "user",
+      objectType: "rfi",
+      action: "rfi.returned_to_draft",
+      metadata: {},
+      correlationId,
+    });
   }
 
   async issue(
     actor: AppSession,
     projectId: string,
     rfiId: string,
+    idempotencyKey: string,
+    input: RfiIssueRequest,
     correlationId: string,
-  ): Promise<Rfi> {
-    await this.projects.requireRfiManagement(actor, projectId, "rfis:issue");
-    await this.find(actor, projectId, rfiId);
-    void correlationId;
-    throw new RfiIssuanceUnavailableError();
+  ): Promise<RfiOfficialIssueResult> {
+    return this.officialIssuer.issue(
+      actor,
+      projectId,
+      rfiId,
+      idempotencyKey,
+      input,
+      correlationId,
+    );
   }
 
   async respond(
@@ -332,6 +390,63 @@ export class RfiService {
       contactId,
     );
     if (!contact || contact.archivedAt) throw new RfiResponsibleContactError();
+  }
+
+  private async validateReadyToIssue(
+    actor: AppSession,
+    projectId: string,
+    rfi: Rfi,
+  ): Promise<void> {
+    if (!rfi.subject.trim() || !rfi.question.trim()) {
+      throw new RfiReadyValidationError(
+        "The RFI subject and question must be complete before it is marked ready.",
+      );
+    }
+    if (!rfi.responsiblePartyId) {
+      throw new RfiReadyValidationError(
+        "A responsible project contact is required before the RFI is marked ready.",
+      );
+    }
+    const contact = await this.contacts.findById(
+      actor.organizationId,
+      projectId,
+      rfi.responsiblePartyId,
+    );
+    if (!contact || contact.archivedAt) {
+      throw new RfiReadyValidationError(
+        "Responsible party must be an active contact for this project.",
+      );
+    }
+    const template = await this.templateBinding.describe(
+      actor.organizationId,
+      rfi.templateVersionId,
+    );
+    if (
+      !template ||
+      template.templateVersionId !== rfi.templateVersionId ||
+      template.status !== "published"
+    ) {
+      throw new RfiReadyValidationError(
+        "The exact published RFI template version is unavailable.",
+      );
+    }
+    try {
+      requireValidRendererDefinition(template.definition);
+    } catch {
+      throw new RfiReadyValidationError(
+        "The exact published RFI template version is not usable for official issue.",
+      );
+    }
+    if (
+      rfi.rfiNumber ||
+      rfi.issuedNumberSequence !== null ||
+      rfi.issuedAt ||
+      rfi.issuanceReconciliationState !== "not_issued"
+    ) {
+      throw new RfiReadyValidationError(
+        "An RFI with consumed official issue state cannot be marked ready.",
+      );
+    }
   }
 }
 

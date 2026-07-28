@@ -180,11 +180,11 @@ describe("templates foundation API", () => {
     await seed();
   });
 
-  it("creates a template on first publish and reports schema version 9", async () => {
+  it("creates a template on first publish and reports schema version 13", async () => {
     const version = await testDatabase()
       .prepare("SELECT schema_version FROM app_meta WHERE id = 1")
       .first<{ schema_version: number }>();
-    expect(version?.schema_version).toBe(12);
+    expect(version?.schema_version).toBe(13);
 
     const response = await publishTemplate("submittal");
     expect(response.status).toBe(200);

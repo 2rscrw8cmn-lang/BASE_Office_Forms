@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 ## 1. General workflow rules
 
 - Transitions are server actions, not arbitrary status edits.
@@ -116,7 +115,7 @@ refreshed from confirmed server data before navigation.
 
 ```text
 draft
-→ ready_to_issue
+↔ ready_to_issue
 → open
 → response_received
 → closed
@@ -154,35 +153,69 @@ No official number is assigned.
 
 Guard:
 
-- project active
-- title and question complete
-- recipients resolved or explicitly overridden
-- attachments finalized
-- user has issue permission
+- current state is exactly `draft`;
+- subject and question are complete;
+- `responsiblePartyId` resolves to an active contact in the same project;
+- the exact bound template version exists, remains `published`, and is usable
+  by the official renderer contract;
+- user has `rfis:mark_ready`.
+
+These are the RFI-level facts that become locked. Ordinary PATCH editing is not
+permitted in `ready_to_issue`.
+
+### 5.3A Return to draft
+
+The intentional operator action **Return to draft** moves
+`ready_to_issue` back to `draft`. It requires `rfis:return_to_draft`, appends
+`rfi.returned_to_draft`, and is allowed only before any official issue or
+number allocation. The repository atomically requires no `record_number`,
+`sequence_no`, `issued_at`, `rfi_official_issues`, or `issuances` evidence. The
+returned draft can be edited and marked ready again after validation.
+
+Renderer, R2, D1, idempotency, or reconciliation failures do not automatically
+return an RFI to draft. Confirmed or potentially successful issue attempts stay
+ready/open according to authoritative D1 evidence so a safe retry or operator
+reconciliation cannot be confused with a content correction.
 
 ### 5.4 Issue
 
 Guard:
 
-- current state is `ready_to_issue` or authorized `draft`
-- idempotency key supplied
-- recipient routing valid
-- render succeeds
+- authenticated actor has project-scoped `rfis:issue`;
+- project is active;
+- current state is exactly `ready_to_issue` (direct issue from `draft` is not
+  permitted);
+- subject, question, responsible project contact, and at least one To recipient
+  are complete and active;
+- exact bound template version exists, validates, and is still `published`;
+- every included file belongs to the authoritative current RFI revision and
+  its private R2 object supplies matching D1 size and SHA-256 metadata (missing
+  SHA is a failure);
+- `Idempotency-Key` is supplied and the request is valid;
+- delivery mode is `record_only`.
 
-Atomic effects:
+Coordinated effects:
 
-1. Assign next project RFI sequence if unnumbered.
-2. Set display number.
-3. Compile render payload.
-4. Create issued revision.
-5. Generate or queue issued PDF artifact.
-6. Record recipient snapshot.
-7. Set `issued_at`.
-8. Set state `open`.
-9. Write activity event.
-10. Optionally create delivery/share.
+1. Resolve the next project `rfi` record-type sequence without reserving it.
+2. Freeze exact template definition, project/RFI/contact/routing/due-date/file
+   data, renderer version, and checksums.
+3. Compile and generate the official PDF through the strict, versioned BASE RFI
+   official-document compiler; unsupported template changes are rejected.
+4. Write the deterministic private R2 object and verify size/checksum.
+5. In one guarded D1 batch, allocate the number, promote the authoritative
+   shared revision 1 to `published` and label it `Original Issue`, attach the
+   generated artifact, create the generic issuance and file snapshots, store
+   frozen RFI/recipient/file snapshots, set `issued_at` and `open`, append
+   activity, and store the immutable idempotency result.
 
-Failure before completion must not consume a number unless the number and issue record were durably committed. If a number is consumed and later delivery fails, retain the number and show delivery failure.
+If R2 write/verification fails, no D1 official state is committed. After a D1
+error, authoritative evidence determines whether the batch committed. Confirmed
+success retains the artifact and returns the stored result; confirmed absence
+permits guarded deletion; partial/unavailable evidence retains the artifact,
+records reconciliation, and returns
+`RFI_ARTIFACT_RECONCILIATION_REQUIRED`. Same key/resource/request replays;
+cross-RFI/project reuse or changed input conflicts. Email/share delivery is not
+part of Slice 2A.
 
 ### 5.5 Record response
 
