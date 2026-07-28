@@ -8,7 +8,7 @@
  * never render a previously cached one.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { fetchRfiWorkspace, RfiWorkspaceApiError } from "./api";
 import type { RfiWorkspaceModel } from "./types";
 
@@ -31,6 +31,26 @@ export type RfiWorkspaceState =
       refreshing: boolean;
       retry: () => void;
     };
+
+/**
+ * Reloads the authoritative workspace and hands back the server's answer.
+ *
+ * Lifecycle work uses this instead of trusting its own request's outcome: after
+ * an issue attempt whose result is unknown, the only honest question is what the
+ * server now says about this RFI. Returns `null` when the reload did not produce
+ * a readable model (denied, missing, or still failing), which is deliberately
+ * not the same as "no official issue".
+ */
+export async function refetchRfiWorkspace(
+  queryClient: QueryClient,
+  projectId: string,
+  rfiId: string,
+): Promise<RfiWorkspaceModel | null> {
+  const key = rfiWorkspaceQueryKey(projectId, rfiId);
+  await queryClient.invalidateQueries({ queryKey: key });
+  const cached = queryClient.getQueryData<QueryResult>(key);
+  return cached?.kind === "ready" ? cached.data : null;
+}
 
 async function load(
   projectId: string,

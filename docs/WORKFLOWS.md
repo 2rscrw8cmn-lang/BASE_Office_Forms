@@ -163,6 +163,18 @@ Guard:
 These are the RFI-level facts that become locked. Ordinary PATCH editing is not
 permitted in `ready_to_issue`.
 
+**Browser sequence (Slice 2B).** The lifecycle action is offered only when the
+server returns `capabilities.markReady`. It reads **Mark ready** for a clean
+draft and **Save and mark ready** when the form holds unsaved edits, because
+`/ready` must never validate content the operator can no longer see. The
+confirmed sequence is: validate the client fields → `PATCH` the draft with the
+current `lockVersion` → confirm the save → refetch the authoritative workspace →
+`POST .../ready` → refetch the workspace and the RFI register. A `409` save
+conflict reloads the authoritative values and stops before `/ready`. A save that
+succeeds while `/ready` fails is reported as exactly that: the draft stays saved,
+editable, and unmarked, with the server message and request ID, and is never
+retried automatically.
+
 ### 5.3A Return to draft
 
 The intentional operator action **Return to draft** moves
@@ -216,6 +228,46 @@ records reconciliation, and returns
 `RFI_ARTIFACT_RECONCILIATION_REQUIRED`. Same key/resource/request replays;
 cross-RFI/project reuse or changed input conflicts. Email/share delivery is not
 part of Slice 2A.
+
+### 5.4A Issue — browser workflow (Slice 2B)
+
+The action is offered only when the server returns `capabilities.issue`, and it
+is the primary action in `ready_to_issue`; **Return to draft** moves to the
+overflow so the deliberate correction can never displace the real task.
+
+The workflow is two deliberate stages. **Issue details** prefills the RFI's
+responsible project contact as the recipient, requires at least one recipient,
+keeps CC optional and non-overlapping with To, prefills and requires a real
+`YYYY-MM-DD` response due date, lists the current draft revision's attachments by
+role with all eligible files selected by default, and states delivery as a fixed
+**Record only** summary. **Review and confirm** shows the canonical payload plus
+the statements that the server assigns the official number and that the issued
+version and artifact become immutable. The final action is labelled **Issue
+official RFI**.
+
+One deliberate attempt carries exactly one `Idempotency-Key`. The key is reused
+verbatim for every retry of the same canonical body, including after a network
+failure, and is spent only when the operator changes an unsubmitted payload or
+the server definitively refuses. While an outcome is unknown the submitted
+payload is locked and cannot be edited or resubmitted, dismissal that would
+create uncertainty is refused, and no official number or status is optimistically
+displayed.
+
+A failed request is never treated as proof that nothing committed. The browser
+re-reads the workspace first; a present `officialIssue` means the attempt
+succeeded and the persisted evidence is shown. Otherwise:
+`RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, and
+`RFI_ISSUE_COMMIT_FAILED` offer **Retry issue** with the same key and body; a
+transport failure or unexplained 5xx offers **Check issue status**, which is a
+read and never a second POST; `RFI_ARTIFACT_RECONCILIATION_REQUIRED` offers no
+retry at all, shows a support/reconciliation notice with the request ID, and lets
+the operator close and return later. **Return to draft is never used, manually or
+automatically, to recover an uncertain issue outcome.**
+
+After a confirmed issue the workflow closes, the RFI workspace, project RFI
+register, dashboard, and project-overview read models are invalidated, the
+server-assigned number is announced, and the authoritative refetched workspace —
+not a local patch — renders the result.
 
 ### 5.5 Record response
 

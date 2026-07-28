@@ -1,8 +1,27 @@
 # RFI Slice 2A Migration, Rollout, and Recovery
 
-**Status:** Implementation and local rehearsal complete; review pending. No
-production deployment, migration, SQL, or R2 mutation was performed by the
-Slice 2A coding task.
+**Status:** Slice 2A is complete in code and merged as PR #49 (`f6b9462`); its
+local rehearsal is complete. **No production deployment, migration, SQL, or R2
+mutation has been performed** — the human-approved sequence below is still
+outstanding.
+
+RFI Slice 2B adds the record-only issuance UI on
+`feature/rfi-slice-2b-issuance-ui` (draft PR; not merged) and changes nothing in
+this document's migration, rollout, rollback, or reconciliation procedure: no
+schema change, no endpoint change, and no server behaviour change. Two steps
+below become browser-operable rather than manual once Slice 2B merges:
+
+- step 8's pilot issue can be performed from the RFI workspace's **Issue RFI**
+  workflow, which generates and preserves one `Idempotency-Key` per deliberate
+  attempt and sends `deliveryMode: record_only`;
+- step 8's **Return to draft** verification uses the overflow action in the
+  ready-to-issue state.
+
+The prohibition below is unchanged and is enforced by the UI: **Return to draft
+is never offered, manually or automatically, as a recovery path for a renderer,
+R2, D1, idempotency, or reconciliation failure.** An uncertain issue outcome
+surfaces a support/reconciliation notice with its request ID and offers no retry
+at all.
 
 ## Scope and compatibility
 
@@ -174,7 +193,9 @@ is an integrity incident requiring investigation and a reviewed forward fix.
 ## Deliberate limitations
 
 - `record_only` only; no email, share, inbox, or portal delivery.
-- No issuance dialog or other UI is included.
+- Slice 2A itself shipped no UI. The issuance dialog and issued-evidence
+  presentation are RFI Slice 2B (`UI_PROGRAM_STATUS.md` §5I), which is
+  implemented but not merged.
 - Response, clarification, close, reopen, final-closed artifact, and log export
   remain later slices.
 - Artifact generation is synchronous in the Worker and uses the frozen

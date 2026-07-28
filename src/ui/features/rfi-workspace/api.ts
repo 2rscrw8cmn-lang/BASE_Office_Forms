@@ -5,13 +5,16 @@
  * POSTs. Same paths, same methods, same bodies; no endpoint or response shape
  * changed for UI-7.
  *
- * This UI does not implement the separate issuance dialog. It does consume the
- * accepted Slice 2A workspace contract and exposes the intentionally reversible
- * pre-issue `return-to-draft` transition when the server authorizes it.
+ * Slice 2B adds the two remaining pre-response lifecycle calls the browser
+ * needs — `POST .../ready` and `POST .../issue` — against the accepted Slice 2A
+ * contract. Nothing here re-implements server authority: numbering, validation,
+ * idempotency persistence, and artifact commit all stay on the server.
  */
 
 import type {
   RecordResponseInput,
+  RfiIssueRequestInput,
+  RfiOfficialIssueResult,
   RfiTransition,
   RfiWorkspaceModel,
   UpdateRfiInput,
@@ -155,8 +158,8 @@ export async function uploadRfiAttachment(
 }
 
 /**
- * A lifecycle transition, never an ordinary save. Issue and ready are not
- * offered here because their UI workflow is outside this slice.
+ * A lifecycle transition, never an ordinary save. `ready` and `issue` have their
+ * own typed operations below because they carry extra contract obligations.
  */
 export async function runRfiTransition(
   projectId: string,
@@ -166,4 +169,49 @@ export async function runRfiTransition(
   await request(`${rfiPath(projectId, rfiId)}/${transition}`, {
     method: "POST",
   });
+}
+
+/**
+ * `draft -> ready_to_issue`. The server re-validates subject, question, the
+ * active same-project responsible contact, and the exact published template
+ * binding, and answers `422 RFI_READY_VALIDATION_FAILED` when any of them fail;
+ * the RFI then stays editable in `draft`. No body is sent: there is nothing the
+ * browser may assert about readiness.
+ */
+export async function markRfiReady(
+  projectId: string,
+  rfiId: string,
+): Promise<void> {
+  await request(`${rfiPath(projectId, rfiId)}/ready`, { method: "POST" });
+}
+
+/**
+ * The one official issue call.
+ *
+ * The `Idempotency-Key` header is required by the server and is supplied
+ * explicitly by the caller rather than generated here, because one deliberate
+ * operator attempt — including every retry of the same canonical payload — must
+ * carry exactly one key. Generating it inside this function would silently mint
+ * a second key on retry and risk a duplicate official issue.
+ */
+export async function issueRfi(
+  projectId: string,
+  rfiId: string,
+  idempotencyKey: string,
+  input: RfiIssueRequestInput,
+  signal?: AbortSignal,
+): Promise<{ result: RfiOfficialIssueResult; requestId: string }> {
+  const { data, requestId } = await request(
+    `${rfiPath(projectId, rfiId)}/issue`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(input),
+      signal,
+    },
+  );
+  return { result: data as RfiOfficialIssueResult, requestId };
 }

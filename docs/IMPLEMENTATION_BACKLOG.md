@@ -159,9 +159,16 @@ Acceptance:
   route.
 - RFI-02.8 Add final-closed artifact option.
 
-Slice 2A closeout still requires PR review and the guarded rollout in
-`RFI_SLICE_2A_ROLLOUT.md`. Email/share delivery and issuance UI are separate
-work, not hidden completion criteria for the checked backend items.
+- [x] RFI-02.9 Add the capability-gated browser mark-ready and official-issue
+  workflow, browser-side idempotency, ambiguous-outcome and reconciliation
+  handling, and issued-evidence presentation (Slice 2B; draft PR, not merged).
+
+Slice 2A is complete in code and merged as PR #49; its closeout still requires
+the guarded production rollout in `RFI_SLICE_2A_ROLLOUT.md`, which has not been
+performed. Slice 2B adds the record-only issuance UI on
+`feature/rfi-slice-2b-issuance-ui` and is awaiting review. Email, share-link,
+and portal delivery remain separate later work, not hidden completion criteria
+for the checked items above.
 
 Acceptance:
 

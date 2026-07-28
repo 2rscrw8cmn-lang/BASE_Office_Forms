@@ -13,9 +13,15 @@
  * Concurrency is the server's: every save carries `lockVersion`, and a
  * `409 RFI_VERSION_CONFLICT` reloads the latest authorized values and asks the
  * author to review and retry rather than silently overwriting someone else.
+ *
+ * Slice 2B adds a narrow coordination boundary rather than a second copy of this
+ * form: the panel reports whether the draft is dirty and exposes one validated
+ * save operation, so **Save and mark ready** in the identity header runs exactly
+ * this save with exactly this `lockVersion`. The form state itself is never
+ * duplicated in the feature component.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -43,6 +49,22 @@ interface Values {
   requestedResponseDate: string;
 }
 
+/**
+ * `unchanged` is not `saved`: it means there was nothing to persist, so a
+ * caller sequencing a save before a lifecycle transition must not report a save
+ * that never happened.
+ */
+export interface RfiContentSaveResult {
+  outcome: "saved" | "unchanged" | "invalid" | "conflict" | "failed";
+  message: string;
+  requestId: string;
+}
+
+export interface RfiContentPanelHandle {
+  /** Validates, then saves when dirty. Never throws; it reports its outcome. */
+  save: () => Promise<RfiContentSaveResult>;
+}
+
 function valuesFrom(data: RfiWorkspaceModel): Values {
   const { rfi } = data;
   return {
@@ -54,6 +76,10 @@ function valuesFrom(data: RfiWorkspaceModel): Values {
     responsiblePartyId: rfi.responsiblePartyId ?? "",
     requestedResponseDate: rfi.requestedResponseDate ?? "",
   };
+}
+
+function sameValues(a: Values, b: Values): boolean {
+  return (Object.keys(a) as (keyof Values)[]).every((key) => a[key] === b[key]);
 }
 
 function ReadOnlyField({
@@ -82,9 +108,14 @@ function ReadOnlyField({
 export function RfiContentPanel({
   projectId,
   data,
+  handleRef,
+  onDirtyChange,
 }: {
   projectId: string;
   data: RfiWorkspaceModel;
+  /** Receives the validated save operation for the Save-and-mark-ready path. */
+  handleRef?: RefObject<RfiContentPanelHandle | null>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const shell = useShell();
   const queryClient = useQueryClient();
@@ -115,6 +146,122 @@ export function RfiContentPanel({
   if (seededVersion !== lockVersion) {
     setSeededVersion(lockVersion);
     setValues(valuesFrom(data));
+  }
+
+  const dirty = editable && !sameValues(values, valuesFrom(data));
+
+  // The save closure must always see the values and lock version that are on
+  // screen right now, including when it is invoked from the identity header
+  // rather than this form's own submit button.
+  const latest = useRef({ data, values, saving: false });
+  useEffect(() => {
+    latest.current = { data, values, saving: saveState === "saving" };
+  });
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = {
+      save: async (): Promise<RfiContentSaveResult> => {
+        const current = latest.current;
+        if (!current.data.capabilities.updateDraft) {
+          return { outcome: "unchanged", message: "", requestId: "" };
+        }
+        if (current.saving) {
+          return {
+            outcome: "failed",
+            message: "A save is already in progress.",
+            requestId: "",
+          };
+        }
+        const subject = current.values.subject.trim();
+        const question = current.values.question.trim();
+        const next: { subject?: string; question?: string } = {};
+        if (!subject) next.subject = "A subject is required.";
+        if (!question) next.question = "A question is required.";
+        if (next.subject || next.question) {
+          setErrors(next);
+          (next.subject ? subjectRef : questionRef).current?.focus();
+          shell.announce("Please correct the highlighted fields.");
+          return {
+            outcome: "invalid",
+            message: "Complete the required RFI fields before continuing.",
+            requestId: "",
+          };
+        }
+        if (sameValues(current.values, valuesFrom(current.data))) {
+          setErrors({});
+          return { outcome: "unchanged", message: "", requestId: "" };
+        }
+        return persist(current.values, current.data);
+      },
+    };
+    return () => {
+      handleRef.current = null;
+    };
+    // Everything the handle needs is read through `latest` at call time, so it
+    // is installed once per mount rather than replaced on every keystroke.
+  }, [handleRef]);
+
+  async function persist(
+    next: Values,
+    model: RfiWorkspaceModel,
+  ): Promise<RfiContentSaveResult> {
+    setErrors({});
+    setFailure(null);
+    setSaveState("saving");
+    try {
+      await updateRfi(projectId, model.rfi.id, {
+        subject: next.subject.trim(),
+        question: next.question.trim(),
+        contractorSuggestion: next.contractorSuggestion.trim() || null,
+        drawingReferences: next.drawingReferences.trim() || null,
+        specificationReferences: next.specificationReferences.trim() || null,
+        responsiblePartyId: next.responsiblePartyId || null,
+        requestedResponseDate: next.requestedResponseDate || null,
+        lockVersion: model.rfi.lockVersion,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: rfiWorkspaceQueryKey(projectId, model.rfi.id),
+      });
+      setSaveState("saved");
+      shell.announce("RFI draft saved.");
+      return { outcome: "saved", message: "", requestId: "" };
+    } catch (error) {
+      const status = error instanceof RfiWorkspaceApiError ? error.status : 0;
+      const requestId =
+        error instanceof RfiWorkspaceApiError ? error.requestId : "";
+      if (status === 409) {
+        // The server wins. Reload the authoritative values (the re-seed above
+        // refreshes the form) and ask for a deliberate retry.
+        await queryClient.invalidateQueries({
+          queryKey: rfiWorkspaceQueryKey(projectId, model.rfi.id),
+        });
+        setSaveState("conflict");
+        shell.announce(
+          "This RFI changed elsewhere. The latest values were loaded; review and retry.",
+        );
+        return {
+          outcome: "conflict",
+          message:
+            "This RFI changed elsewhere. The latest values were loaded; review them and try again.",
+          requestId,
+        };
+      }
+      const message =
+        status === 403
+          ? "You no longer have permission to edit this draft."
+          : error instanceof RfiWorkspaceApiError
+            ? error.message
+            : "The draft could not be saved.";
+      setSaveState("failed");
+      setFailure({ message, requestId });
+      shell.announce("The draft could not be saved.");
+      return { outcome: "failed", message, requestId };
+    }
   }
 
   if (!editable) {
@@ -152,6 +299,7 @@ export function RfiContentPanel({
       noValidate
       aria-busy={saveState === "saving" || undefined}
       data-rfi-content-form
+      data-rfi-dirty={dirty ? "true" : "false"}
       onSubmit={(event) => {
         event.preventDefault();
         if (saveState === "saving") return;
@@ -166,56 +314,7 @@ export function RfiContentPanel({
           shell.announce("Please correct the highlighted fields.");
           return;
         }
-        setErrors({});
-        setFailure(null);
-        setSaveState("saving");
-        void (async () => {
-          try {
-            await updateRfi(projectId, data.rfi.id, {
-              subject,
-              question,
-              contractorSuggestion: values.contractorSuggestion.trim() || null,
-              drawingReferences: values.drawingReferences.trim() || null,
-              specificationReferences:
-                values.specificationReferences.trim() || null,
-              responsiblePartyId: values.responsiblePartyId || null,
-              requestedResponseDate: values.requestedResponseDate || null,
-              lockVersion,
-            });
-            await queryClient.invalidateQueries({
-              queryKey: rfiWorkspaceQueryKey(projectId, data.rfi.id),
-            });
-            setSaveState("saved");
-            shell.announce("RFI draft saved.");
-          } catch (error) {
-            const status =
-              error instanceof RfiWorkspaceApiError ? error.status : 0;
-            if (status === 409) {
-              // The server wins. Reload the authoritative values (the effect
-              // above re-seeds the form) and ask for a deliberate retry.
-              await queryClient.invalidateQueries({
-                queryKey: rfiWorkspaceQueryKey(projectId, data.rfi.id),
-              });
-              setSaveState("conflict");
-              shell.announce(
-                "This RFI changed elsewhere. The latest values were loaded; review and retry.",
-              );
-              return;
-            }
-            setSaveState("failed");
-            setFailure({
-              message:
-                status === 403
-                  ? "You no longer have permission to edit this draft."
-                  : error instanceof RfiWorkspaceApiError
-                    ? error.message
-                    : "The draft could not be saved.",
-              requestId:
-                error instanceof RfiWorkspaceApiError ? error.requestId : "",
-            });
-            shell.announce("The draft could not be saved.");
-          }
-        })();
+        void persist(values, data);
       }}
     >
       <fieldset

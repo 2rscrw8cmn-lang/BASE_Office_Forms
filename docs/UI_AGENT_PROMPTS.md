@@ -228,9 +228,9 @@ UX/testing docs, and the PR body.
 
 ## Prompt UI-7 — Detail workspaces
 
-**Status: implemented** on `claude/ui-7-detail-workspaces` (draft PR #48).
-See `docs/UI_PROGRAM_STATUS.md` §5G. The prompt below is retained as the phase's
-specification of record.
+**Status: complete; merged to `main` as `509d5bb` (PR #48).**
+See `docs/UI_PROGRAM_STATUS.md` §5G and §5H. The prompt below is retained as the
+phase's specification of record.
 
 This phase started from `main` at `315de55`, which contains the native RFI register (UI-5),
 the native Projects register and Create Project workflow (UI-6A), and the
@@ -259,7 +259,41 @@ Use existing APIs and capabilities. Do not enable incomplete issuance. Add loadi
 Update CURRENT_APPLICATION_STRUCTURE.md, UI_PROGRAM_STATUS.md, applicable RFI/record/revision UX docs, and the PR body.
 ```
 
+## Prompt RFI Slice 2B — Mark ready, official issuance, and issued evidence
+
+**Status: implemented** on `feature/rfi-slice-2b-issuance-ui` (draft PR; not
+merged). See `docs/UI_PROGRAM_STATUS.md` §5I. This is a product slice, not a
+UI-program phase, but it runs on the UI foundation and follows the same closeout
+rules.
+
+It started from `main` at `509d5bb`, which contains the merged UI-7 native detail
+workspaces (PR #48) and the merged RFI Slice 2A official issuance backend
+(PR #49).
+
+```text
+[INSERT REQUIRED PREAMBLE]
+
+Complete the browser-operable RFI issue workflow inside the native UI-7 RFI workspace: draft → save → mark ready → review issue details → officially issue once → receive the server-assigned RFI number → view and download immutable Original Issue evidence after refresh.
+
+Integrate the accepted Slice 2A contract exactly. Do not create a second workflow, reimplement server authority (numbering, validation, idempotency persistence, artifact commit), or invent unsupported delivery features. Only `record_only` delivery exists; never show disabled email or portal options.
+
+Use top-level rfi.status and capabilities as the sole current authority. Never infer lifecycle eligibility from role strings, local status assumptions, the existence of officialIssue, or issue-time capabilities.
+
+Never call /ready against stale server content: save a dirty draft with its lockVersion, confirm, refetch, then mark ready. A save that succeeds while mark ready fails must say exactly that.
+
+One deliberate issue attempt carries exactly one Idempotency-Key, reused for every retry of the same canonical payload. Never mint a second key after a network failure or while checking whether an ambiguous request committed. Never store the key durably or expose it in the UI, logs, or URLs.
+
+A failed request is not proof that nothing committed: refetch the workspace first, and treat a present officialIssue as success. Offer retry only for definitive transient failures; offer no retry at all for RFI_ARTIFACT_RECONCILIATION_REQUIRED.
+
+Use existing UI Lab components — shared FormDialog, AlertDialog, fields, checkboxes, buttons, badges, and file rows. Do not build a custom modal, focus trap, button system, or mobile overlay. Preserve the approved constrained main column and context rail.
+
+Add API, mark-ready, ready-state, issue-dialog, idempotency, failure/reconciliation, issued-evidence, accessibility, and layout coverage, and a deterministic evidence command. Update UI_PROGRAM_STATUS.md, CURRENT_APPLICATION_STRUCTURE.md, UX_RFI_SPEC.md, API_CONTRACTS.md consumer guidance, WORKFLOWS.md, TESTING_QUALITY_STRATEGY.md, the roadmap/backlog, and the PR body.
+```
+
 ## Prompt UI-8 — Dashboard, forms, Team, Administration
+
+**Status: not started, and blocked.** Do not begin UI-8 until RFI Slice 2B is
+reviewed and merged.
 
 ```text
 [INSERT REQUIRED PREAMBLE]

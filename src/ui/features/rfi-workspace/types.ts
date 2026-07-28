@@ -188,3 +188,70 @@ export interface RecordResponseInput {
 
 /** Explicit server-authoritative transitions; never an ordinary save. */
 export type RfiTransition = "close" | "reopen" | "return-to-draft" | "void";
+
+/**
+ * The exact `POST .../issue` request body (docs/API_CONTRACTS.md §8). Unknown
+ * fields are rejected by the server, so this type is closed on purpose. The
+ * browser never supplies an RFI number: numbering happens only server-side
+ * during issue.
+ */
+export interface RfiIssueRequestInput {
+  recipientProjectContactIds: string[];
+  ccProjectContactIds: string[];
+  responseDueDate: string;
+  includedFileIds: string[];
+  deliveryMode: "record_only";
+}
+
+export interface RfiIssueFileSummary {
+  fileId: string;
+  role: string;
+  originalFilename: string;
+  mediaType: string;
+  byteSize: number;
+  sha256: string;
+}
+
+export interface RfiIssueRecipientSummary {
+  projectContactId: string;
+  contactName: string;
+  companyName: string | null;
+  email: string | null;
+}
+
+/**
+ * The immediate `POST .../issue` response. Deliberately NOT the long-lived
+ * `RfiOfficialIssueSummary`: the issue-time result carries `status`,
+ * `capabilities`, and identity fields that the workspace's immutable evidence
+ * projection intentionally does not. Neither is treated as current lifecycle
+ * state — the refetched top-level `rfi.status`/`capabilities` are.
+ */
+export interface RfiOfficialIssueResult {
+  rfiId: string;
+  recordId: string;
+  officialDisplayNumber: string;
+  status: "open";
+  issuedRevision: {
+    id: string;
+    internalRevisionNumber: number;
+    userFacingVersion: string;
+  };
+  issuance: { id: string; issueNumber: string };
+  issuedAt: string;
+  responseDueDate: string;
+  officialArtifact: RfiIssueFileSummary;
+  includedFiles: RfiIssueFileSummary[];
+  recipients: {
+    to: RfiIssueRecipientSummary[];
+    cc: RfiIssueRecipientSummary[];
+  };
+  capabilities: {
+    issue: false;
+    recordResponse: true;
+    returnForClarification: false;
+    close: false;
+    reopen: false;
+    void: true;
+  };
+  requestId: string;
+}

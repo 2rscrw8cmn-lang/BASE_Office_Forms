@@ -401,7 +401,7 @@ Field meanings:
 The response never exposes storage keys, R2 metadata, raw authorization
 internals, raw SQL fields, or activity JSON blobs.
 
-**Consumer note (UI-7).** The native Record, Revision, and RFI detail
+**Consumer note (UI-7, merged).** The native Record, Revision, and RFI detail
 workspaces consume the existing workspace read models
 (`GET .../records/:recordId/workspace`,
 `GET .../records/:recordId/revisions/:revisionId/workspace`,
@@ -410,9 +410,51 @@ workspaces consume the existing workspace read models
 `POST .../revisions/:revisionId/files`, `POST .../publish`,
 `PATCH .../rfis/:rfiId`, `POST .../respond`, `POST .../attachments`, and the
 `close`/`reopen`/`void` transitions) unchanged. No endpoint, response shape,
-field, or capability was added or altered for UI-7. `issue` and `ready` remain
-uncalled by the browser and fail closed server-side. `returnForClarification`
+field, or capability was added or altered for UI-7. `returnForClarification`
 remains implemented and returned as a capability with no browser surface.
+
+**Consumer note (RFI Slice 2B).** The browser now calls `POST .../ready` and
+`POST .../issue`. **No endpoint, request shape, response shape, field,
+capability, or migration was added or altered for Slice 2B** — the accepted
+Slice 2A contract is consumed exactly as specified. Binding consumer rules:
+
+- `POST .../ready` is sent with no body. When the draft holds unsaved edits the
+  browser first `PATCH`es it with the current `lockVersion`, confirms the save,
+  re-reads `GET .../workspace`, and only then calls `/ready`, so the server never
+  validates readiness against content the operator can no longer see. A `409`
+  save conflict stops before `/ready`.
+- `POST .../issue` carries a non-empty `Idempotency-Key` of at most 200
+  characters, generated once per deliberate operator attempt and **reused
+  verbatim for every retry of the same canonical request body** — including
+  retries after a network failure or an ambiguous server outcome. A new key is
+  minted only when the operator changes an unsubmitted payload or the server
+  definitively refuses. The browser never supplies an RFI number, status, or any
+  field outside the five documented ones.
+- A failed `POST .../issue` is never treated as proof that nothing committed. The
+  consumer re-reads `GET .../workspace` first; a present `officialIssue` means
+  the attempt succeeded and the persisted result is presented instead of
+  prompting for another issue. This is the required handling for
+  `409 RFI_ALREADY_ISSUED`, for any transport failure, and for any unexplained
+  5xx.
+- `503 RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`, and
+  `RFI_ISSUE_COMMIT_FAILED` are definitive pre-commit failures and may be retried
+  with the same key and the same body.
+  `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` may **not** be retried: the consumer
+  shows a support/reconciliation notice with the request ID and mints no second
+  key.
+- Recipient and CC selection uses the workspace's existing `responsibleContacts`
+  collection, which already lists every non-archived contact in the project —
+  exactly the eligibility rule the issue service enforces. Consumers must not
+  fan out per-contact requests, accept free-typed contact IDs, or infer
+  eligibility in the browser.
+- `includedFileIds` may contain only attachments whose `revisionId` matches
+  `currentVersion.id`. The generated official PDF is produced by the server and is
+  never an included file.
+- The immediate `POST .../issue` response is typed separately from the workspace's
+  `officialIssue`. Neither is used as current lifecycle state; top-level
+  `rfi.status` and top-level `capabilities` from a refetched workspace are.
+- Only `record_only` delivery exists. Consumers must not present disabled email,
+  share-link, or portal options.
 
 **Consumer note (UI-6B).** The native Document Register
 (`src/ui/features/records/`) replaced `public/records-view.js` on

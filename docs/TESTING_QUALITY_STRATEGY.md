@@ -527,6 +527,107 @@ the Return to draft confirmation open. The existing issued capture now waits
 for the persistent official-PDF download evidence instead of only a generic
 read-only facts surface.
 
+### 12A-vi. RFI Slice 2B issuance UI coverage
+
+RFI Slice 2B adds **94 unit tests across six new suites** (735 → 829). Every
+existing UI-7 and Slice 2A suite is retained and passing; the only change to an
+existing assertion is `rfi-workspace-react.test.tsx`'s official-PDF link name,
+which follows the evidence section's redesigned download action.
+
+`rfi-issue-api.test.ts` (6) proves the API layer against the accepted Slice 2A
+contract: the exact `POST .../ready` and `POST .../issue` paths and methods with
+correct encoding; a body-less ready call; the exact JSON issue body with no
+client-supplied number, status, or unknown field; the exact `Idempotency-Key`
+header; request-ID extraction from the envelope and the `x-request-id` header;
+the typed `RfiOfficialIssueResult`; every documented server failure
+(`IDEMPOTENCY_KEY_REQUIRED`, `VALIDATION_FAILED`, `AUTHENTICATION_REQUIRED`,
+`RFI_ILLEGAL_TRANSITION`, `RFI_ALREADY_ISSUED`, `IDEMPOTENCY_KEY_REUSED`,
+`RFI_ISSUE_VALIDATION_FAILED`, `RFI_READY_VALIDATION_FAILED`,
+`RFI_ARTIFACT_RENDER_FAILED`, `RFI_STORAGE_UNAVAILABLE`,
+`RFI_ISSUE_COMMIT_FAILED`, `RFI_ARTIFACT_RECONCILIATION_REQUIRED`) propagating
+its status, code, message, and request ID; and an unreachable server surfacing as
+status 0 rather than a refusal, because a failed fetch does not prove the request
+never arrived.
+
+`rfi-issue-idempotency.test.ts` (16) proves the rules where they are decided:
+`crypto.randomUUID` is used when available and the fallback produces a
+cryptographic RFC 4122 v4 value (never `Math.random`); distinct attempts get
+distinct keys within the 200-character limit; the canonical payload is stable for
+an identical request and differs for any changed recipient, CC, due date, or file
+set; a key is reused for a retry of the same payload in `pending`, `retryable`,
+and `uncertain` states; a key is never reused once the payload changed or the
+server definitively refused; the payload is locked while `pending`, `uncertain`,
+or `reconcile`; an unused key is spent on edit while an unresolved one is never
+silently dropped; and the failure classifier maps each documented code to
+retryable, uncertain, reconcile, or rejected.
+
+`rfi-mark-ready-react.test.tsx` (20) proves `capabilities.markReady` gates the
+action, a clean draft shows **Mark ready** and a dirty draft **Save and mark
+ready**, the confirmation explains the lock/absent number/return path/separate
+final action, a clean draft is marked ready with no PATCH, a dirty draft saves
+first with its `lockVersion` and re-reads the authoritative workspace before
+`/ready`, a save failure prevents `/ready` and says the draft was not saved, a
+409 conflict prevents `/ready` and reloads, a 422 refusal keeps the RFI editable
+and shows the request ID, a save that succeeded while `/ready` failed says so,
+client validation sends nothing at all, no local number is invented, all four
+read models are invalidated, Issue RFI is primary in `ready_to_issue` with Return
+to draft in the overflow, Return to draft is promoted (and not duplicated) when
+`issue` is unauthorized, an issued and numbered RFI offers no Return to draft,
+and an unauthorized user sees no actions at all.
+
+`rfi-issue-dialog-react.test.tsx` (30) proves the prefilled responsible contact,
+the at-least-one-recipient rule, optional CC, non-overlapping To/CC in both
+directions, a real calendar due date, the prefilled due date, eligible files by
+role selected by default, exclusion of another revision's attachment, the exact
+selected file IDs, the record-only notice with no delivery control of any kind,
+the canonical review payload, the **Issue official RFI** label (and the absence
+of Save/Submit/Publish/Send), Back without issuing, one request for a triple
+click, retry with the identical key and body, no second key after a network
+failure, a status check that is a read rather than a second POST, a locked
+payload while the outcome is unknown, a new key only after a pre-submission
+payload change, a non-disclosing idempotency conflict, refetch-confirmed success
+from both a network failure and `RFI_ALREADY_ISSUED`, no blind retry on
+reconciliation-required, a definitive validation error staying in the workflow,
+a permission loss removing the action after refetch, no false success or false
+failure, dialog/field/error labelling, initial focus on the first recipient,
+focus restoration to the Issue RFI trigger, refused dismissal while in flight,
+and the announced pending state.
+
+`rfi-issued-evidence-react.test.tsx` (11) proves the official PDF uses the
+authenticated attachment content path and exposes no storage key, R2 URL, or
+SHA-256; the issued version, issuance, dates, and To/CC snapshots render; included
+files carry their role and stay distinct from the generated artifact; an empty
+included list says so plainly; the evidence survives a remount; current status
+and the rail read from top-level `rfi.status` (with the number and status kept
+once, in the identity header); a present `officialIssue` never re-enables issue
+or return-to-draft on a closed RFI; heading hierarchy stays correct with the
+evidence section present; modifier-click behaviour on the download anchor is left
+to the browser; long filenames, companies, and subjects render in wrapping
+containers; and the register shows the server-assigned number, Open status,
+party, and dates after a live issue without a manual refresh and without losing
+its search/filter/sort URL state.
+
+`rfi-issue-layout-tokens.test.ts` (11) enforces the static boundaries: no raw
+colour literals, only registered `--app-*` tokens, the review grid collapsing to
+one column at 760px, a full-width touch target for the official PDF on mobile,
+`overflow-wrap: anywhere` on every long-value container, every grid track able to
+shrink below its content, no `min-width` above 390px, the shared
+`FormDialog`/`Checkbox`/`DateInput`/`Field`/`AlertDialog` rather than a
+feature-local modal, no direct Radix or Lucide import, no feature-owned portal,
+focus trap, focus ring, or z-index, the retained UI-7 rail layout, and that the
+idempotency key, a storage key, a predicted `RFI-` number, and `localStorage` are
+never rendered or used.
+
+As with UI-6B and UI-7, `happy-dom` has no layout engine, so the 390px/430px/
+834px "no horizontal overflow" requirement is proven by
+`npm run evidence:rfi2b`'s `scrollWidth` assertion rather than by a unit test.
+That script produced **26 deterministic captures** into `docs/evidence/rfi-2b/`;
+each waits for a selector that only exists once the documented state has
+rendered, asserts its CSS viewport, and fails the run on horizontal overflow.
+Every failure state is produced by the real components reacting to a real server
+response through the real API layer — including the pending, retryable,
+reconciliation-required, and live end-to-end issue captures.
+
 ### 12B. RFI Slice 1 reconciliation evidence
 
 Before production approval, run the guarded remote rehearsal in

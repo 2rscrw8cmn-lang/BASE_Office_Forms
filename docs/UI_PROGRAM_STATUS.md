@@ -1,24 +1,30 @@
 # BASE UI Program Status
 
 **Status date:** 2026-07-28
-**Current phase:** **UI-7 — RFI, Record, and Revision detail workspaces.** The
-native workspaces are implemented on `claude/ui-7-detail-workspaces` and are
-being reconciled to the accepted RFI Slice 2A contract in draft PR #48. Only
-the Work Dashboard and Project Overview remain compatibility-mounted.
-**Active branch/PR:** `claude/ui-7-detail-workspaces`, draft PR #48. RFI Slice
-2A merged as PR #49; its backend contract is the authority for the UI-7 RFI
-workspace. The UI-6A squash/UI-6B rebase episode recorded in §5F is closed
-history, not an active condition.
+**Current phase:** **RFI Slice 2B — Mark ready, official issuance, and
+issued-evidence UI.** UI-7 is complete and merged (PR #48, `509d5bb`); the RFI
+Slice 2A backend is complete in code and merged (PR #49, `f6b9462`). Only the
+Work Dashboard and Project Overview remain compatibility-mounted.
+**Active branch/PR:** `feature/rfi-slice-2b-issuance-ui`, draft PR — the
+browser-operable record-only issue workflow built on the accepted Slice 2A
+contract. See §5I. The UI-6A squash/UI-6B rebase episode recorded in §5F is
+closed history, not an active condition.
 **Authority:** This is the living handoff for the **UI foundation program (UI-1 … UI-10)**. Update it in every UI-related PR.
 **Scope boundary:** This document tracks UI-program phases only. Product delivery phases (RFI Slice 1/2, submittals, templates, sharing, AI, productization) are tracked in `IMPLEMENTATION_ROADMAP.md`; they appear here only as context in §6.2, and their status there is a pointer, not a second source of truth.
 
-> **2026-07-28 Slice 2A contract integration:** `officialIssue` is an immutable
-> `RfiOfficialIssueSummary` for original-issue evidence, not a current-state
-> object. The workspace must use top-level `rfi.status` and top-level
+> **2026-07-28 Slice 2B issuance UI (this branch):** the RFI workspace now
+> completes the browser path `draft → save → mark ready → review issue details →
+> issue once → server-assigned number → immutable Original Issue evidence`.
+> Delivery is `record_only` only; email, share links, and an external portal
+> remain deferred. One deliberate issue attempt carries exactly one
+> `Idempotency-Key`, reused for every retry of the same canonical payload, and a
+> failed request is never treated as proof that nothing committed. See §5I.
+>
+> **2026-07-28 Slice 2A contract integration (UI-7, merged):** `officialIssue` is
+> an immutable `RfiOfficialIssueSummary` for original-issue evidence, not a
+> current-state object. The workspace uses top-level `rfi.status` and top-level
 > `capabilities` as current authority, including the separately authorized
-> `returnToDraft` capability. The UI retains no full issuance dialog. It must
-> instead show persisted issued evidence after reload, including the official
-> PDF download, and provide Return to draft when authorized.
+> `returnToDraft` capability. That rule is unchanged by Slice 2B.
 
 > **2026-07-24 UI-4 correction pass (PR #44):**
 > A product-owner review of PR #44 found three gaps against the legacy shell's
@@ -1446,13 +1452,14 @@ new native feature; a bundle budget remains UI-10 scope.
 
 ### Next recommended action
 
-Complete. UI-6B merged to `main` as `315de55` (PR #47). **UI-7 Detail
-Workspaces** is the active phase — see §5G and §8.
+Complete. UI-6B merged to `main` as `315de55` (PR #47). UI-7 followed and is
+also merged (`509d5bb`, PR #48) — see §5G. The active work is **RFI Slice 2B**;
+see §5I and §8.
 
-## 5G. UI-7 implemented — native React detail workspaces
+## 5G. UI-7 complete — native React detail workspaces
 
-Branch `claude/ui-7-detail-workspaces`, rebased onto the accepted Slice 2A
-mainline. **Draft PR #48; not merged.**
+**Merged to `main` as `509d5bb` (PR #48).** The section below is the closed-out
+record of that phase; it is history, not active work.
 
 ### Confirmed starting point
 
@@ -1826,11 +1833,180 @@ populate `docs/evidence/ui-7/`, including the two new long-content captures.
 
 ### Next recommended action
 
-Review this correction alongside §5G on PR #48, run `npm run evidence:ui7` on
-a machine with Chrome, and complete the §5G product-owner smoke checklist
-(its "Mobile (390 px)" step now also exercises the long-content fixture via
-the rail layout). Do not merge without explicit approval. UI-8 remains the
-next phase after merge, unchanged from §5G.
+Complete. Merged with §5G as `509d5bb` (PR #48). `npm run evidence:ui7` still
+needs one run on a machine with Chrome to populate `docs/evidence/ui-7/`; that
+is a closeout task for the merged phase, not a blocker on current work.
+
+## 5I. RFI Slice 2B — mark ready, official issuance, and issued evidence
+
+Branch `feature/rfi-slice-2b-issuance-ui`, started from `main` at
+`509d5bb2ed48a9f9416a6874eb3bd3675e884c21`. **Draft PR; not merged.**
+
+### Confirmed starting point
+
+Both dependencies are merged: UI-7 native detail workspaces (`509d5bb`, PR #48)
+and the RFI Slice 2A official issuance backend (`f6b9462`, PR #49). No
+production deployment, migration, remote D1 SQL, R2 write, or real official
+issue was performed by this task.
+
+### What this slice delivers
+
+The complete browser-operable record-only issue path inside the existing UI-7
+RFI workspace:
+
+`draft → save → mark ready → review issue details → issue once → server-assigned
+number → immutable Original Issue evidence after reload`.
+
+**Mark ready.** The lifecycle action reads `capabilities.markReady` and is
+labelled **Mark ready** for a clean draft and **Save and mark ready** when the
+form holds unsaved edits, so `/ready` is never called against stale server
+content. The confirmed sequence is: validate the client fields, save with the
+current `lockVersion`, confirm the save, refetch the authoritative workspace,
+call `/ready`, refetch workspace and register data. A save that succeeds while
+`/ready` fails says exactly that — the draft stays saved, editable, and
+unmarked, with the server message and request ID. A `409` save conflict reloads
+the server values and stops before `/ready`.
+
+**Coordination boundary, not a second form.** `RfiContentPanel` keeps sole
+ownership of the draft form state and exposes only what the header needs:
+whether the draft is dirty (`onDirtyChange`) and one validated save operation
+(`handleRef`). No generic form framework was introduced.
+
+**Ready to issue.** `Issue RFI` is the primary action; `Return to draft` moves
+to the overflow menu and is promoted back to primary only when the server does
+not authorize `issue`, so it appears exactly once. A lifecycle notice states
+that content and routing are locked, and no editable content fields render.
+
+**Issue workflow.** Two stages inside the shared `FormDialog` — issue details,
+then review and confirm. To prefills the responsible project contact and
+requires at least one recipient; CC is optional and cannot overlap To (a contact
+selected under To is disabled under CC and is dropped from CC when promoted);
+the response due date prefills from `requestedResponseDate` and must be a real
+`YYYY-MM-DD` calendar date; eligible current-revision attachments are listed by
+role and selected by default; delivery is a fixed **Record only** summary with no
+disabled email or portal controls. The final action is labelled **Issue official
+RFI**.
+
+**Recipient data source.** The existing `responsibleContacts` workspace
+collection was reused unchanged. It already selects every non-archived contact
+in the project, which is exactly the eligibility rule
+`RfiOfficialIssueService.resolveContact` enforces, so **no read-model change and
+no server change were needed**. It exposes only project contact ID, name, and
+company — no email, phone, or address.
+
+**Idempotency.** One deliberate attempt carries exactly one key
+(`crypto.randomUUID` through `createIdempotencyKey`, with a
+`crypto.getRandomValues` v4 fallback). The key is reused for every retry of the
+same canonical payload, including after a network failure; it is spent only when
+the operator changes an unused payload or the server definitively refuses. The
+attempt state tracks the canonical submitted payload, key, request state, request
+ID, and whether the outcome is confirmed, retryable, or uncertain. The key is
+never persisted, rendered, logged, or placed in a URL.
+
+**Ambiguous outcomes.** Every issue failure first re-reads the authoritative
+workspace. If `officialIssue` is present the attempt is treated as successful and
+the persisted result is shown, whatever the response said. Otherwise the failure
+is classified: transient server failures (`RFI_ARTIFACT_RENDER_FAILED`,
+`RFI_STORAGE_UNAVAILABLE`, `RFI_ISSUE_COMMIT_FAILED`) offer **Retry issue** with
+the same key and payload; a failed fetch or unexplained 5xx offers **Check issue
+status**, which is a read and never a second POST;
+`RFI_ARTIFACT_RECONCILIATION_REQUIRED` shows a support/reconciliation notice with
+the request ID, offers no retry at all, and lets the operator close and return
+later. No state ever reports a success or a failure it cannot prove.
+
+**Cache invalidation.** `invalidateRfiLifecycleCaches` invalidates the RFI
+workspace, the project RFI register, and the reserved dashboard and
+project-overview keys from one place after mark ready, return to draft, and
+issue. The workflow never navigates, so register search/filter/sort URL state is
+preserved and no manual refresh is required.
+
+**Issued evidence.** The Original Issue section now presents the generated
+official PDF as the clearest action (through the authenticated attachment content
+route), then the issued version, issuance number, issued date, response-due
+snapshot, To and CC snapshots, and the files included with the original issue
+labelled by role — kept distinct from the generated artifact and from later
+files. Current status and available actions still come only from top-level
+`rfi.status` and `capabilities`.
+
+### API and schema impact
+
+No endpoint, request shape, response shape, migration, or server behaviour
+changed. The feature-local API layer gained `markRfiReady` and `issueRfi`;
+`issueRfi` takes a typed body plus an explicit idempotency key and an optional
+`AbortSignal`, and sends the exact `Idempotency-Key` header.
+`RfiOfficialIssueResult` is typed separately from `RfiOfficialIssueSummary`
+because the immediate result carries issue-time `status`, `capabilities`, and
+identity fields the long-lived workspace projection intentionally omits.
+
+Two shared components gained additive optional props rather than a feature-local
+substitute: `FormDialog` (`secondaryAction`, `submitDisabled`, `hideSubmit`,
+`fieldsDisabled`) and `Checkbox` (`ref`, so a dialog can place initial focus on
+the first recipient).
+
+### Tests
+
+**94 new tests across six suites**, with every existing UI-7 and Slice 2A suite
+preserved and passing:
+
+| Suite                       | Tests | Covers                                                                                                                       |
+| --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `rfi-issue-api`             | 6     | endpoints, methods, exact body, exact header, request-ID extraction, typed result, every documented error code                |
+| `rfi-issue-idempotency`     | 16    | key generation, canonical payload identity, key reuse/discard rules, payload locking, failure classification                  |
+| `rfi-mark-ready-react`      | 20    | capability gate, clean/dirty labels, save-before-ready ordering, save failure, 409 conflict, 422 refusal, action priority     |
+| `rfi-issue-dialog-react`    | 30    | recipients, CC, due date, included files, record-only notice, review payload, double click, retry, network failure, a11y      |
+| `rfi-issued-evidence-react` | 11    | official PDF route, snapshots, roles, reload survival, evidence-is-not-authority, heading hierarchy, register update          |
+| `rfi-issue-layout-tokens`   | 11    | token registry, 390px responsive rules, wrapping, shared-component boundary, no rendered key/storage key/predicted number     |
+
+Full gate: `npm run check` passes — Prettier, Cloudflare types, TypeScript,
+ESLint, **829 unit tests**, **154 Worker/D1 integration tests**, the production
+Vite build, the Pages Functions build, `npm audit --audit-level=high` clean, and
+the secret scan. `npm run lab:build` passes.
+
+### Visual evidence
+
+`npm run evidence:rfi2b` builds the shared evidence bundle and drives the real
+React workspace and the real API layer through Chrome DevTools. **26 captures
+were produced in this session** into `docs/evidence/rfi-2b/`; every capture
+asserts the CSS viewport it claims and fails the run on horizontal overflow, so
+the 390px, 430px, 834px, and desktop captures are proof of no overflow rather
+than an assertion about it. Covered: clean draft with Mark ready, dirty draft
+with Save and mark ready, both mark-ready confirmations, mark-ready validation
+failure, ready-to-issue workspace, Return to draft in overflow, issue details,
+recipient/CC selection, included-file selection, final review, issuing pending,
+retryable failure with request ID, reconciliation-required, issued workspace with
+official PDF, issued recipients and included files, a live end-to-end issue, and
+long filename/contact/company content at desktop and 390px.
+
+### Deliberate limitations
+
+- `record_only` only. No email delivery, email composition, external recipient
+  portal, secure share links, or external responses.
+- No RFI log export, bulk issue, or Submittals.
+- Response/clarification workflow is unchanged; its redesign stays a later slice.
+- The Work Dashboard and Project Overview are still compatibility-mounted, so
+  their query keys in `src/ui/app/queryKeys.ts` are reserved for UI-8; today
+  those legacy controllers refetch on mount and cannot show a stale count.
+- `uploadAttachment` remains server-authorized in `ready_to_issue`, so files can
+  still be added while content and routing are locked. That is the accepted
+  Slice 2A lifecycle rule, not a UI decision.
+
+### Rollback
+
+1. Revert the PR merge commit. The RFI workspace returns to the merged UI-7
+   behaviour: evidence and Return to draft, no mark-ready or issue UI.
+2. To disable only the issue entry point without a revert, remove the
+   `capabilities.issue` branch from `primaryAction` in
+   `RfiWorkspaceFeature.tsx`; `/issue` is then unreachable from the browser and
+   remains server-guarded.
+3. No database, storage, `/api/v2` contract, renderer, or controlled-document
+   definition change is involved in either path.
+
+### Next recommended action
+
+Review this draft PR, run the authenticated product-owner smoke checklist against
+a preview deployment, and confirm the `docs/evidence/rfi-2b/` captures. Do not
+merge without explicit approval. **UI-8 — Dashboard and Project Overview — is
+not started and must not begin until this slice is reviewed and merged.**
 
 ## 6. Phase status
 
@@ -1851,8 +2027,8 @@ convenience pointer to the product delivery roadmap, whose source of truth is
 | UI-5 — RFI register          | Complete; merged (`86b11e1`, PR #45)            | none                                |
 | UI-6A — Projects register    | Complete; merged (`0b5ec89`, PR #46, squash)    | none                                |
 | UI-6B — Document Register    | **Complete; merged** (`315de55`, PR #47, squash) | none                                |
-| UI-7 — Detail workspaces     | **Implemented and Slice 2A-integrated** — draft PR #48 | Review UI-7 evidence and contract integration |
-| UI-8 — Dashboard/forms/admin | Not started                                     | Shared shell/forms/registers stable |
+| UI-7 — Detail workspaces     | **Complete; merged** (`509d5bb`, PR #48)        | none                                |
+| UI-8 — Dashboard/forms/admin | Not started; blocked until RFI Slice 2B is reviewed and merged | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio      | Not started                                     | Application foundation stable       |
 | UI-10 — Enforcement/cleanup  | Not started                                     | Route parity and visual baselines   |
 
@@ -1865,13 +2041,19 @@ advance the table above. Source of truth: `IMPLEMENTATION_ROADMAP.md` (and
 | Roadmap item                        | Status                                                   | Relationship to the UI program                       |
 | ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
 | RFI Slice 1                         | Complete; merged and closed out in production            | Its register/workspace surfaces are what UI-5/UI-7 migrate |
-| RFI Slice 2A — backend architecture | **Accepted and merged** as PR #49 | UI-7 consumes its workspace contract                |
-| RFI Slice 2 — issuance UI           | Not started; no full dialog in UI-7                       | Compose shared workspace chrome around the accepted contract |
+| RFI Slice 2A — backend architecture | **Complete in code; merged** as `f6b9462` (PR #49) — no production migration or deployment yet | UI-7 consumes its workspace contract |
+| RFI Slice 2B — issuance UI          | **Implemented; draft PR on `feature/rfi-slice-2b-issuance-ui`** | Record-only issue workflow composed from the shared workspace chrome (§5I) |
+| RFI Slice 2 — email/share delivery  | Deferred                                                 | Not started; not part of Slice 2B                    |
 
 ## 7. Current constraints and risks
 
-- Slice 2A official issuance is server-authoritative; UI-7 intentionally does
-  not implement its full issuance dialog.
+- Slice 2A official issuance stays server-authoritative. Slice 2B adds the
+  browser workflow for it and reimplements none of that authority: numbering,
+  validation, idempotency persistence, and artifact commit remain on the server.
+- Issue delivery is `record_only`. Email, share links, and an external recipient
+  portal are still deferred and are deliberately not shown as disabled controls.
+- Official issue evidence is immutable; current lifecycle state and available
+  actions come only from top-level `rfi.status` and `capabilities`.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
@@ -1882,29 +2064,28 @@ advance the table above. Source of truth: `IMPLEMENTATION_ROADMAP.md` (and
 
 ## 8. Next action
 
-**UI-7 — Detail workspaces — is implemented and awaiting review in draft PR
-#48.** Work is on `claude/ui-7-detail-workspaces`, rebased onto the Slice 2A
-mainline. The three detail routes —
-`/projects/:projectId/records/:recordId`,
-`.../revisions/:revisionId`, and `/projects/:projectId/rfis/:rfiId` — now render
-native React through the shared Record Workspace pattern, and the legacy
-controllers are retained as the documented rollback path. Full scope, decisions,
-tests, limitations, and rollback are in §5G.
+**RFI Slice 2B — mark ready, official issuance, and issued-evidence UI — is
+implemented and awaiting review in a draft PR on
+`feature/rfi-slice-2b-issuance-ui`.** UI-7 is complete and merged (`509d5bb`,
+PR #48) and the Slice 2A backend is complete in code and merged (`f6b9462`,
+PR #49); both are history, not active work.
 
-The Slice 2A integration aligns the RFI model exactly with the accepted
-workspace contract: published-or-draft current version, immutable original
-issue evidence/PDF, top-level lifecycle authority, and authorized Return to
-draft. The full issuance dialog remains intentionally deferred.
+The RFI workspace now completes the browser path
+`draft → save → mark ready → review → issue once → server-assigned number →
+immutable Original Issue evidence`, with `record_only` delivery, one idempotency
+key per deliberate attempt, and honest handling of retryable, uncertain, and
+reconciliation-required outcomes. Full scope, decisions, tests, evidence,
+limitations, and rollback are in §5I.
 
-Two things are outstanding before this phase can close: run
-`npm run evidence:ui7` on a machine with Chrome to populate
-`docs/evidence/ui-7/` (none of this session's environment had a browser), and
-complete the authenticated product-owner smoke checklist in §5G.
+Outstanding before this slice can close: an authenticated product-owner smoke
+pass against a preview deployment, and product-owner confirmation of the 26
+`docs/evidence/rfi-2b/` captures. No production deployment, migration, remote
+D1 SQL, R2 write, or real official issue was performed.
 
-After UI-7 is reviewed and merged, **UI-8 — Dashboard, Project Overview,
+After this slice is reviewed and merged, **UI-8 — Dashboard, Project Overview,
 remaining create/edit forms, Team, and Administration** is the next phase. It
 migrates the last two compatibility-mounted screens (`dashboard`,
 `project-overview`) plus the placeholder project routes, and must compose the
 shared shell, register, workspace, and form patterns rather than introduce new
-chrome. Roadmap work (RFI Slice 2A backend architecture) may proceed
-independently; see §6.2 and `IMPLEMENTATION_ROADMAP.md`.
+chrome. **Do not begin UI-8 before this slice is reviewed and merged.** See §6.2
+and `IMPLEMENTATION_ROADMAP.md`.

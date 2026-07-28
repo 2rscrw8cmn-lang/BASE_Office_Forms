@@ -12,11 +12,16 @@
  *  - attachments carry an explicit role and their exact draft revision;
  *  - the template-bound document view is read-only and rendered on demand.
  *
- * The full issuance dialog remains outside UI-7. This workspace does expose
- * the accepted Slice 2A read model: immutable original-issue evidence after
- * reload, plus the server-authorized Return to draft correction path before
- * issue. A legacy RFI that consumed a number without a complete issuance says
- * exactly that.
+ * Slice 2B completes the browser-operable issue path on top of the accepted
+ * Slice 2A server contract: mark ready (saving first when the draft has unsaved
+ * edits), the ready-to-issue state with Issue RFI as the primary task and Return
+ * to draft as the deliberate correction, the two-stage issue workflow, and the
+ * immutable original-issue evidence that survives reload.
+ *
+ * Current lifecycle state comes only from top-level `rfi.status` and
+ * `capabilities`. `officialIssue` is evidence, never authority: an issued RFI
+ * that has since been responded to, closed, or voided still shows exactly the
+ * actions the server currently allows.
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -42,7 +47,8 @@ import {
 } from "../../components";
 import { useShell } from "../../app/ShellContext";
 import { RfiAttachmentsPanel, attachmentList } from "./RfiAttachmentsPanel";
-import { RfiContentPanel } from "./RfiContentPanel";
+import { RfiContentPanel, type RfiContentPanelHandle } from "./RfiContentPanel";
+import { RfiIssueDialog } from "./RfiIssueDialog";
 import { RfiResponsePanel, shouldShowResponse } from "./RfiResponsePanel";
 import {
   RfiTemplatePreview,
@@ -50,18 +56,21 @@ import {
 } from "./RfiTemplatePreview";
 import {
   attachmentContentHref,
+  markRfiReady,
   rfiRegisterHref,
   runRfiTransition,
   RfiWorkspaceApiError,
 } from "./api";
+import { invalidateRfiLifecycleCaches } from "./cache";
 import {
   actorLabel,
   describeActivity,
+  formatBytes,
   formatDate,
   rfiActivityDetail,
+  rfiAttachmentRoleLabel,
   rfiNumberLabel,
 } from "./format";
-import { projectRfisQueryKey } from "../rfis/useProjectRfis";
 import { rfiWorkspaceQueryKey, useRfiWorkspace } from "./useRfiWorkspace";
 import type {
   RfiOfficialIssueSummary,
@@ -112,6 +121,32 @@ const TRANSITIONS: Record<
   },
 };
 
+const MARK_READY_DESCRIPTION =
+  "The RFI's content and routing become read-only. No official number is assigned yet, and you can deliberately return it to draft before issuing. Issuing officially is a separate, final action.";
+
+function issueFileSummary(file: {
+  originalFilename: string;
+  role: string;
+  byteSize: number;
+}): string {
+  return `${rfiAttachmentRoleLabel(file.role)} · ${formatBytes(file.byteSize)}`;
+}
+
+function recipientLine(recipient: {
+  contactName: string;
+  companyName: string | null;
+}): string {
+  return recipient.companyName
+    ? `${recipient.contactName} — ${recipient.companyName}`
+    : recipient.contactName;
+}
+
+/**
+ * Immutable original-issue evidence. Distinguishes the three kinds of file an
+ * issued RFI can carry -- the generated official artifact, the files included
+ * with the original issue, and anything added later -- rather than presenting
+ * one undifferentiated list.
+ */
 function OriginalIssueEvidence({
   projectId,
   rfiId,
@@ -128,13 +163,36 @@ function OriginalIssueEvidence({
       description="Immutable evidence from the original official issue. Current status and available actions are shown above."
       className="rfi-workspace-original-issue"
     >
+      <div className="rfi-workspace-artifact" data-official-artifact>
+        <div className="rfi-workspace-artifact__text">
+          <p className="rfi-workspace-artifact__title">
+            {issue.officialArtifact.originalFilename}
+          </p>
+          <p className="rfi-workspace-artifact__meta">
+            Official RFI PDF generated at issue ·{" "}
+            {formatBytes(issue.officialArtifact.byteSize)}
+          </p>
+        </div>
+        <ButtonLink
+          variant="official"
+          iconStart="download"
+          href={attachmentContentHref(
+            projectId,
+            rfiId,
+            issue.officialArtifact.fileId,
+          )}
+          target="_blank"
+          rel="noopener"
+          aria-label={`Download the official PDF ${issue.officialArtifact.originalFilename}`}
+          data-official-pdf-download={issue.officialArtifact.fileId}
+        >
+          Download official PDF
+        </ButtonLink>
+      </div>
+
       <dl className="rfi-workspace-facts">
         <div className="rfi-workspace-fact">
-          <dt>Official number</dt>
-          <dd>{issue.officialDisplayNumber}</dd>
-        </div>
-        <div className="rfi-workspace-fact">
-          <dt>Issued revision</dt>
+          <dt>Issued version</dt>
           <dd>{issue.issuedRevision.userFacingVersion}</dd>
         </div>
         <div className="rfi-workspace-fact">
@@ -146,30 +204,50 @@ function OriginalIssueEvidence({
           <dd>{formatDate(issue.issuedAt) || "—"}</dd>
         </div>
         <div className="rfi-workspace-fact">
-          <dt>Response due</dt>
+          <dt>Response due at issue</dt>
           <dd>{issue.responseDueDate || "—"}</dd>
         </div>
         <div className="rfi-workspace-fact is-wide">
-          <dt>Official PDF</dt>
-          <dd>
-            <ButtonLink
-              size="compact"
-              variant="secondary"
-              iconStart="download"
-              href={attachmentContentHref(
-                projectId,
-                rfiId,
-                issue.officialArtifact.fileId,
-              )}
-              target="_blank"
-              rel="noopener"
-              data-official-pdf-download={issue.officialArtifact.fileId}
-            >
-              Download {issue.officialArtifact.originalFilename}
-            </ButtonLink>
+          <dt>Issued to</dt>
+          <dd data-issued-to>
+            {issue.recipients.to.length > 0
+              ? issue.recipients.to.map(recipientLine).join("; ")
+              : "No recipients recorded"}
+          </dd>
+        </div>
+        <div className="rfi-workspace-fact is-wide">
+          <dt>CC</dt>
+          <dd data-issued-cc>
+            {issue.recipients.cc.length > 0
+              ? issue.recipients.cc.map(recipientLine).join("; ")
+              : "None"}
           </dd>
         </div>
       </dl>
+
+      <div className="rfi-workspace-included" data-issued-files>
+        <h4 className="rfi-workspace-included__title">
+          Files included with the original issue
+        </h4>
+        {issue.includedFiles.length > 0 ? (
+          <ul className="rfi-workspace-included__list">
+            {issue.includedFiles.map((file) => (
+              <li key={file.fileId}>
+                <span className="rfi-workspace-included__name">
+                  {file.originalFilename}
+                </span>
+                <span className="rfi-workspace-included__meta">
+                  {issueFileSummary(file)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rfi-workspace-empty-value">
+            No files were included with the original issue.
+          </p>
+        )}
+      </div>
     </WorkspaceSection>
   );
 }
@@ -185,8 +263,12 @@ export function RfiWorkspaceFeature({
   const queryClient = useQueryClient();
   const state = useRfiWorkspace(projectId, rfiId);
   const [pending, setPending] = useState<PendingTransition | null>(null);
+  const [markReadyOpen, setMarkReadyOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const contentHandle = useRef<RfiContentPanelHandle | null>(null);
   // Confirmations open from the primary action or from an overflow item, so
   // focus return is explicit; the overflow trigger (not the unmounted menu
   // item) is what focus goes back to.
@@ -254,6 +336,13 @@ export function RfiWorkspaceFeature({
   const legacyIncomplete =
     rfi.issuanceReconciliationState === "legacy_incomplete";
   const editableDraft = capabilities.updateDraft;
+  const readyToIssue = rfi.status === "ready_to_issue" && capabilities.issue;
+  const markReadyLabel = draftDirty ? "Save and mark ready" : "Mark ready";
+
+  const failureText = (error: unknown, fallback: string): string => {
+    if (!(error instanceof RfiWorkspaceApiError)) return fallback;
+    return `${error.message}${error.requestId ? ` Request ID ${error.requestId}.` : ""}`;
+  };
 
   const runTransition = (item: PendingTransition) => {
     if (working) return;
@@ -262,14 +351,7 @@ export function RfiWorkspaceFeature({
     void (async () => {
       try {
         await runRfiTransition(projectId, rfi.id, item.transition);
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: rfiWorkspaceQueryKey(projectId, rfi.id),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: projectRfisQueryKey(projectId),
-          }),
-        ]);
+        await invalidateRfiLifecycleCaches(queryClient, projectId, rfi.id);
         shell.announce(`${item.confirmLabel} completed.`);
         setWorking(false);
         setPending(null);
@@ -287,18 +369,128 @@ export function RfiWorkspaceFeature({
           return;
         }
         setTransitionError(
-          error instanceof RfiWorkspaceApiError
-            ? `${error.message}${error.requestId ? ` Request ID ${error.requestId}.` : ""}`
-            : "The action could not be completed.",
+          failureText(error, "The action could not be completed."),
         );
         shell.announce("The action could not be completed.");
       }
     })();
   };
 
-  /** One primary current action, and only from a server capability. */
+  /**
+   * Save-and-mark-ready. The draft is never marked ready against server content
+   * the operator can no longer see: an unsaved edit is saved first, the
+   * authoritative workspace is re-read, and only then does `/ready` run. A save
+   * that succeeds while ready fails says exactly that rather than claiming the
+   * whole operation failed and leaving the operator unsure what persisted.
+   */
+  const runMarkReady = () => {
+    if (working) return;
+    setWorking(true);
+    setTransitionError(null);
+    void (async () => {
+      let saved = false;
+      if (draftDirty && contentHandle.current) {
+        const result = await contentHandle.current.save();
+        if (result.outcome === "invalid") {
+          setWorking(false);
+          setMarkReadyOpen(false);
+          confirmFocus.restore();
+          setTransitionError(
+            "This RFI was not marked ready. Complete the required fields, then try again.",
+          );
+          return;
+        }
+        if (result.outcome === "conflict") {
+          setWorking(false);
+          setMarkReadyOpen(false);
+          confirmFocus.restore();
+          setTransitionError(
+            `${result.message} It was not marked ready.${
+              result.requestId ? ` Request ID ${result.requestId}.` : ""
+            }`,
+          );
+          shell.announce("This RFI changed elsewhere.");
+          return;
+        }
+        if (result.outcome === "failed") {
+          setWorking(false);
+          setMarkReadyOpen(false);
+          confirmFocus.restore();
+          setTransitionError(
+            `${result.message} The draft was not saved and was not marked ready.${
+              result.requestId ? ` Request ID ${result.requestId}.` : ""
+            }`,
+          );
+          return;
+        }
+        saved = result.outcome === "saved";
+      }
+
+      try {
+        await markRfiReady(projectId, rfi.id);
+        await invalidateRfiLifecycleCaches(queryClient, projectId, rfi.id);
+        setWorking(false);
+        setMarkReadyOpen(false);
+        confirmFocus.restore();
+        shell.announce("This RFI is ready to issue.");
+      } catch (error) {
+        setWorking(false);
+        setMarkReadyOpen(false);
+        confirmFocus.restore();
+        // The workspace is reloaded either way, so what is on screen after a
+        // failure is the server's state, not a hopeful local one.
+        await queryClient.invalidateQueries({
+          queryKey: rfiWorkspaceQueryKey(projectId, rfi.id),
+        });
+        setTransitionError(
+          `${saved ? "Your changes were saved, but this RFI was not marked ready. " : "This RFI was not marked ready. "}${failureText(
+            error,
+            "The action could not be completed.",
+          )} It is still editable as a draft.`,
+        );
+        shell.announce("This RFI was not marked ready.");
+      }
+    })();
+  };
+
+  /*
+   * One primary current action, always from a server capability, ordered by
+   * what the lifecycle actually asks of the operator next. In `ready_to_issue`
+   * that is Issue RFI; Return to draft is the deliberate correction and moves
+   * to the overflow so it can never displace the real task.
+   */
   let primaryAction: ReactNode = null;
-  if (capabilities.returnToDraft) {
+  if (capabilities.markReady) {
+    primaryAction = (
+      <Button
+        variant="official"
+        data-primary-action
+        data-mark-ready
+        onClick={(event) => {
+          confirmFocus.capture(event.currentTarget);
+          setTransitionError(null);
+          setMarkReadyOpen(true);
+        }}
+      >
+        {markReadyLabel}
+      </Button>
+    );
+  } else if (capabilities.issue) {
+    primaryAction = (
+      <Button
+        variant="official"
+        data-primary-action
+        data-issue-rfi
+        onClick={(event) => {
+          confirmFocus.capture(event.currentTarget);
+          setTransitionError(null);
+          setIssueOpen(true);
+        }}
+      >
+        Issue RFI
+      </Button>
+    );
+  } else if (capabilities.returnToDraft) {
     primaryAction = (
       <Button
         variant="official"
@@ -349,6 +541,25 @@ export function RfiWorkspaceFeature({
   }
 
   const overflowItems = [
+    // Only demoted here; when Issue RFI is not the primary action, Return to
+    // draft is promoted above instead of appearing twice.
+    ...(capabilities.returnToDraft && capabilities.issue
+      ? [
+          {
+            id: "return-to-draft",
+            label: "Return to draft",
+            icon: "arrow-left" as const,
+            onSelect: () => {
+              confirmFocus.capture(actionsTriggerRef.current);
+              setTransitionError(null);
+              setPending({
+                transition: "return-to-draft",
+                ...TRANSITIONS["return-to-draft"],
+              });
+            },
+          },
+        ]
+      : []),
     ...(capabilities.reopen && capabilities.close
       ? [
           {
@@ -478,6 +689,11 @@ export function RfiWorkspaceFeature({
               title="Legacy issue requires reconciliation"
               description="The consumed number and timestamp were preserved, but this RFI is not presented as officially issued because no immutable issued revision or official artifact exists."
             />
+          ) : readyToIssue ? (
+            <WorkspaceNotice
+              title="Ready to issue"
+              description="This RFI is ready to issue. Its content and routing are locked. Return it to draft to make changes."
+            />
           ) : null
         }
         metadata={metadata}
@@ -561,7 +777,12 @@ export function RfiWorkspaceFeature({
               : "The authoritative question and references, as issued."
           }
         >
-          <RfiContentPanel projectId={projectId} data={data} />
+          <RfiContentPanel
+            projectId={projectId}
+            data={data}
+            handleRef={contentHandle}
+            onDirtyChange={setDraftDirty}
+          />
         </WorkspaceSection>
 
         <WorkspaceSection
@@ -594,6 +815,43 @@ export function RfiWorkspaceFeature({
           </WorkspaceSection>
         ) : null}
       </WorkspacePage>
+
+      {markReadyOpen ? (
+        <AlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !working) {
+              setMarkReadyOpen(false);
+              confirmFocus.restore();
+            }
+          }}
+          className="rfi-workspace-alert"
+          title="Mark this RFI ready to issue?"
+          description={MARK_READY_DESCRIPTION}
+          confirmLabel={markReadyLabel}
+          loading={working}
+          onConfirm={runMarkReady}
+        />
+      ) : null}
+
+      {issueOpen ? (
+        <RfiIssueDialog
+          projectId={projectId}
+          data={data}
+          open
+          onDismiss={() => {
+            setIssueOpen(false);
+            confirmFocus.restore();
+          }}
+          onIssued={(officialDisplayNumber) => {
+            setIssueOpen(false);
+            confirmFocus.restore();
+            shell.announce(
+              `This RFI was officially issued as ${officialDisplayNumber}.`,
+            );
+          }}
+        />
+      ) : null}
 
       {pending ? (
         <AlertDialog

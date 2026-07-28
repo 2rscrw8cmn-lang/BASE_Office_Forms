@@ -26,6 +26,9 @@ import type {
   WorkspaceRevision,
 } from "../../src/ui/features/record-workspace/types";
 import type {
+  RfiIssueFileSummary,
+  RfiOfficialIssueResult,
+  RfiOfficialIssueSummary,
   RfiWorkspaceAttachment,
   RfiWorkspaceModel,
 } from "../../src/ui/features/rfi-workspace/types";
@@ -150,6 +153,88 @@ export function attachment(
   };
 }
 
+function issueFile(
+  overrides: Partial<RfiIssueFileSummary> = {},
+): RfiIssueFileSummary {
+  return {
+    fileId: "attachment-1",
+    role: "supporting_attachment",
+    originalFilename: "sketch.pdf",
+    mediaType: "application/pdf",
+    byteSize: 4096,
+    sha256: "b".repeat(64),
+    ...overrides,
+  };
+}
+
+/** The immutable workspace projection (`RfiWorkspaceModel["officialIssue"]`). */
+export function officialIssueSummary(
+  overrides: Partial<RfiOfficialIssueSummary> = {},
+): RfiOfficialIssueSummary {
+  return {
+    officialDisplayNumber: "RFI-014",
+    issuedRevision: {
+      id: "rfi-draft-1",
+      internalRevisionNumber: 1,
+      userFacingVersion: "Original Issue",
+    },
+    issuance: { id: "issuance-1", issueNumber: "ISS-014" },
+    issuedAt: "2026-07-25T09:00:00Z",
+    responseDueDate: "2026-08-05",
+    officialArtifact: issueFile({
+      fileId: "official-rfi-pdf",
+      role: "generated_artifact",
+      originalFilename: "RFI-014.pdf",
+      byteSize: 42_000,
+      sha256: "a".repeat(64),
+    }),
+    includedFiles: [issueFile()],
+    recipients: {
+      to: [
+        {
+          projectContactId: "contact-1",
+          contactName: "Alex Architect",
+          companyName: "Meridian",
+          email: "alex@example.com",
+        },
+      ],
+      cc: [],
+    },
+    originalIssueRequestId: "req-original-issue",
+    ...overrides,
+  };
+}
+
+/** The immediate `POST .../issue` result, which is a different shape. */
+export function officialIssueResult(
+  overrides: Partial<RfiOfficialIssueResult> = {},
+): RfiOfficialIssueResult {
+  const summary = officialIssueSummary();
+  return {
+    rfiId: RFI_ID,
+    recordId: RFI_ID,
+    officialDisplayNumber: summary.officialDisplayNumber,
+    status: "open",
+    issuedRevision: summary.issuedRevision,
+    issuance: summary.issuance,
+    issuedAt: summary.issuedAt,
+    responseDueDate: summary.responseDueDate,
+    officialArtifact: summary.officialArtifact,
+    includedFiles: summary.includedFiles,
+    recipients: summary.recipients,
+    capabilities: {
+      issue: false,
+      recordResponse: true,
+      returnForClarification: false,
+      close: false,
+      reopen: false,
+      void: true,
+    },
+    requestId: "req-issue",
+    ...overrides,
+  };
+}
+
 /**
  * `rfi` and `capabilities` are merged field-wise, so a test can override one
  * status or one capability without restating the whole object.
@@ -253,6 +338,16 @@ export interface RecordedCall {
   body?: Record<string, unknown>;
   fileName?: string;
   role?: string;
+  /** Request headers, lower-cased, so idempotency behaviour is observable. */
+  headers?: Record<string, string>;
+}
+
+function headerRecord(init?: RequestInit): Record<string, string> {
+  const headers: Record<string, string> = {};
+  new Headers(init?.headers).forEach((value, key) => {
+    headers[key.toLowerCase()] = value;
+  });
+  return headers;
 }
 
 function requestUrl(input: string | URL | Request): string {
@@ -279,6 +374,12 @@ export interface WorkspaceFetchConfig {
   onRespond?: (body: Record<string, unknown>) => Response;
   onUploadAttachment?: () => Response;
   onTransition?: (transition: string) => Response;
+  onMarkReady?: () => Response | Promise<Response>;
+  /** Receives the exact body and the exact `Idempotency-Key` that was sent. */
+  onIssue?: (
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+  ) => Response | Promise<Response>;
 }
 
 export function installWorkspaceFetch(config: WorkspaceFetchConfig = {}) {
@@ -290,7 +391,7 @@ export function installWorkspaceFetch(config: WorkspaceFetchConfig = {}) {
   globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
     const url = requestUrl(input);
     const method = (init?.method ?? "GET").toUpperCase();
-    const call: RecordedCall = { method, url };
+    const call: RecordedCall = { method, url, headers: headerRecord(init) };
     if (typeof init?.body === "string") {
       call.body = JSON.parse(init.body) as Record<string, unknown>;
     }
@@ -385,10 +486,21 @@ export function installWorkspaceFetch(config: WorkspaceFetchConfig = {}) {
         config.onRespond?.(call.body ?? {}) ?? jsonResponse({ data: {} }),
       );
     }
-    const transition =
-      /\/rfis\/[^/?]+\/(close|reopen|void|issue|ready|return|return-to-draft)$/.exec(
-        url,
+    if (/\/rfis\/[^/?]+\/issue$/.test(url) && method === "POST") {
+      return Promise.resolve(
+        config.onIssue?.(
+          call.body ?? {},
+          call.headers?.["idempotency-key"] ?? "",
+        ) ?? jsonResponse({ data: officialIssueResult() }),
       );
+    }
+    if (/\/rfis\/[^/?]+\/ready$/.test(url) && method === "POST") {
+      return Promise.resolve(
+        config.onMarkReady?.() ?? jsonResponse({ data: {} }),
+      );
+    }
+    const transition =
+      /\/rfis\/[^/?]+\/(close|reopen|void|return|return-to-draft)$/.exec(url);
     if (transition && method === "POST") {
       return Promise.resolve(
         config.onTransition?.(transition[1]) ?? jsonResponse({ data: {} }),
@@ -435,6 +547,19 @@ export function renderWorkspace(
   const announcements: string[] = [];
   let navigateFunction: NavigateFunction | null = null;
 
+  /*
+   * Which read models a workflow invalidated. Asserting on `isInvalidated`
+   * directly is racy: an active query refetches immediately and clears the flag,
+   * so the record of the call is what a test can rely on.
+   */
+  const invalidatedKeys: string[] = [];
+  const invalidate = queryClient.invalidateQueries.bind(queryClient);
+  queryClient.invalidateQueries = (filters, options) => {
+    if (filters?.queryKey)
+      invalidatedKeys.push(JSON.stringify(filters.queryKey));
+    return invalidate(filters, options);
+  };
+
   const bridge: ShellBridge = {
     runtime: {
       getApiClient: () => Promise.reject(new Error("not used")),
@@ -469,6 +594,10 @@ export function renderWorkspace(
     queryClient,
     navigations,
     announcements,
+    /** Serialized query keys passed to `invalidateQueries`, in call order. */
+    invalidatedKeys,
+    wasInvalidated: (key: readonly unknown[]) =>
+      invalidatedKeys.includes(JSON.stringify(key)),
     goTo: (to: string) => {
       if (!navigateFunction) throw new Error("Navigation is not ready.");
       void navigateFunction(to);

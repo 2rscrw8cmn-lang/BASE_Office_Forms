@@ -636,7 +636,10 @@ describe("RFI workspace — immutable original issue evidence", () => {
     expect(evidence?.textContent).toContain("Original issue");
     expect(evidence?.textContent).toContain("ISS-014");
     expect(evidence?.textContent).toContain("Original Issue");
-    const pdf = screen.getByRole("link", { name: "Download RFI-014.pdf" });
+    expect(evidence?.textContent).toContain("RFI-014.pdf");
+    const pdf = screen.getByRole("link", {
+      name: "Download the official PDF RFI-014.pdf",
+    });
     expect(pdf.getAttribute("href")).toBe(
       `/api/v2/projects/${PROJECT_ID}/rfis/${RFI_ID}/attachments/official-rfi-pdf/content`,
     );
