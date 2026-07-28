@@ -1,8 +1,8 @@
 /*
- * Read-model types for the RFI workspace. They mirror the unchanged
- * `GET /api/v2/projects/:projectId/rfis/:rfiId/workspace` envelope
- * (`src/application/read-models/rfi-workspace-service.ts`) exactly. UI-7 adds no
- * endpoint, changes no response shape, and derives no capability in the browser.
+ * Read-model types for the RFI workspace. They mirror
+ * `GET /api/v2/projects/:projectId/rfis/:rfiId/workspace`
+ * (`src/application/read-models/rfi-workspace-service.ts`) exactly. The server
+ * remains authoritative for lifecycle and capabilities.
  *
  * The RFI is one structured project record: the register row and this workspace
  * read the same authoritative record through two task-shaped read models
@@ -49,12 +49,57 @@ export interface RfiWorkspaceCapabilities {
   updateDraft: boolean;
   uploadAttachment: boolean;
   markReady: boolean;
+  returnToDraft: boolean;
   issue: boolean;
   recordResponse: boolean;
   returnForClarification: boolean;
   close: boolean;
   reopen: boolean;
   void: boolean;
+}
+
+/** Immutable original-issue evidence; never use this as current state. */
+export interface RfiOfficialIssueSummary {
+  officialDisplayNumber: string;
+  issuedRevision: {
+    id: string;
+    internalRevisionNumber: number;
+    userFacingVersion: "Original Issue";
+  };
+  issuance: { id: string; issueNumber: string };
+  issuedAt: string;
+  responseDueDate: string;
+  officialArtifact: {
+    fileId: string;
+    role: string;
+    originalFilename: string;
+    mediaType: string;
+    byteSize: number;
+    sha256: string;
+  };
+  includedFiles: {
+    fileId: string;
+    role: string;
+    originalFilename: string;
+    mediaType: string;
+    byteSize: number;
+    sha256: string;
+  }[];
+  recipients: {
+    to: {
+      projectContactId: string;
+      contactName: string;
+      companyName: string | null;
+      email: string | null;
+    }[];
+    cc: {
+      projectContactId: string;
+      contactName: string;
+      companyName: string | null;
+      email: string | null;
+    }[];
+  };
+  originalIssueRequestId: string;
 }
 
 export interface RfiWorkspaceModel {
@@ -85,7 +130,7 @@ export interface RfiWorkspaceModel {
     dueSoon: boolean;
     issuanceReconciliationState: "not_issued" | "legacy_incomplete";
   };
-  currentVersion: { id: string; label: string; status: "draft" };
+  currentVersion: { id: string; label: string; status: "draft" | "published" };
   responsibleContacts: {
     id: string;
     name: string;
@@ -118,6 +163,7 @@ export interface RfiWorkspaceModel {
     supporting_attachment: RfiWorkspaceAttachment[];
     reference_drawing: RfiWorkspaceAttachment[];
   };
+  officialIssue: RfiOfficialIssueSummary | null;
   responses: RfiWorkspaceResponse[];
   activity: RfiWorkspaceActivity[];
   capabilities: RfiWorkspaceCapabilities;
@@ -140,5 +186,5 @@ export interface RecordResponseInput {
   respondedBy: string | null;
 }
 
-/** Only transitions that already had a browser surface before UI-7. */
-export type RfiTransition = "close" | "reopen" | "void";
+/** Explicit server-authoritative transitions; never an ordinary save. */
+export type RfiTransition = "close" | "reopen" | "return-to-draft" | "void";

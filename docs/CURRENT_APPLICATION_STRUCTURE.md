@@ -962,17 +962,19 @@ server's `lockVersion`, and on `409 RFI_VERSION_CONFLICT` reloads the
 authoritative values and asks for a deliberate retry; a 403 says permission was
 lost rather than retrying. While the draft is editable, Assigned to and Response
 due live in the editor and are omitted from the metadata strip, so each fact has
-exactly one authoritative location. Close, Reopen, and Void are confirmed
-transitions from server capabilities. **Issue and mark-ready are not exposed at
-all** — the server returns `issue: false`/`markReady: false` for every actor in
-Slice 1 and fails those transitions closed — and a legacy RFI that consumed a
-number without a complete issuance is labelled "Needs issue repair" with the
-reconciliation notice instead of being presented as issued. The template-bound
-document view is read-only, rendered on demand inside a `Collapsible` through
-`createRendererPreviewAdapter`, and states plainly that the controlled renderer
-is not loaded in the authenticated workspace when `globalThis.BASE` is absent
-(unchanged from the legacy workspace — see "Known limitations" in
-`UI_PROGRAM_STATUS.md` §5G).
+exactly one authoritative location. Close, Reopen, Void, and the intentional
+pre-issue **Return to draft** correction are confirmed transitions from
+top-level server capabilities. The full issuance dialog remains out of scope.
+After reload, `officialIssue` renders its immutable Original Issue evidence and
+authorized official-PDF download; it never supplies current status or actions,
+which remain top-level `rfi.status` and `capabilities`. A legacy RFI that
+consumed a number without a complete issuance is labelled "Needs issue repair"
+with the reconciliation notice instead of being presented as issued. The
+template-bound document view is read-only, rendered on demand inside a
+`Collapsible` through `createRendererPreviewAdapter`, and states plainly that
+the controlled renderer is not loaded in the authenticated workspace when
+`globalThis.BASE` is absent (unchanged from the legacy workspace — see "Known
+limitations" in `UI_PROGRAM_STATUS.md` §5G).
 
 ### Rollback
 
@@ -1335,9 +1337,9 @@ project-membership authorization. PR 4 adds `src/domain/rfis`,
 `src/application/rfis`, and RFI-specific repositories over the shared
 Records → Revisions → Files spine. Each RFI uses a stable `records` identity, a
 one-to-one `rfi_details` extension, a current draft revision, and revision-scoped
-files. Issue remains fail-closed until the complete immutable-revision and
-official-artifact transaction is implemented; no Slice 1 request can consume a
-number or present a draft as Open. Project, contact, and RFI lifecycle mutations
+files. Slice 2A now supplies the guarded immutable-revision and official-artifact
+transaction; Slice 1's former fail-closed issuance boundary remains historical,
+not current behavior. Project, contact, and RFI lifecycle mutations
 append durable activity events. PR 5 adds `src/domain/records`,
 `src/application/records`, and a D1 records repository. Records are project-scoped,
 use controlled types and active/archived statuses, and atomically append create,

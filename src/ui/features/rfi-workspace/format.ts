@@ -37,6 +37,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "rfi.created": "RFI drafted",
   "rfi.updated": "RFI updated",
   "rfi.marked_ready": "RFI marked ready to issue",
+  "rfi.returned_to_draft": "Returned to draft",
   "rfi.issued": "RFI issued",
   "rfi.responded": "Response received",
   "rfi.returned_for_clarification": "Returned for clarification",

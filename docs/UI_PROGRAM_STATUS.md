@@ -321,16 +321,16 @@ is complete. Full evidence lives in `RFI_SLICE_1_ROLLOUT.md`; the key facts:
   exactly once with subject/question preserved and the unresolved Party value
   intact; expandable draft editor (single-open, normal text selection,
   field save/refresh persistence), Details/Preview, RFI workspace load,
-  metadata/breadcrumbs, and controlled renderer preview all pass; issuance
-  remains fail-closed as designed.
+  metadata/breadcrumbs, and controlled renderer preview all pass. This is the
+  historical Slice 1 result; Slice 2A later added the guarded issue contract.
 - **Known limitations:** only one legacy RFI existed in production at
   migration time and it had zero responses/attachments, so response and
   R2-file/attachment-preservation logic were exercised structurally and via
   the disposable 0014 rehearsal's populated fixture, not against real
   production attachment data. The unresolved Party value stays unlinked to a
   `project_contacts` row until someone edits it by hand — expected behavior,
-  not a defect. RFI issuance remains incomplete and fail-closed (pre-existing,
-  unchanged by this migration).
+  not a defect. Slice 1 did not include official issuance; that later contract
+  is now supplied by accepted Slice 2A.
 
 **RFI Slice 1 is complete.**
 
@@ -1451,8 +1451,8 @@ Workspaces** is the active phase — see §5G and §8.
 
 ## 5G. UI-7 implemented — native React detail workspaces
 
-Branch `claude/ui-7-detail-workspaces`, based on `main` at `315de55`. **Not
-merged; no PR opened yet.**
+Branch `claude/ui-7-detail-workspaces`, rebased onto the accepted Slice 2A
+mainline. **Draft PR #48; not merged.**
 
 ### Confirmed starting point
 
@@ -1517,12 +1517,14 @@ server confirms. Publish is offered only when the server says
 `publishRevision` *and* the draft has a file; otherwise the requirement is
 explained rather than presented as a disabled control.
 
-**Issuance stays unavailable.** The RFI workspace exposes no issue or
-mark-ready control and its API module has no way to call them. The server
-returns `issue: false`/`markReady: false` in Slice 1 and fails those transitions
-closed. A legacy RFI that consumed a number without a complete issuance is
-labelled "Needs issue repair", keeps the reconciliation notice, and deliberately
-does **not** show an Issued date as fact.
+**Slice 2A contract integration.** UI-7 retains no full issuance dialog or
+mark-ready surface. It reads `officialIssue` only as the immutable
+`RfiOfficialIssueSummary` for original-issue evidence, including the authorized
+official-PDF download after reload. Current state and actions always come from
+top-level `rfi.status` and top-level `capabilities`; `returnToDraft` therefore
+offers a confirmed **Return to draft** action only for an authorized unnumbered
+ready RFI. A legacy RFI that consumed a number without complete issuance is
+still labelled "Needs issue repair" and is not presented as officially issued.
 
 **Concurrency and staged work.** RFI draft saves carry the server's
 `lockVersion`; a `409` reloads the authoritative values, re-seeds the editor,
@@ -1537,7 +1539,8 @@ applied to a single-stage sequence.
 No API change was required or made. Every action is gated on an existing
 server-derived capability: `updateRecord`, `archiveRecord`, `createRevision`,
 per-revision `uploadFile`/`publishRevision`, and the RFI `updateDraft`,
-`uploadAttachment`, `recordResponse`, `close`, `reopen`, `void`. Nothing is
+`uploadAttachment`, `returnToDraft`, `recordResponse`, `close`, `reopen`,
+`void`. Nothing is
 inferred from a role string. `returnForClarification` is implemented and
 returned by the server but had no browser surface before UI-7 and deliberately
 still has none — enabling a previously unreachable transition is a product
@@ -1564,10 +1567,11 @@ UI-7 adds **151 unit tests** across six suites:
 - `revision-workspace-react` (17) — exact revision context, immutability
   notices, upload including the server-reconciled failure path, publish gating
   and conflict, async states;
-- `rfi-workspace-react` (26) — hierarchy, numbering honesty, lockVersion
+- `rfi-workspace-react` (33) — hierarchy, numbering honesty, lockVersion
   concurrency and 403/409 handling, read-only content, role-explicit
-  attachments, response separation, lifecycle transitions, issuance absence,
-  document view, activity safety, async states;
+  attachments, response separation, lifecycle transitions, immutable original
+  issue/PDF evidence, Return to draft confirmation, document view, activity
+  safety, async states;
 - `workspace-route-integration` (9) — native mount for all three routes, no
   legacy factory load, one shell-owned `h1`, correct descendant tab,
   project-readiness gating, generic project not-found, and the retained rollback
@@ -1595,14 +1599,14 @@ production build, static-asset verification, Pages Functions compilation,
 
 `scripts/capture-ui7-evidence.mjs` (`npm run evidence:ui7`) drives the real
 workspaces through the shared evidence harness — production components only, no
-static mock markup — and captures 27 deterministic states across 1280, 834,
+static mock markup — and captures 30 deterministic states across 1280, 834,
 430, and 390 px CSS viewports: current version, draft-plus-current, no original,
 archived read-only, edit/create/archive dialogs, record error; draft upload,
 publish confirmation, upload-failure recovery, published read-only, empty draft,
-mobile; RFI draft editor, issued read-only, recorded response, legacy
-reconciliation, void confirmation, validation error, document view, error,
-tablet and mobile. Each capture asserts its CSS viewport and fails on horizontal
-overflow.
+  mobile; RFI draft editor, issued original-issue evidence/PDF, Return to draft
+  confirmation, recorded response, legacy reconciliation, void confirmation,
+  validation error, document view, error, tablet and mobile. Each capture
+  asserts its CSS viewport and fails on horizontal overflow.
 
 **No screenshots were produced in this session.** This machine has no
 Chrome/Chromium binary (`CHROME_PATH` unset and none of the candidate paths
@@ -1631,7 +1635,9 @@ UI-10 scope.
   deliberate UI-2 CSS boundary — and loading a scoped renderer bundle is a later
   decision, not UI-7 scope.
 - **`returnForClarification` remains without a browser surface** (see above).
-- **Issuance remains incomplete and fail-closed**, unchanged.
+- **No full issuance dialog is included.** Slice 2A's server contract and its
+  persisted official evidence are integrated; the multi-field issue workflow is
+  a later dedicated UI slice.
 - **`revision-issue`, `issuance-detail`, `issuance-created`, and
   `project-team`** still resolve to the shell's placeholder route; they are
   UI-8 scope.
@@ -1655,7 +1661,12 @@ UI-10 scope.
   RFI in a second tab; confirm the "Changed elsewhere" recovery reloads the
   latest values.
 - On an issued RFI: confirm content is read-only, the response section is
-  separate from the question, and no Issue control exists anywhere.
+  separate from the question, the immutable Original Issue evidence and PDF
+  download persist after reload, and current status/actions follow top-level
+  state rather than that evidence.
+- On an authorized ready RFI: confirm Return to draft requires confirmation,
+  returns to editable draft only after server confirmation, and is absent when
+  the capability is absent.
 - Mobile (390 px): confirm each workspace reflows without horizontal scrolling
   and primary actions stay reachable.
 - Keyboard: operate the overflow menus and confirmations end to end and confirm
@@ -1758,19 +1769,21 @@ four call sites used it, not in the primitive.
 
 ### Evidence and tests added
 
-`scripts/capture-ui7-evidence.mjs` grew from 27 to 29 captures: a new
+`scripts/capture-ui7-evidence.mjs` grew from 27 to 30 captures: a new
 `rfiWorkspaceFixture=long` fixture (a multi-line subject, a three-paragraph
 question, and an eight-event activity list) captured at 1280px and 390px to
 stress-test the constrained main column and the non-sticky activity rail
 under worst-case content, and the `document-view` capture was renamed to
 `rfi-workspace-desktop-document-view-unavailable.png` with its scenario
 updated to assert no toggle is rendered at all (previously it clicked a
-toggle that no longer exists in the unavailable state).
+toggle that no longer exists in the unavailable state). Slice 2A integration
+adds the thirtieth capture: an authorized ready RFI with the Return to draft
+confirmation open; the issued capture now waits for official-PDF evidence.
 
-Unit tests grew from 151 to **159** across the same six suites (net +8, all
-in three files):
+Unit tests grew from 151 to **161** across the same six suites (net +10, all
+in four files):
 
-- `rfi-workspace-react` (26 → 31): a new "RFI workspace — rail layout"
+- `rfi-workspace-react` (26 → 33): a new "RFI workspace — rail layout"
   block (rail/grid structure present; editable-draft facts absent from the
   rail; read-only facts present in the rail; activity confined to
   `.base-workspace__secondary`, never `.base-workspace__body`), plus
@@ -1778,6 +1791,10 @@ in three files):
   no-renderer state has no `Show document view` button and one proving the
   interactive Collapsible still works once a `globalThis.BASE` runtime is
   mocked;
+- `rfi-workspace-react` also proves the Slice 2A model: a `published` current
+  version, immutable `RfiOfficialIssueSummary`/official-PDF evidence after
+  reload, top-level status authority, and a confirmed capability-gated Return
+  to draft request;
 - `record-workspace-react` (21 → 23): a new "Record workspace — navigation
   safety" block proving a plain click on the primary action navigates through
   the shell, and a ctrl-clicked primary action leaves `defaultPrevented`
@@ -1795,9 +1812,10 @@ there would be meaningless. The enforceable check is
 which now also runs against the new long-content fixture at 390px.
 
 Full `npm run check` passes: Prettier, generated Cloudflare types, TypeScript,
-ESLint, **728 unit tests**, **120 Worker integration tests**, the Vite
+ESLint, **735 unit tests**, **154 Worker integration tests**, the Vite
 production build, static-asset verification, Pages Functions compilation,
-`npm audit --audit-level=high` (0 vulnerabilities), and the secret scan.
+`npm audit --audit-level=high` (0 vulnerabilities), and the 506-file secret
+scan.
 
 ### Known limitation, unchanged
 
@@ -1833,7 +1851,7 @@ convenience pointer to the product delivery roadmap, whose source of truth is
 | UI-5 — RFI register          | Complete; merged (`86b11e1`, PR #45)            | none                                |
 | UI-6A — Projects register    | Complete; merged (`0b5ec89`, PR #46, squash)    | none                                |
 | UI-6B — Document Register    | **Complete; merged** (`315de55`, PR #47, squash) | none                                |
-| UI-7 — Detail workspaces     | **Implemented** — branch `claude/ui-7-detail-workspaces`, no PR yet | Review and merge UI-7 |
+| UI-7 — Detail workspaces     | **Implemented and Slice 2A-integrated** — draft PR #48 | Review UI-7 evidence and contract integration |
 | UI-8 — Dashboard/forms/admin | Not started                                     | Shared shell/forms/registers stable |
 | UI-9 — Library + Studio      | Not started                                     | Application foundation stable       |
 | UI-10 — Enforcement/cleanup  | Not started                                     | Route parity and visual baselines   |
@@ -1847,12 +1865,13 @@ advance the table above. Source of truth: `IMPLEMENTATION_ROADMAP.md` (and
 | Roadmap item                        | Status                                                   | Relationship to the UI program                       |
 | ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
 | RFI Slice 1                         | Complete; merged and closed out in production            | Its register/workspace surfaces are what UI-5/UI-7 migrate |
-| RFI Slice 2A — backend architecture | Not started; may begin whenever `main` is pulled and stable | Independent of the UI program                     |
-| RFI Slice 2 — issuance UI           | Not started; shared components exist                      | Must compose the UI-3 components and the UI-7 workspace pattern rather than invent register/workspace chrome |
+| RFI Slice 2A — backend architecture | **Accepted and merged** as PR #49 | UI-7 consumes its workspace contract                |
+| RFI Slice 2 — issuance UI           | Not started; no full dialog in UI-7                       | Compose shared workspace chrome around the accepted contract |
 
 ## 7. Current constraints and risks
 
-- Official RFI issuance remains incomplete and must fail closed.
+- Slice 2A official issuance is server-authoritative; UI-7 intentionally does
+  not implement its full issuance dialog.
 - Existing renderer output and valid definitions remain compatible.
 - Browser capability presentation never replaces server authorization.
 - The existing Cloudflare development/test dependency audit findings must be
@@ -1863,14 +1882,19 @@ advance the table above. Source of truth: `IMPLEMENTATION_ROADMAP.md` (and
 
 ## 8. Next action
 
-**UI-7 — Detail workspaces — is implemented and awaiting review.** Work is on
-`claude/ui-7-detail-workspaces` (based on `main` at `315de55`); no PR is open
-and nothing is merged. The three detail routes —
+**UI-7 — Detail workspaces — is implemented and awaiting review in draft PR
+#48.** Work is on `claude/ui-7-detail-workspaces`, rebased onto the Slice 2A
+mainline. The three detail routes —
 `/projects/:projectId/records/:recordId`,
 `.../revisions/:revisionId`, and `/projects/:projectId/rfis/:rfiId` — now render
 native React through the shared Record Workspace pattern, and the legacy
 controllers are retained as the documented rollback path. Full scope, decisions,
 tests, limitations, and rollback are in §5G.
+
+The Slice 2A integration aligns the RFI model exactly with the accepted
+workspace contract: published-or-draft current version, immutable original
+issue evidence/PDF, top-level lifecycle authority, and authorized Return to
+draft. The full issuance dialog remains intentionally deferred.
 
 Two things are outstanding before this phase can close: run
 `npm run evidence:ui7` on a machine with Chrome to populate

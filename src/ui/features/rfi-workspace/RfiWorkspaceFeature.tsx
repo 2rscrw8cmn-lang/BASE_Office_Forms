@@ -12,10 +12,11 @@
  *  - attachments carry an explicit role and their exact draft revision;
  *  - the template-bound document view is read-only and rendered on demand.
  *
- * Issuance is not exposed. The server returns `markReady: false` and
- * `issue: false` for every actor in Slice 1 and fails those transitions closed;
- * this workspace offers no control that could imply otherwise, and a legacy RFI
- * that consumed a number without a complete issuance says exactly that.
+ * The full issuance dialog remains outside UI-7. This workspace does expose
+ * the accepted Slice 2A read model: immutable original-issue evidence after
+ * reload, plus the server-authorized Return to draft correction path before
+ * issue. A legacy RFI that consumed a number without a complete issuance says
+ * exactly that.
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -26,6 +27,7 @@ import {
   AttentionBadge,
   Badge,
   Button,
+  ButtonLink,
   Collapsible,
   DropdownMenu,
   ErrorState,
@@ -46,7 +48,12 @@ import {
   RfiTemplatePreview,
   templatePreviewAvailable,
 } from "./RfiTemplatePreview";
-import { rfiRegisterHref, runRfiTransition, RfiWorkspaceApiError } from "./api";
+import {
+  attachmentContentHref,
+  rfiRegisterHref,
+  runRfiTransition,
+  RfiWorkspaceApiError,
+} from "./api";
 import {
   actorLabel,
   describeActivity,
@@ -56,7 +63,11 @@ import {
 } from "./format";
 import { projectRfisQueryKey } from "../rfis/useProjectRfis";
 import { rfiWorkspaceQueryKey, useRfiWorkspace } from "./useRfiWorkspace";
-import type { RfiTransition, RfiWorkspaceModel } from "./types";
+import type {
+  RfiOfficialIssueSummary,
+  RfiTransition,
+  RfiWorkspaceModel,
+} from "./types";
 import "./rfi-workspace.css";
 
 interface PendingTransition {
@@ -85,6 +96,13 @@ const TRANSITIONS: Record<
     confirmLabel: "Reopen RFI",
     destructive: false,
   },
+  "return-to-draft": {
+    title: "Return this RFI to draft?",
+    description:
+      "This intentionally unlocks an unnumbered ready RFI so its content or routing can be corrected. It does not undo or recover an official issue.",
+    confirmLabel: "Return to draft",
+    destructive: false,
+  },
   void: {
     title: "Void this RFI?",
     description:
@@ -93,6 +111,68 @@ const TRANSITIONS: Record<
     destructive: true,
   },
 };
+
+function OriginalIssueEvidence({
+  projectId,
+  rfiId,
+  issue,
+}: {
+  projectId: string;
+  rfiId: string;
+  issue: RfiOfficialIssueSummary;
+}) {
+  return (
+    <WorkspaceSection
+      headingLevel={3}
+      title="Original issue"
+      description="Immutable evidence from the original official issue. Current status and available actions are shown above."
+      className="rfi-workspace-original-issue"
+    >
+      <dl className="rfi-workspace-facts">
+        <div className="rfi-workspace-fact">
+          <dt>Official number</dt>
+          <dd>{issue.officialDisplayNumber}</dd>
+        </div>
+        <div className="rfi-workspace-fact">
+          <dt>Issued revision</dt>
+          <dd>{issue.issuedRevision.userFacingVersion}</dd>
+        </div>
+        <div className="rfi-workspace-fact">
+          <dt>Issuance</dt>
+          <dd>{issue.issuance.issueNumber}</dd>
+        </div>
+        <div className="rfi-workspace-fact">
+          <dt>Issued</dt>
+          <dd>{formatDate(issue.issuedAt) || "—"}</dd>
+        </div>
+        <div className="rfi-workspace-fact">
+          <dt>Response due</dt>
+          <dd>{issue.responseDueDate || "—"}</dd>
+        </div>
+        <div className="rfi-workspace-fact is-wide">
+          <dt>Official PDF</dt>
+          <dd>
+            <ButtonLink
+              size="compact"
+              variant="secondary"
+              iconStart="download"
+              href={attachmentContentHref(
+                projectId,
+                rfiId,
+                issue.officialArtifact.fileId,
+              )}
+              target="_blank"
+              rel="noopener"
+              data-official-pdf-download={issue.officialArtifact.fileId}
+            >
+              Download {issue.officialArtifact.originalFilename}
+            </ButtonLink>
+          </dd>
+        </div>
+      </dl>
+    </WorkspaceSection>
+  );
+}
 
 export function RfiWorkspaceFeature({
   projectId,
@@ -216,13 +296,27 @@ export function RfiWorkspaceFeature({
     })();
   };
 
-  /*
-   * One primary current action, and only from a server capability. Issue and
-   * mark-ready are intentionally absent -- the server fails them closed until
-   * the Slice 2 issuance transaction exists.
-   */
+  /** One primary current action, and only from a server capability. */
   let primaryAction: ReactNode = null;
-  if (capabilities.close) {
+  if (capabilities.returnToDraft) {
+    primaryAction = (
+      <Button
+        variant="official"
+        data-primary-action
+        data-transition="return-to-draft"
+        onClick={(event) => {
+          confirmFocus.capture(event.currentTarget);
+          setTransitionError(null);
+          setPending({
+            transition: "return-to-draft",
+            ...TRANSITIONS["return-to-draft"],
+          });
+        }}
+      >
+        Return to draft
+      </Button>
+    );
+  } else if (capabilities.close) {
     primaryAction = (
       <Button
         variant="official"
@@ -477,6 +571,14 @@ export function RfiWorkspaceFeature({
         >
           <RfiAttachmentsPanel projectId={projectId} data={data} />
         </WorkspaceSection>
+
+        {data.officialIssue ? (
+          <OriginalIssueEvidence
+            projectId={projectId}
+            rfiId={rfi.id}
+            issue={data.officialIssue}
+          />
+        ) : null}
 
         {shouldShowResponse(data) ? (
           <WorkspaceSection

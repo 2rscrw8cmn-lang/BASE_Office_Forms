@@ -520,15 +520,23 @@ const LONG_RFI_QUESTION = [
 
 function currentRfiWorkspace() {
   const long = rfiWorkspaceFixture === "long";
-  const issued = rfiWorkspaceFixture !== "draft" && !long;
+  const issued =
+    ["issued", "responded", "legacy"].includes(rfiWorkspaceFixture) && !long;
   const legacy = rfiWorkspaceFixture === "legacy";
   const responded = rfiWorkspaceFixture === "responded";
+  const ready = rfiWorkspaceFixture === "ready";
   return {
     rfi: {
       id: "rfi-1",
       rfiNumber: issued ? "RFI-014" : null,
       legacyReference: null,
-      status: responded ? "response_received" : issued ? "open" : "draft",
+      status: responded
+        ? "response_received"
+        : issued
+          ? "open"
+          : ready
+            ? "ready_to_issue"
+            : "draft",
       subject: long
         ? LONG_RFI_SUBJECT
         : "Resolve conflicting ceiling height requirements at the second-floor corridor",
@@ -560,8 +568,8 @@ function currentRfiWorkspace() {
     },
     currentVersion: {
       id: "rfi-draft-1",
-      label: "Current Draft",
-      status: "draft",
+      label: issued ? "Original Issue" : "Current Draft",
+      status: issued ? "published" : "draft",
     },
     responsibleContacts: [
       RFI_CONTACT,
@@ -588,6 +596,31 @@ function currentRfiWorkspace() {
       supporting_attachment: [RFI_ATTACHMENTS[0]],
       reference_drawing: [RFI_ATTACHMENTS[1]],
     },
+    officialIssue:
+      issued && !legacy
+        ? {
+            officialDisplayNumber: "RFI-014",
+            issuedRevision: {
+              id: "rfi-draft-1",
+              internalRevisionNumber: 1,
+              userFacingVersion: "Original Issue" as const,
+            },
+            issuance: { id: "issuance-1", issueNumber: "ISS-014" },
+            issuedAt: "2026-07-10T09:00:00Z",
+            responseDueDate: "2026-08-05",
+            officialArtifact: {
+              fileId: "official-rfi-pdf",
+              role: "generated_artifact",
+              originalFilename: "RFI-014.pdf",
+              mediaType: "application/pdf",
+              byteSize: 42_000,
+              sha256: "0".repeat(64),
+            },
+            includedFiles: [],
+            recipients: { to: [], cc: [] },
+            originalIssueRequestId: "req-original-issue",
+          }
+        : null,
     responses: responded
       ? [
           {
@@ -696,6 +729,7 @@ function currentRfiWorkspace() {
       updateDraft: !issued,
       uploadAttachment: !issued,
       markReady: false,
+      returnToDraft: ready,
       issue: false,
       recordResponse: issued && !responded,
       returnForClarification: false,
@@ -1408,6 +1442,16 @@ async function runRfiWorkspaceScenario() {
     [...menu.querySelectorAll<HTMLElement>(".base-menu__item")]
       .find((item) => item.textContent.includes("Void RFI"))
       ?.click();
+    await waitForSelector('[role="alertdialog"]');
+    return;
+  }
+
+  if (rfiWorkspaceScenario === "return-to-draft-confirm") {
+    (
+      (await waitForSelector(
+        '[data-transition="return-to-draft"]',
+      )) as HTMLButtonElement
+    ).click();
     await waitForSelector('[role="alertdialog"]');
     return;
   }

@@ -389,8 +389,9 @@ its CSS viewport, and fails if the page overflows horizontally.
 
 ### 12A-iv. UI-7 detail workspace coverage (implemented)
 
-UI-7 adds 151 unit tests across six suites. All are DOM suites under Happy DOM
-except the parity suite, which is a pure Node comparison.
+UI-7 and its reviewed follow-up corrections now add 161 unit tests across six
+suites. All are DOM suites under Happy DOM except the parity suite, which is a
+pure Node comparison.
 
 `record-workspace-react.test.tsx` (21) covers the required workspace hierarchy
 and its order; Record identity in the header versus Record facts in the metadata
@@ -419,7 +420,7 @@ server-reconciled upload-failure path (refetch before retry, preserved filename,
 request ID); publish gating, confirmation, and 409 conflict recovery; and the
 async states.
 
-`rfi-workspace-react.test.tsx` (26) covers the shared hierarchy applied to a
+`rfi-workspace-react.test.tsx` (33) covers the shared hierarchy applied to a
 structured record; no official number before issue and never a database id;
 legacy-incomplete reconciliation labelling with no Issued date presented as
 fact; draft editing carrying `lockVersion` and never sending status or number;
@@ -430,10 +431,12 @@ the metadata strip only then; role-explicit attachments with their exact draft
 revision and authenticated downloads; role-carrying upload and the reconciled
 retry; the response as its own section separated from the question, its absence
 for a draft, capability-gated recording, and the awaiting-response state; the
-complete absence of issue/mark-ready; confirmed close and destructive void; no
-actions at all when the server grants none; an honest document-view unavailable
-message; activity rendering only mapped labels and structured details (never raw
-JSON); and the async states.
+deferred full issuance dialog; capability-gated Return to draft confirmation;
+published current-version compatibility; immutable original-issue evidence and
+the authorized official-PDF download after reload; confirmed close and
+destructive void; no actions at all when the server grants none; an honest
+document-view unavailable message; activity rendering only mapped labels and
+structured details (never raw JSON); and the async states.
 
 `workspace-route-integration.test.tsx` (9) proves each of the three routes
 mounts its native workspace and never loads its legacy controller, that the
@@ -471,7 +474,8 @@ A follow-up correction (§5G/§5H in `UI_PROGRAM_STATUS.md`) replaced the RFI
 workspace's full-width stacked layout with an opt-in `WorkspacePage`
 `layout="rail"` mode and closed a dead-end "Document view" control and a
 `ButtonLink` modifier-click bug. It grows three of the six suites above by 8
-tests (151 → 159):
+tests (151 → 159); the subsequent Slice 2A contract integration adds two RFI
+workspace tests (159 → 161):
 
 `rfi-workspace-react.test.tsx` (26 → 31) adds an "RFI workspace — rail
 layout" block: the workspace renders `.base-workspace--rail` with a
@@ -510,6 +514,18 @@ grid/rail breakpoints and the "no horizontal overflow" requirement are
 verified by this capture script's existing `scrollWidth` assertion, not by a
 new unit test — a `document.documentElement.scrollWidth` check under
 `happy-dom` would not reflect real layout.
+
+The Slice 2A UI integration adds two more RFI workspace tests (31 → 33) for
+the server-authorized Return to draft confirmation and the persisted immutable
+`RfiOfficialIssueSummary`/official-PDF surface. The issued fixture uses a
+`published` `currentVersion`; its top-level `rfi.status` is deliberately
+different from the immutable evidence to prove current authority is not derived
+from the original issue.
+
+It also adds a thirtieth deterministic capture: an authorized ready RFI with
+the Return to draft confirmation open. The existing issued capture now waits
+for the persistent official-PDF download evidence instead of only a generic
+read-only facts surface.
 
 ### 12B. RFI Slice 1 reconciliation evidence
 

@@ -5,8 +5,9 @@
  * POSTs. Same paths, same methods, same bodies; no endpoint or response shape
  * changed for UI-7.
  *
- * Issuance is deliberately absent. The server fails `issue`/`ready` closed until
- * the Slice 2 transaction exists, and this module offers no way to call them.
+ * This UI does not implement the separate issuance dialog. It does consume the
+ * accepted Slice 2A workspace contract and exposes the intentionally reversible
+ * pre-issue `return-to-draft` transition when the server authorizes it.
  */
 
 import type {
@@ -154,8 +155,8 @@ export async function uploadRfiAttachment(
 }
 
 /**
- * A lifecycle transition, never an ordinary save. Only transitions that already
- * had a browser surface are callable; `issue` and `ready` are not offered.
+ * A lifecycle transition, never an ordinary save. Issue and ready are not
+ * offered here because their UI workflow is outside this slice.
  */
 export async function runRfiTransition(
   projectId: string,

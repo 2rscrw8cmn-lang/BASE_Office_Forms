@@ -3,7 +3,8 @@
  * Native React RFI workspace (UI-7): the shared workspace hierarchy applied to
  * a structured record, response separated from the question, explicit file
  * roles, optimistic-concurrency conflict recovery, capability-gated lifecycle
- * transitions, issuance staying unavailable, and every required async state.
+ * transitions, immutable original-issue evidence, and every required async
+ * state.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -491,7 +492,7 @@ describe("RFI workspace — response", () => {
 });
 
 describe("RFI workspace — lifecycle and issuance", () => {
-  it("never offers issue or mark-ready", async () => {
+  it("does not introduce the separate full issuance dialog", async () => {
     installWorkspaceFetch({
       rfi: rfiWorkspace({
         rfi: { status: "ready_to_issue" },
@@ -504,6 +505,34 @@ describe("RFI workspace — lifecycle and issuance", () => {
     expect(document.body.textContent).not.toContain("Issue RFI");
     expect(document.body.textContent).not.toContain("Mark ready");
     expect(document.querySelector('[data-transition="issue"]')).toBeNull();
+  });
+
+  it("offers Return to draft only from the authoritative capability and confirms it", async () => {
+    const { calls } = installWorkspaceFetch({
+      rfi: rfiWorkspace({
+        rfi: { status: "ready_to_issue" },
+        capabilities: { updateDraft: false, returnToDraft: true, void: false },
+      }),
+    });
+    render();
+    await waitForWorkspace();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Return to draft" }),
+    );
+    const dialog = await screen.findByRole("alertdialog");
+    expect(calls.some((call) => call.url.endsWith("/return-to-draft"))).toBe(
+      false,
+    );
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Return to draft" }),
+    );
+    await waitFor(() => {
+      expect(calls.some((call) => call.url.endsWith("/return-to-draft"))).toBe(
+        true,
+      );
+    });
   });
 
   it("confirms a close transition before sending it", async () => {
@@ -563,6 +592,57 @@ describe("RFI workspace — lifecycle and issuance", () => {
     expect(document.querySelector("[data-primary-action]")).toBeNull();
     expect(document.querySelector("[data-rfi-actions]")).toBeNull();
     expect(document.querySelector("[data-attachment-form]")).toBeNull();
+  });
+});
+
+describe("RFI workspace — immutable original issue evidence", () => {
+  it("persists official evidence and PDF download after reload without using it as current authority", async () => {
+    const issued = rfiWorkspace({
+      rfi: { rfiNumber: "RFI-014", status: "closed" },
+      currentVersion: {
+        id: "rfi-draft-1",
+        label: "Original Issue",
+        status: "published",
+      },
+      officialIssue: {
+        officialDisplayNumber: "RFI-014",
+        issuedRevision: {
+          id: "rfi-draft-1",
+          internalRevisionNumber: 1,
+          userFacingVersion: "Original Issue",
+        },
+        issuance: { id: "issuance-1", issueNumber: "ISS-014" },
+        issuedAt: "2026-07-10T09:00:00Z",
+        responseDueDate: "2026-08-05",
+        officialArtifact: {
+          fileId: "official-rfi-pdf",
+          role: "generated_artifact",
+          originalFilename: "RFI-014.pdf",
+          mediaType: "application/pdf",
+          byteSize: 42000,
+          sha256: "a".repeat(64),
+        },
+        includedFiles: [],
+        recipients: { to: [], cc: [] },
+        originalIssueRequestId: "req-original-issue",
+      },
+      capabilities: { updateDraft: false, void: false },
+    });
+    installWorkspaceFetch({ rfi: issued });
+    render();
+    await waitForWorkspace();
+
+    const evidence = root().querySelector(".rfi-workspace-original-issue");
+    expect(evidence?.textContent).toContain("Original issue");
+    expect(evidence?.textContent).toContain("ISS-014");
+    expect(evidence?.textContent).toContain("Original Issue");
+    const pdf = screen.getByRole("link", { name: "Download RFI-014.pdf" });
+    expect(pdf.getAttribute("href")).toBe(
+      `/api/v2/projects/${PROJECT_ID}/rfis/${RFI_ID}/attachments/official-rfi-pdf/content`,
+    );
+    // Current lifecycle state comes from top-level rfi.status, not the immutable
+    // evidence object (which has no status or capabilities).
+    expect(root().textContent).toContain("Closed");
   });
 });
 

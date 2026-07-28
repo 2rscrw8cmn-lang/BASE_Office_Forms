@@ -367,7 +367,12 @@ await capture("rfi-workspace-desktop-draft-editor.png", {
 await capture("rfi-workspace-desktop-issued-readonly.png", {
   ...DESKTOP,
   query: `?route=${route(RFI)}&rfiWorkspaceFixture=issued`,
-  expect: ".rfi-workspace-facts",
+  expect: "[data-official-pdf-download]",
+});
+await capture("rfi-workspace-desktop-return-to-draft-confirm.png", {
+  ...DESKTOP,
+  query: `?route=${route(RFI)}&rfiWorkspaceFixture=ready&rfiWorkspaceScenario=return-to-draft-confirm`,
+  expect: '[role="alertdialog"]',
 });
 await capture("rfi-workspace-desktop-response-recorded.png", {
   ...DESKTOP,

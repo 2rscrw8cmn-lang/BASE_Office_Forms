@@ -167,10 +167,12 @@ Structure:
 - **Activity**: the timeline of meaningful events (created, subject changed,
   question changed, responsible party changed, response date changed, attachment
   added). Raw activity JSON is never exposed.
-- **Lifecycle actions**: Close, Reopen, and Void are confirmed transitions
-  driven by server capabilities. Issue and mark-ready are not exposed at all
-  (§11.2). `returnForClarification` is implemented server-side but has no
-  browser surface; adding one is a Slice 3 decision, not a migration one.
+- **Lifecycle actions**: Close, Reopen, Void, and the pre-issue **Return to
+  draft** correction are confirmed transitions driven by server capabilities.
+  The workspace does not add the separate full issuance dialog; it presents the
+  persisted original-issue evidence and official PDF after the Slice 2A server
+  operation completes. `returnForClarification` remains server-side only; its
+  browser surface is a Slice 3 decision.
 
 ## 7. Table/detail shared-data rule
 

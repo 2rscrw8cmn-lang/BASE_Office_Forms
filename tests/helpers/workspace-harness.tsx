@@ -220,12 +220,14 @@ export function rfiWorkspace(
     organization: { id: "org-1", name: "BASE Construction" },
     template: null,
     attachments: { supporting_attachment: [], reference_drawing: [] },
+    officialIssue: null,
     responses: [],
     activity: [],
     capabilities: {
       updateDraft: true,
       uploadAttachment: true,
       markReady: false,
+      returnToDraft: false,
       issue: false,
       recordResponse: false,
       returnForClarification: false,
@@ -384,7 +386,9 @@ export function installWorkspaceFetch(config: WorkspaceFetchConfig = {}) {
       );
     }
     const transition =
-      /\/rfis\/[^/?]+\/(close|reopen|void|issue|ready|return)$/.exec(url);
+      /\/rfis\/[^/?]+\/(close|reopen|void|issue|ready|return|return-to-draft)$/.exec(
+        url,
+      );
     if (transition && method === "POST") {
       return Promise.resolve(
         config.onTransition?.(transition[1]) ?? jsonResponse({ data: {} }),
