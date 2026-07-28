@@ -1849,6 +1849,15 @@ and the RFI Slice 2A official issuance backend (`f6b9462`, PR #49). No
 production deployment, migration, remote D1 SQL, R2 write, or real official
 issue was performed by this task.
 
+**Continuation audit (2026-07-28).** The incomplete handoff at `c2400df` was
+audited requirement-by-requirement. The workflow implementation was complete;
+the correction added independent shared-component regressions and the matching
+UI Lab state. Four durable documents that the WIP commit had converted wholesale
+from repository-standard LF to CRLF were normalized back to LF while preserving
+only their intentional Slice 2B edits, reducing those files' final comparison
+with `origin/main` to a narrow semantic diff. The full gate and all 26 evidence
+captures were rerun after the correction.
+
 ### What this slice delivers
 
 The complete browser-operable record-only issue path inside the existing UI-7
@@ -1945,8 +1954,9 @@ the first recipient).
 
 ### Tests
 
-**94 new tests across six suites**, with every existing UI-7 and Slice 2A suite
-preserved and passing:
+**96 tests added for this slice:** 94 workflow tests across six dedicated
+suites, plus two independent shared-component regressions. Every existing UI-7
+and Slice 2A suite is preserved and passing:
 
 | Suite                       | Tests | Covers                                                                                                                       |
 | --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -1956,17 +1966,21 @@ preserved and passing:
 | `rfi-issue-dialog-react`    | 30    | recipients, CC, due date, included files, record-only notice, review payload, double click, retry, network failure, a11y      |
 | `rfi-issued-evidence-react` | 11    | official PDF route, snapshots, roles, reload survival, evidence-is-not-authority, heading hierarchy, register update          |
 | `rfi-issue-layout-tokens`   | 11    | token registry, 390px responsive rules, wrapping, shared-component boundary, no rendered key/storage key/predicted number     |
+| `base-components-behavior`  | +1    | `Checkbox` forwards its optional ref to the focusable Radix control                                                           |
+| `base-components-keyboard`  | +1    | additive `FormDialog` locked-fields, secondary-action, disabled-submit, and no-resubmit states                                |
 
 Full gate: `npm run check` passes — Prettier, Cloudflare types, TypeScript,
-ESLint, **829 unit tests**, **154 Worker/D1 integration tests**, the production
+ESLint, **831 unit tests**, **154 Worker/D1 integration tests**, the production
 Vite build, the Pages Functions build, `npm audit --audit-level=high` clean, and
-the secret scan. `npm run lab:build` passes.
+the **542-file** secret scan. `npm run lab:build` passes. The UI Lab includes
+the shared locked reconciliation/no-resubmit `FormDialog` state.
 
 ### Visual evidence
 
 `npm run evidence:rfi2b` builds the shared evidence bundle and drives the real
 React workspace and the real API layer through Chrome DevTools. **26 captures
-were produced in this session** into `docs/evidence/rfi-2b/`; every capture
+were regenerated and individually inspected** in the continuation audit into
+`docs/evidence/rfi-2b/`; every capture
 asserts the CSS viewport it claims and fails the run on horizontal overflow, so
 the 390px, 430px, 834px, and desktop captures are proof of no overflow rather
 than an assertion about it. Covered: clean draft with Mark ready, dirty draft
@@ -1975,7 +1989,10 @@ failure, ready-to-issue workspace, Return to draft in overflow, issue details,
 recipient/CC selection, included-file selection, final review, issuing pending,
 retryable failure with request ID, reconciliation-required, issued workspace with
 official PDF, issued recipients and included files, a live end-to-end issue, and
-long filename/contact/company content at desktop and 390px.
+long filename/contact/company content at desktop and 390px. The audit found no
+clipped footer, horizontal overflow, full-width workspace regression, unusable
+mobile control, or long-value wrapping defect; no production visual correction
+was required.
 
 ### Deliberate limitations
 

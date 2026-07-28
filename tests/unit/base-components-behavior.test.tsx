@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useState } from "react";
+import { createRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -55,6 +55,19 @@ describe("Checkbox", () => {
     await waitFor(() => {
       expect(box).toHaveAttribute("aria-checked", "true");
     });
+  });
+
+  it("forwards a ref to the focusable checkbox control", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Checkbox ref={ref}>Include issued files</Checkbox>);
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: "Include issued files",
+    });
+    expect(ref.current).toBe(checkbox);
+
+    ref.current?.focus();
+    expect(checkbox).toHaveFocus();
   });
 });
 

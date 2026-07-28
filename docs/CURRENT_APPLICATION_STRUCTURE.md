@@ -1053,6 +1053,10 @@ exposed.
 (`secondaryAction`, `submitDisabled`, `hideSubmit`, `fieldsDisabled`) and
 `Checkbox` gained `ref`, so the workflow uses the shared dialog, focus trap,
 buttons, fields, and error summary rather than a feature-local substitute.
+`base-components-keyboard.test.tsx` independently covers all four new dialog
+states, `base-components-behavior.test.tsx` independently proves that the
+checkbox ref targets the focusable control, and the UI Lab includes the locked
+reconciliation/no-resubmit dialog state.
 
 ### Rollback
 

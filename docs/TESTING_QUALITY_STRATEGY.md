@@ -529,10 +529,12 @@ read-only facts surface.
 
 ### 12A-vi. RFI Slice 2B issuance UI coverage
 
-RFI Slice 2B adds **94 unit tests across six new suites** (735 → 829). Every
-existing UI-7 and Slice 2A suite is retained and passing; the only change to an
-existing assertion is `rfi-workspace-react.test.tsx`'s official-PDF link name,
-which follows the evidence section's redesigned download action.
+RFI Slice 2B adds **96 unit tests** (735 → 831): 94 workflow tests across six
+new suites, plus two independent regressions in the existing shared-component
+suites. Every existing UI-7 and Slice 2A suite is retained and passing; the only
+change to a pre-Slice-2B workspace assertion is
+`rfi-workspace-react.test.tsx`'s official-PDF link name, which follows the
+evidence section's redesigned download action.
 
 `rfi-issue-api.test.ts` (6) proves the API layer against the accepted Slice 2A
 contract: the exact `POST .../ready` and `POST .../issue` paths and methods with
@@ -617,6 +619,14 @@ feature-local modal, no direct Radix or Lucide import, no feature-owned portal,
 focus trap, focus ring, or z-index, the retained UI-7 rail layout, and that the
 idempotency key, a storage key, a predicted `RFI-` number, and `localStorage` are
 never rendered or used.
+
+The two shared-component regressions close the additive API boundary
+independently of the RFI composition: `base-components-behavior.test.tsx` proves
+that `Checkbox` forwards its optional ref to the focusable Radix control, and
+`base-components-keyboard.test.tsx` proves `FormDialog` can disable only its
+fields, render a secondary action, disable submission, or remove the unsafe
+submit action while preserving an enabled cancel/close path. The UI Lab
+catalogue includes the locked reconciliation/no-resubmit state.
 
 As with UI-6B and UI-7, `happy-dom` has no layout engine, so the 390px/430px/
 834px "no horizontal overflow" requirement is proven by
