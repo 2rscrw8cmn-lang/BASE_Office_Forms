@@ -43,6 +43,7 @@
     "db:fixture:rfi-preview": "node scripts/rfi-preview-fixture.mjs",
     "db:fixture:rfi-preview:verify": "node scripts/rfi-preview-fixture.mjs verify",
     "db:reconcile:rfi-preview-template": "node scripts/rfi-preview-fixture.mjs reconcile",
+    "db:reconcile:production-rfi-template": "node scripts/rfi-production-template-reconciliation.mjs --dry-run",
     "db:fixture:rfi-preview:cleanup": "node scripts/rfi-preview-fixture.mjs cleanup",
     "db:rehearse:rfi-0014": "node scripts/rfi-0014-rehearsal.mjs",
     "db:rehearse:rfi-0014:cleanup": "node scripts/rfi-0014-rehearsal.mjs cleanup",
