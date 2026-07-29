@@ -115,7 +115,10 @@ function connectCdp(webSocketUrl) {
  * fixed budget. A state that never arrives fails the run loudly rather than
  * being captured silently half-rendered.
  */
-async function capture(name, { width, height, query, expect, settle = 400 }) {
+async function capture(
+  name,
+  { width, height, query, expect, settle = 400, railExpectation },
+) {
   const debugPort = await availablePort();
   const profile = await mkdtemp(join(tmpdir(), "base-rfi2b-cdp-"));
   const chrome = spawn(
@@ -229,6 +232,61 @@ async function capture(name, { width, height, query, expect, settle = 400 }) {
       throw new Error(
         `${name} overflowed: ${String(metrics.scrollWidth)}px content in ${String(width)}px viewport.`,
       );
+    }
+
+    if (railExpectation) {
+      const railState = await client.send(
+        "Runtime.evaluate",
+        {
+          expression: `(() => {
+            const rail = document.querySelector('.base-workspace__rail-top');
+            const metadata = document.querySelector('.base-workspace__metadata');
+            const activity = document.querySelector('.base-workspace-section--secondary');
+            if (!rail || !metadata || !activity) return { missing: true };
+            const metadataRect = metadata.getBoundingClientRect();
+            const activityRect = activity.getBoundingClientRect();
+            const overlap = !(metadataRect.right <= activityRect.left ||
+              activityRect.right <= metadataRect.left ||
+              metadataRect.bottom <= activityRect.top ||
+              activityRect.bottom <= metadataRect.top);
+            const railStyle = getComputedStyle(rail);
+            return {
+              missing: false,
+              overlap,
+              position: railStyle.position,
+              zIndex: railStyle.zIndex,
+              backgroundColor: railStyle.backgroundColor,
+              gridDisplay: getComputedStyle(document.querySelector('.base-workspace__grid')).display,
+              scrollY: window.scrollY,
+              metadataRect: { left: metadataRect.left, right: metadataRect.right, top: metadataRect.top, bottom: metadataRect.bottom },
+              activityRect: { left: activityRect.left, right: activityRect.right, top: activityRect.top, bottom: activityRect.bottom },
+            };
+          })()`,
+          returnByValue: true,
+        },
+        sessionId,
+      );
+      const rail = railState.result.value;
+      if (rail.missing || rail.overlap || rail.scrollY <= 0) {
+        throw new Error(
+          `${name}: sticky metadata and Activity overlap: ${JSON.stringify(rail)}.`,
+        );
+      }
+      if (railExpectation === "desktop") {
+        if (
+          rail.position !== "sticky" ||
+          rail.zIndex === "auto" ||
+          rail.backgroundColor === "rgba(0, 0, 0, 0)"
+        ) {
+          throw new Error(
+            `${name}: desktop rail lacks its sticky protective layer: ${JSON.stringify(rail)}.`,
+          );
+        }
+      } else if (rail.position === "sticky" || rail.gridDisplay !== "block") {
+        throw new Error(
+          `${name}: compact rail must remain non-sticky and single-column: ${JSON.stringify(rail)}.`,
+        );
+      }
     }
 
     const screenshot = await client.send(
@@ -381,6 +439,24 @@ await capture("rfi2b-issued-tablet.png", {
   ...TABLET,
   query: at("rfiWorkspaceFixture=issued"),
   expect: "[data-official-pdf-download]",
+});
+await capture("rfi2b-sticky-rail-scrolled-desktop.png", {
+  ...DESKTOP,
+  query: at("rfiWorkspaceFixture=ready-long&rfiWorkspaceScenario=sticky-rail"),
+  expect: ".base-workspace-section--secondary",
+  railExpectation: "desktop",
+});
+await capture("rfi2b-sticky-rail-tablet.png", {
+  ...TABLET,
+  query: at("rfiWorkspaceFixture=ready-long&rfiWorkspaceScenario=sticky-rail"),
+  expect: ".base-workspace-section--secondary",
+  railExpectation: "compact",
+});
+await capture("rfi2b-sticky-rail-mobile.png", {
+  ...MOBILE,
+  query: at("rfiWorkspaceFixture=ready-long&rfiWorkspaceScenario=sticky-rail"),
+  expect: ".base-workspace-section--secondary",
+  railExpectation: "compact",
 });
 
 // --- Mobile and long content ---------------------------------------------

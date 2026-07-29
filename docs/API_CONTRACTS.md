@@ -676,7 +676,27 @@ Relevant errors:
 - `500 RFI_ARTIFACT_RECONCILIATION_REQUIRED` when commit evidence is partial or
   unavailable, or guarded compensation cannot delete R2
 
-### `POST /rfis/{rfiId}/responses`
+### `POST /rfis/{rfiId}/respond`
+
+Implemented at `POST /api/v2/projects/{projectId}/rfis/{rfiId}/respond`.
+
+```json
+{
+  "response": "Provide a total of three can lights.",
+  "respondedBy": "External Design Lead"
+}
+```
+
+`respondedBy` is optional free-text display attribution. It is stored only in
+`rfi_responses.responded_by`; it is never interpreted as a BASE user ID or a
+project-contact ID. The authenticated actor may be stored separately as the
+recording user where the detail row's user foreign key has that meaning. A
+successful write persists response history, the current response summary,
+`response_received` lifecycle state, and `rfi.responded` activity atomically.
+An unexpected D1 batch failure returns `503 RFI_RESPONSE_COMMIT_FAILED` with a
+safe message and request ID; no partial response or activity is committed.
+
+### `POST /rfis/{rfiId}/responses` (planned response-snapshot workflow)
 
 ```json
 {

@@ -275,11 +275,17 @@ Guard:
 
 - state is `open` or `returned_for_clarification`
 - response text or response file present
-- responder identity recorded
+- optional responder display attribution may be recorded as free text
 
 Effects:
 
 - store response
+- preserve the entered responder display attribution only in response history;
+  do not treat an external responder as an authenticated BASE user or project
+  contact
+- record the authenticated BASE actor separately when `response_by_user_id`
+  represents the user who entered the response; otherwise leave contact identity
+  unset until a deliberate contact-selection workflow exists
 - attach returned files with role
 - set response timestamp
 - set state `response_received`

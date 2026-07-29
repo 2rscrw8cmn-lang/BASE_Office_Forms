@@ -1550,6 +1550,12 @@
   .base-workspace__grid .base-workspace__rail-top {
     position: sticky;
     top: calc(56px + var(--app-space-4));
+    /* Keep the compact sticky facts above the scrolling main-column content.
+     * The opaque token surface and small trailing gutter prevent text from
+     * visibly painting through the rail at the sticky boundary. */
+    z-index: 1;
+    padding-bottom: var(--app-space-2);
+    background: var(--app-surface);
   }
 }
 

@@ -210,5 +210,8 @@ migration, or official record.
   implemented but not merged.
 - Response, clarification, close, reopen, final-closed artifact, and log export
   remain later slices.
-- Artifact generation is synchronous in the Worker and uses the frozen
-  Slice 2A PDF renderer contract.
+- Artifact generation is synchronous in the Worker and currently uses the
+  frozen Slice 2A strict RFI PDF adapter. A deferred RFI-02.10 architecture item
+  will converge that adapter with the reusable Library/Studio
+  controlled-document renderer; the exact Library template version remains the
+  authoritative binding and existing official artifacts are never regenerated.

@@ -151,10 +151,12 @@ function OriginalIssueEvidence({
   projectId,
   rfiId,
   issue,
+  projectTimezone,
 }: {
   projectId: string;
   rfiId: string;
   issue: RfiOfficialIssueSummary;
+  projectTimezone: string;
 }) {
   return (
     <WorkspaceSection
@@ -201,7 +203,7 @@ function OriginalIssueEvidence({
         </div>
         <div className="rfi-workspace-fact">
           <dt>Issued</dt>
-          <dd>{formatDate(issue.issuedAt) || "—"}</dd>
+          <dd>{formatDate(issue.issuedAt, projectTimezone) || "—"}</dd>
         </div>
         <div className="rfi-workspace-fact">
           <dt>Response due at issue</dt>
@@ -620,7 +622,13 @@ export function RfiWorkspaceFeature({
           },
         ]),
     ...(rfi.issuedAt && !legacyIncomplete
-      ? [{ label: "Issued", value: formatDate(rfi.issuedAt), mono: true }]
+      ? [
+          {
+            label: "Issued",
+            value: formatDate(rfi.issuedAt, data.project.timezone),
+            mono: true,
+          },
+        ]
       : []),
     { label: "Current version", value: data.currentVersion.label },
     { label: "Files", value: String(attachmentList(data).length) },
@@ -798,6 +806,7 @@ export function RfiWorkspaceFeature({
             projectId={projectId}
             rfiId={rfi.id}
             issue={data.officialIssue}
+            projectTimezone={data.project.timezone}
           />
         ) : null}
 

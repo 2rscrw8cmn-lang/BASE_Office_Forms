@@ -143,7 +143,9 @@ export function parseLockVersion(value: unknown): number {
   return value;
 }
 
-export function parseRfiResponse(value: unknown): RfiResponseWriteInput {
+export function parseRfiResponse(
+  value: unknown,
+): Omit<RfiResponseWriteInput, "recordedByUserId"> {
   const source = object(value);
   return {
     response: requiredText(source.response, "response"),

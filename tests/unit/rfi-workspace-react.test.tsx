@@ -15,6 +15,7 @@ import {
   attachment,
   installWorkspaceFetch,
   jsonResponse,
+  officialIssueSummary,
   PROJECT_ID,
   RFI_ID,
   renderWorkspace,
@@ -646,6 +647,35 @@ describe("RFI workspace — immutable original issue evidence", () => {
     // Current lifecycle state comes from top-level rfi.status, not the immutable
     // evidence object (which has no status or capabilities).
     expect(root().textContent).toContain("Closed");
+  });
+
+  it("uses the project timezone for workspace and original-issue dates", async () => {
+    const issuedAt = "2026-07-29T01:30:00.000Z";
+    installWorkspaceFetch({
+      rfi: rfiWorkspace({
+        rfi: { rfiNumber: "RFI-015", status: "open", issuedAt },
+        currentVersion: {
+          id: "rfi-draft-1",
+          label: "Original Issue",
+          status: "published",
+        },
+        officialIssue: officialIssueSummary({
+          officialDisplayNumber: "RFI-015",
+          issuedAt,
+        }),
+        capabilities: { updateDraft: false },
+      }),
+    });
+    render();
+    await waitForWorkspace();
+
+    expect(
+      root().querySelector(".base-workspace__metadata")?.textContent,
+    ).toContain("July 28, 2026");
+    expect(
+      root().querySelector(".rfi-workspace-original-issue")?.textContent,
+    ).toContain("July 28, 2026");
+    expect(root().textContent).not.toContain("July 29, 2026");
   });
 });
 

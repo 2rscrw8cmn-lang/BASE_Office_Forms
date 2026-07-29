@@ -961,9 +961,9 @@ document's current version; the breadcrumb keeps the owning document one click
 away. Published and superseded versions state that they are immutable, and an
 archived document's notice takes precedence over the revision's own. Upload
 appears only when the server returns `revision.capabilities.uploadFile`, and
-Publish only when `publishRevision` is true *and* the draft has at least one
+Publish only when `publishRevision` is true _and_ the draft has at least one
 file — otherwise the workspace explains the requirement rather than offering a
-disabled control. A failed upload refetches the workspace *before* offering a
+disabled control. A failed upload refetches the workspace _before_ offering a
 retry, so the file list on screen is confirmed server truth and a repeat attempt
 cannot silently attach a second copy; this is the UI-6B staged-work rule applied
 to a single-stage sequence.
@@ -974,6 +974,12 @@ The RFI is a structured record, so its "current work" is its authoritative
 content rather than a file list. Response content is a separate section from the
 question and is never merged into it. Attachments carry an explicit role
 (supporting attachment / reference drawing) and their exact draft revision.
+Free-text response attribution is persisted only in response history;
+`rfi_details.response_by_user_id` stores the authenticated recording actor, not
+an external responder display string, so its user foreign key remains intact.
+The response history/current-summary/status/activity write is one D1 batch; an
+unexpected constraint failure becomes safe `503 RFI_RESPONSE_COMMIT_FAILED`
+with redacted structured context and no partial state.
 Draft editing is one form gated on `capabilities.updateDraft`, carries the
 server's `lockVersion`, and on `409 RFI_VERSION_CONFLICT` reloads the
 authoritative values and asks for a deliberate retry; a 403 says permission was
@@ -992,6 +998,12 @@ template-bound document view is read-only, rendered on demand inside a
 the controlled renderer is not loaded in the authenticated workspace when
 `globalThis.BASE` is absent (unchanged from the legacy workspace — see "Known
 limitations" in `UI_PROGRAM_STATUS.md` §5G).
+Official issue timestamps remain UTC storage values but are presented as the
+project-local calendar date in the workspace evidence and strict PDF adapter;
+the renderer does not derive dates by slicing UTC timestamps. The shared
+desktop `WorkspacePage` rail places an opaque, token-surface sticky facts wrapper
+above scrolling main content, while tablet/mobile retain the non-sticky
+single-column layout.
 
 ### RFI mark ready and official issuance (Slice 2B)
 

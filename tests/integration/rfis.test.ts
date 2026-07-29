@@ -442,6 +442,10 @@ interface WorkspaceModel {
     originalIssueRequestId: string;
   } | null;
   currentVersion?: { id: string; label: string; status: string };
+  responses?: {
+    response: string;
+    respondedBy: string | null;
+  }[];
   capabilities?: {
     updateDraft: boolean;
     markReady: boolean;
@@ -1614,6 +1618,224 @@ describe("RFI register & workspace (Slice 1)", () => {
     });
     expect(model.officialIssue).not.toHaveProperty("status");
     expect(model.officialIssue).not.toHaveProperty("capabilities");
+  });
+
+  it("records free-text responder attribution without using it as a user foreign key", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RESPONSE-FREE-TEXT");
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody(prepared.contactId),
+          { key: "response-free-text-issue" },
+        )
+      ).status,
+    ).toBe(200);
+
+    const response = await invokeV2Api(
+      `/api/v2/projects/${prepared.project.id}/rfis/${prepared.draft.id}/respond`,
+      request("admin", "POST", {
+        response: "Use the revised structural detail.",
+        respondedBy: "External Design Lead",
+      }),
+      dependencies(),
+    );
+    expect(response.status).toBe(200);
+
+    const persisted = await testDatabase()
+      .prepare(
+        `SELECT response, responded_by FROM rfi_responses
+         WHERE record_id = ?`,
+      )
+      .bind(prepared.draft.id)
+      .first<{ response: string; responded_by: string | null }>();
+    expect(persisted).toEqual({
+      response: "Use the revised structural detail.",
+      responded_by: "External Design Lead",
+    });
+    const detail = await testDatabase()
+      .prepare(
+        `SELECT response, response_by_user_id, response_by_contact_id
+         FROM rfi_details WHERE record_id = ?`,
+      )
+      .bind(prepared.draft.id)
+      .first<{
+        response: string;
+        response_by_user_id: string | null;
+        response_by_contact_id: string | null;
+      }>();
+    expect(detail).toEqual({
+      response: "Use the revised structural detail.",
+      response_by_user_id: "user-admin",
+      response_by_contact_id: null,
+    });
+    const state = await testDatabase()
+      .prepare("SELECT workflow_status FROM records WHERE id = ?")
+      .bind(prepared.draft.id)
+      .first<{ workflow_status: string }>();
+    expect(state?.workflow_status).toBe("response_received");
+    const activity = await testDatabase()
+      .prepare(
+        "SELECT action FROM activity_events WHERE object_id = ? AND action = 'rfi.responded'",
+      )
+      .bind(prepared.draft.id)
+      .all<{ action: string }>();
+    expect(activity.results).toEqual([{ action: "rfi.responded" }]);
+    expect(
+      (await testDatabase().prepare("PRAGMA foreign_key_check").all()).results,
+    ).toEqual([]);
+
+    const reloaded = await workspace(prepared.project.id, prepared.draft.id);
+    expect(reloaded.rfi.status).toBe("response_received");
+    expect(reloaded.responses).toMatchObject([
+      {
+        response: "Use the revised structural detail.",
+        respondedBy: "External Design Lead",
+      },
+    ]);
+  });
+
+  it("preserves a blank responder while recording the authenticated actor separately", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RESPONSE-BLANK");
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody(prepared.contactId),
+          { key: "response-blank-issue" },
+        )
+      ).status,
+    ).toBe(200);
+
+    const response = await invokeV2Api(
+      `/api/v2/projects/${prepared.project.id}/rfis/${prepared.draft.id}/respond`,
+      request("admin", "POST", {
+        response: "Proceed as shown.",
+        respondedBy: "",
+      }),
+      dependencies(),
+    );
+    expect(response.status).toBe(200);
+    const persisted = await testDatabase()
+      .prepare(`SELECT responded_by FROM rfi_responses WHERE record_id = ?`)
+      .bind(prepared.draft.id)
+      .first<{ responded_by: string | null }>();
+    expect(persisted?.responded_by).toBeNull();
+    const detail = await testDatabase()
+      .prepare(
+        `SELECT response_by_user_id, response_by_contact_id
+         FROM rfi_details WHERE record_id = ?`,
+      )
+      .bind(prepared.draft.id)
+      .first<{
+        response_by_user_id: string | null;
+        response_by_contact_id: string | null;
+      }>();
+    expect(detail).toEqual({
+      response_by_user_id: "user-admin",
+      response_by_contact_id: null,
+    });
+  });
+
+  it("classifies an unexpected response batch failure, logs only safe context, and rolls back atomically", async () => {
+    const prepared = await prepareIssuableRfi("P-RFI-RESPONSE-ATOMIC");
+    expect(
+      (
+        await issue(
+          prepared.project.id,
+          prepared.draft.id,
+          issueBody(prepared.contactId),
+          { key: "response-atomic-issue" },
+        )
+      ).status,
+    ).toBe(200);
+    await testDatabase()
+      .prepare(
+        `CREATE TRIGGER fail_rfi_response_detail
+         BEFORE UPDATE ON rfi_details
+         WHEN NEW.record_id = '${prepared.draft.id}'
+         BEGIN SELECT RAISE(ABORT, 'forced response detail failure'); END`,
+      )
+      .run();
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      const response = await invokeV2Api(
+        `/api/v2/projects/${prepared.project.id}/rfis/${prepared.draft.id}/respond`,
+        request("admin", "POST", {
+          response: "SECRET RESPONSE MUST NOT BE LOGGED",
+          respondedBy: "SECRET EXTERNAL RESPONDER",
+        }),
+        dependencies(),
+      );
+      expect(response.status).toBe(503);
+      const failure = await readJson<{
+        error: { code: string; requestId: string };
+      }>(response);
+      expect(failure.error.code).toBe("RFI_RESPONSE_COMMIT_FAILED");
+      expect(error).toHaveBeenCalledWith(
+        "rfi_response_commit_failed",
+        expect.objectContaining({
+          requestId: failure.error.requestId,
+          organizationId: "org-a",
+          projectId: prepared.project.id,
+          rfiId: prepared.draft.id,
+          safeErrorMessage: "The RFI response transaction failed.",
+        }),
+      );
+      const loggedCalls = error.mock.calls as unknown as unknown[][];
+      const context = loggedCalls[0]?.[1] as {
+        errorName?: unknown;
+        stackTrace?: unknown;
+      };
+      expect(typeof context.errorName).toBe("string");
+      expect(typeof context.stackTrace).toBe("string");
+      expect(JSON.stringify(error.mock.calls)).not.toContain(
+        "SECRET RESPONSE MUST NOT BE LOGGED",
+      );
+      expect(JSON.stringify(error.mock.calls)).not.toContain(
+        "SECRET EXTERNAL RESPONDER",
+      );
+      const counts = await testDatabase()
+        .prepare(
+          `SELECT
+            (SELECT COUNT(*) FROM rfi_responses WHERE record_id = ?) responses,
+            (SELECT COUNT(*) FROM activity_events
+             WHERE object_id = ? AND action = 'rfi.responded') activities,
+            (SELECT workflow_status FROM records WHERE id = ?) status,
+            (SELECT response FROM rfi_details WHERE record_id = ?) detail_response`,
+        )
+        .bind(
+          prepared.draft.id,
+          prepared.draft.id,
+          prepared.draft.id,
+          prepared.draft.id,
+        )
+        .first<{
+          responses: number;
+          activities: number;
+          status: string;
+          detail_response: string | null;
+        }>();
+      expect(counts).toEqual({
+        responses: 0,
+        activities: 0,
+        status: "open",
+        detail_response: null,
+      });
+      expect(
+        (await testDatabase().prepare("PRAGMA foreign_key_check").all())
+          .results,
+      ).toEqual([]);
+    } finally {
+      error.mockRestore();
+      await testDatabase()
+        .prepare("DROP TRIGGER IF EXISTS fail_rfi_response_detail")
+        .run();
+    }
   });
 
   it("rejects a reused idempotency key when the request changes", async () => {

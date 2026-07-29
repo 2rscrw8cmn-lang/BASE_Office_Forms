@@ -42,7 +42,10 @@ export interface RfiMutationInput extends RfiWriteInput {
   correlationId: string;
 }
 
-export interface RfiResponseInput extends RfiResponseWriteInput {
+export interface RfiResponseInput extends Omit<
+  RfiResponseWriteInput,
+  "recordedByUserId"
+> {
   correlationId: string;
 }
 
@@ -261,7 +264,11 @@ export class RfiService {
       rfi,
       {
         response: input.response,
-        respondedBy: input.respondedBy ?? actor.userId,
+        // `respondedBy` is contact-facing attribution and may be free text or
+        // intentionally blank. The authenticated actor is recorded separately
+        // in the detail row's user foreign key.
+        respondedBy: input.respondedBy,
+        recordedByUserId: actor.userId,
       },
       {
         actorUserId: actor.userId,

@@ -1701,6 +1701,16 @@ async function runRfiIssueScenario() {
     return;
   }
 
+  if (scenario === "sticky-rail") {
+    (
+      await waitForSelector(".base-workspace-section--secondary")
+    ).scrollIntoView({
+      block: "center",
+      behavior: "instant",
+    });
+    return;
+  }
+
   if (!scenario.startsWith("issue-")) return;
 
   ((await waitForSelector("[data-issue-rfi]")) as HTMLButtonElement).click();
