@@ -5,7 +5,7 @@ official-issuance backend (PR #49), the merged UI-7 native detail workspaces
 (PR #48), and the RFI Slice 2B record-only issuance UI on
 `feature/rfi-slice-2b-issuance-ui`. Only the Work Dashboard and Project
 Overview remain compatibility-mounted.
-**Updated:** 2026-07-28 (RFI Slice 2B mark-ready and official issuance UI)
+**Updated:** 2026-07-29 (guarded production BASE RFI template reconciliation)
 
 ## Runtime shape
 
@@ -37,12 +37,19 @@ render/template/recipient snapshots, activity, and idempotency result in one
 guarded D1 batch.
 
 The canonical BASE RFI definition is shared by
-`src/domain/rfis/base-rfi-template.ts` and the isolated preview reconciliation
-through `src/domain/rfis/base-rfi-template-definition.json`. The preview-only
+`src/domain/rfis/base-rfi-template.ts` and the reconciliation scripts through
+`src/domain/rfis/base-rfi-template-definition.json`. The preview-only
 `scripts/rfi-preview-template-reconciliation.mjs` preserves a stale template
 version, publishes one immutable canonical successor, and deliberately rebinds
-only eligible pre-official RFIs. At the renderer boundary, failed artifact
-generation emits a redacted structured log with request/resource IDs, the
+only eligible pre-official RFIs. The separately guarded
+`scripts/rfi-production-template-reconciliation.mjs` addresses the confirmed
+production version-1 field-ID mismatch only: it defaults to a read-only report,
+requires an approved dry-run fingerprint and an active audit actor to apply,
+publishes canonical version 2 without editing version 1, and repeats every
+pre-official guard in its record update. Its procedure and post-apply issue
+verification are in `RFI_SLICE_2A_ROLLOUT.md` §"Production BASE RFI template
+reconciliation". At the renderer boundary, failed artifact generation emits a
+redacted structured log with request/resource IDs, the
 template version, error classification, safe message, and stack frames; it
 never includes RFI/routing content, credentials, idempotency keys, or R2 keys.
 

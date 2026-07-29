@@ -84,3 +84,35 @@ declare module "*rfi-preview-template-reconciliation.mjs" {
     rebindRecordIds: string[];
   };
 }
+
+declare module "*rfi-production-template-reconciliation.mjs" {
+  export const productionReconciliation: {
+    database: string;
+    failedRfiId: string;
+    failedRequestId: string;
+    affectedVersionId: string;
+  };
+  export function expectedPreFieldIdDefinition(): Record<string, unknown>;
+  export function structuralDifferences(
+    actual: unknown,
+    expected: unknown,
+  ): Array<{ path: string; actual: unknown; expected: unknown }>;
+  export function isEligibleProductionRfi(
+    record: Record<string, unknown>,
+  ): boolean;
+  export function planProductionTemplateReconciliation(input: {
+    organizationId: string;
+    templateId: string;
+    sequence: { last_number: number };
+    versions: Array<Record<string, unknown>>;
+    records: Array<Record<string, unknown>>;
+  }): Record<string, unknown>;
+  export function planFingerprint(plan: Record<string, unknown>): string;
+  export function applyProductionTemplateReconciliation(input: {
+    query(command: string): Promise<Array<Record<string, unknown>>>;
+    execute(command: string): Promise<void>;
+    sql(value: string): string;
+    actorUserId: string;
+    reviewedPlanFingerprint: string;
+  }): Promise<Record<string, unknown>>;
+}

@@ -202,6 +202,118 @@ open, closed, and void rows remain bound to their existing version. This is a
 preview-fixture correction only; it does not change a production template,
 migration, or official record.
 
+## Production BASE RFI template reconciliation (pending approval)
+
+The confirmed issuance failure for RFI
+`555271af-6a78-4103-8c24-ede25abd9eed` (request
+`req_1412ca0e-8c1d-4284-b9af-76f7b49fe01e`) is an exact definition mismatch in
+published template version `ed74b014-d1f5-423a-a49a-b56d8a68bf38` (version 1).
+The version has the canonical title, `documentType`, sections, and footnote,
+but every canonical field ID is absent. The source of truth is
+`src/domain/rfis/base-rfi-template-definition.json`.
+
+`npm run db:reconcile:production-rfi-template` is a production-targeted,
+**read-only** dry run by default. Do not run its `--apply` mode, and do not
+retry issuance, until the resulting dry-run report has been reviewed and an
+authorized operator has explicitly approved it. This is a forward correction,
+not a migration: version 1's definition and audit identity remain immutable.
+
+### Required dry-run review
+
+Run only after the release commit and local tests are reviewed:
+
+```text
+npm run db:reconcile:production-rfi-template
+```
+
+The JSON report must be retained with release evidence and must show:
+
+- the resolved organization ID and template ID;
+- version 1 as the current published version;
+- exactly eight structural differences, all missing `id` values for
+  `subject`, `responsible_party`, `requested_response_date`, `question`,
+  `contractor_suggestion`, `drawing_references`, `specification_references`,
+  and `response`;
+- the eligible RFI IDs and count, including the failed RFI above;
+- every ineligible RFI still bound to version 1, with its guard reason, and
+  any non-RFI record bound to that version;
+- the report `fingerprint`.
+
+Stop and investigate if any other structural difference appears, the version,
+sequence, or publication state differs from the report's expected state, the
+failed RFI is not eligible, or an unexpected record is bound to version 1.
+There is no safe "best effort" mode.
+
+### Explicitly approved apply
+
+After an authorized human records approval of that exact dry run, use the
+reported fingerprint unchanged and an active member's user ID as the audit
+actor. In PowerShell:
+
+```powershell
+$env:RFI_PRODUCTION_RECONCILIATION_APPROVED = "approved"
+npm run db:reconcile:production-rfi-template -- --apply --actor-user-id <active-user-id> --reviewed-plan-fingerprint <dry-run-fingerprint>
+Remove-Item Env:RFI_PRODUCTION_RECONCILIATION_APPROVED
+```
+
+The runner re-reads production before writing and refuses to proceed unless the
+fingerprint still matches. It freezes the eligible RFI IDs from that approved
+report as the only authorized rebind set, rejects any later inspection that
+finds another eligible version-1 RFI, and includes the exact frozen IDs in the
+guarded SQL update. It stages a new immutable canonical version 2,
+retires version 1, promotes version 2, and advances
+`template_version_sequences.last_number` from 1 to 2. It never edits version
+1's JSON. Its record update is independently guarded to rebind only records
+that are `record_type_key = 'rfi'`, still reference version 1, are `draft` or
+`ready_to_issue`, have null `sequence_no`, `record_number`, and `issued_at`,
+and have no official issue, published revision, or generated artifact.
+Issued, numbered, open, response-received, closed, void, and otherwise
+ineligible records remain bound to version 1.
+
+The successful apply report must have no planned create, retire, promotion,
+sequence, or rebind change. Immediately run the read-only command a second
+time and retain its zero-change report as the idempotence proof.
+
+If any apply step has written (including staging version 2), the original
+dry-run fingerprint no longer represents production state. Stop rather than
+reusing it: run a fresh read-only dry run, obtain explicit approval of that
+new staged-state fingerprint, and only then resume. A separate reviewed resume
+mechanism would be required to authorize reuse of the original fingerprint;
+none exists in this release.
+
+### Post-apply failed-RFI and issuance verification
+
+Before retrying the failed issuance, verify that the failed RFI is bound to
+version 2, remains `ready_to_issue`, is unnumbered, and has no official issue,
+published revision, generated artifact, or pending orphan. Then retry the same
+issuance attempt through the approved record-only issue workflow. Confirm the
+server assigns one official number, persists one generated PDF and exactly one
+`rfi_official_issues` row, and leaves no `rfi_artifact_orphans` row in
+`pending` state. Preserve the request ID, result, and download evidence with
+the rollout record; do not retry if authoritative evidence is incomplete.
+
+```sql
+SELECT id, template_version_id, workflow_status, sequence_no, record_number, issued_at
+FROM records
+WHERE id = '555271af-6a78-4103-8c24-ede25abd9eed';
+
+SELECT COUNT(*) AS official_issue_count
+FROM rfi_official_issues
+WHERE rfi_id = '555271af-6a78-4103-8c24-ede25abd9eed';
+
+SELECT revision.id, revision.status, file.id AS artifact_file_id, file.role
+FROM record_revisions revision
+LEFT JOIN revision_files file
+  ON file.revision_id = revision.id AND file.role = 'generated_artifact'
+WHERE revision.record_id = '555271af-6a78-4103-8c24-ede25abd9eed'
+ORDER BY revision.revision_number;
+
+SELECT id, reconciliation_status, artifact_storage_key, failure_summary
+FROM rfi_artifact_orphans
+WHERE rfi_id = '555271af-6a78-4103-8c24-ede25abd9eed'
+  AND reconciliation_status = 'pending';
+```
+
 ## Deliberate limitations
 
 - `record_only` only; no email, share, inbox, or portal delivery.
