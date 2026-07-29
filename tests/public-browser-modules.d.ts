@@ -80,6 +80,7 @@ declare module "*rfi-preview-template-reconciliation.mjs" {
     canonicalVersionId: string;
     publishCanonicalVersion: boolean;
     retireVersionId: string | null;
+    promoteCanonicalVersion: boolean;
     rebindRecordIds: string[];
   };
 }

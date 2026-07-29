@@ -55,6 +55,7 @@ describe("RFI preview template reconciliation", () => {
       canonicalVersionId: previewTemplateIds.canonical,
       publishCanonicalVersion: true,
       retireVersionId: previewTemplateIds.stale,
+      promoteCanonicalVersion: true,
       rebindRecordIds: ["draft", "ready"],
     });
   });
@@ -77,6 +78,7 @@ describe("RFI preview template reconciliation", () => {
       canonicalVersionId: previewTemplateIds.canonical,
       publishCanonicalVersion: false,
       retireVersionId: null,
+      promoteCanonicalVersion: false,
       rebindRecordIds: [],
     });
   });

@@ -56,13 +56,35 @@ export function planPreviewTemplateReconciliation({ versions, records }) {
   let canonicalVersionId;
   let publishCanonicalVersion = false;
   let retireVersionId = null;
+  let promoteCanonicalVersion = false;
   if (canonical.length === 1) {
     const [version] = canonical;
-    if (version.status !== "published")
+    if (version.status === "published") {
+      canonicalVersionId = version.id;
+    } else if (version.id === previewTemplateIds.canonical) {
+      const stale = normalized.find(
+        (candidate) =>
+          candidate.id === previewTemplateIds.stale &&
+          isStalePreviewStub(candidate.definition),
+      );
+      const otherPublished = normalized.filter(
+        (candidate) => candidate.status === "published",
+      );
+      if (
+        !stale ||
+        otherPublished.some((candidate) => candidate.id !== stale.id)
+      )
+        throw new Error(
+          "Preview template reconciliation found an unsafe staged canonical version.",
+        );
+      canonicalVersionId = version.id;
+      retireVersionId = stale.status === "published" ? stale.id : null;
+      promoteCanonicalVersion = true;
+    } else {
       throw new Error(
         "Preview template reconciliation found a retired canonical BASE RFI version.",
       );
-    canonicalVersionId = version.id;
+    }
   } else {
     const canonicalIdConflict = normalized.find(
       (version) => version.id === previewTemplateIds.canonical,
@@ -81,12 +103,14 @@ export function planPreviewTemplateReconciliation({ versions, records }) {
     canonicalVersionId = previewTemplateIds.canonical;
     publishCanonicalVersion = true;
     retireVersionId = published[0].id;
+    promoteCanonicalVersion = true;
   }
 
   return {
     canonicalVersionId,
     publishCanonicalVersion,
     retireVersionId,
+    promoteCanonicalVersion,
     rebindRecordIds: records
       .filter(isEligiblePreviewRfi)
       .map((record) => record.id),
@@ -117,25 +141,37 @@ export async function reconcilePreviewTemplate({ query, execute, sql }) {
   const canonicalJson = JSON.stringify(definition);
 
   if (plan.publishCanonicalVersion) {
-    await execute(`BEGIN;
-      UPDATE template_versions SET status = 'retired'
-      WHERE id = ${sql(plan.retireVersionId)}
-        AND organization_id = ${sql("rfi-preview-org")}
-        AND status = 'published';
-      UPDATE template_version_sequences SET last_number = last_number + 1
-      WHERE template_id = ${sql("rfi-preview-template")}
-        AND organization_id = ${sql("rfi-preview-org")};
-      INSERT INTO template_versions
+    // Remote D1 SQL rejects explicit BEGIN/COMMIT. Stage the new immutable row
+    // as retired first, then retire/promote in separate, restart-safe commands.
+    await execute(`INSERT INTO template_versions
         (id, organization_id, template_id, version_number, definition_json, status,
          created_by, created_at, published_at, published_by)
       SELECT ${sql(plan.canonicalVersionId)}, ${sql("rfi-preview-org")},
-        ${sql("rfi-preview-template")}, last_number, ${sql(canonicalJson)}, 'published',
+        ${sql("rfi-preview-template")}, last_number + 1, ${sql(canonicalJson)}, 'retired',
         ${sql("rfi-preview-access-user")}, datetime('now'), datetime('now'),
         ${sql("rfi-preview-access-user")}
       FROM template_version_sequences
       WHERE template_id = ${sql("rfi-preview-template")}
-        AND organization_id = ${sql("rfi-preview-org")};
-    COMMIT;`);
+        AND organization_id = ${sql("rfi-preview-org")};`);
+  }
+
+  if (plan.retireVersionId) {
+    await execute(`UPDATE template_versions SET status = 'retired'
+      WHERE id = ${sql(plan.retireVersionId)}
+        AND organization_id = ${sql("rfi-preview-org")}
+        AND status = 'published';`);
+  }
+
+  if (plan.promoteCanonicalVersion) {
+    await execute(`UPDATE template_versions SET status = 'published'
+      WHERE id = ${sql(plan.canonicalVersionId)}
+        AND organization_id = ${sql("rfi-preview-org")}
+        AND status = 'retired';`);
+    await execute(`UPDATE template_version_sequences
+      SET last_number = (SELECT version_number FROM template_versions WHERE id = ${sql(plan.canonicalVersionId)})
+      WHERE template_id = ${sql("rfi-preview-template")}
+        AND organization_id = ${sql("rfi-preview-org")}
+        AND last_number < (SELECT version_number FROM template_versions WHERE id = ${sql(plan.canonicalVersionId)});`);
   }
 
   if (plan.rebindRecordIds.length > 0) {
