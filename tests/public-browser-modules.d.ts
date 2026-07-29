@@ -70,3 +70,17 @@ declare module "*rfi-workspace-view.js" {
     options: Record<string, unknown>,
   ): BrowserView;
 }
+
+declare module "*rfi-preview-template-reconciliation.mjs" {
+  export const previewTemplateIds: { stale: string; canonical: string };
+  export function planPreviewTemplateReconciliation(input: {
+    versions: { id: string; status: string; definition_json: string }[];
+    records: Record<string, unknown>[];
+  }): {
+    canonicalVersionId: string;
+    publishCanonicalVersion: boolean;
+    retireVersionId: string | null;
+    promoteCanonicalVersion: boolean;
+    rebindRecordIds: string[];
+  };
+}

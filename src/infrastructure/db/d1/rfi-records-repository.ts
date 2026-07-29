@@ -1,6 +1,7 @@
 import {
   RfiConflictError,
   RfiIllegalTransitionError,
+  RfiResponsePersistenceError,
 } from "../../../domain/rfis/errors";
 import { canUpdateDraft } from "../../../domain/rfis/lifecycle";
 import type {
@@ -201,6 +202,14 @@ function eventStatement(
       rfi.organizationId,
       rfi.projectId,
     );
+}
+
+function safeErrorName(error: unknown): string {
+  return error instanceof Error && error.name ? error.name : "UnknownError";
+}
+
+function safeStackTrace(error: unknown): string | null {
+  return error instanceof Error && error.stack ? error.stack : null;
 }
 
 export interface RfiCreateInput extends RfiWriteInput {
@@ -483,11 +492,13 @@ export class D1RfiRecordsRepository {
     );
     const now = new Date().toISOString();
     const nextLock = rfi.lockVersion + 1;
-    const results = await this.database.batch([
-      this.responses.createForIssuedRfiStatement(response, rfi.projectId),
-      this.database
-        .prepare(
-          `UPDATE rfi_details SET response = ?, response_by_user_id = ?,
+    let results: D1Result[];
+    try {
+      results = await this.database.batch([
+        this.responses.createForIssuedRfiStatement(response, rfi.projectId),
+        this.database
+          .prepare(
+            `UPDATE rfi_details SET response = ?, response_by_user_id = ?,
              response_received_at = ?
            WHERE record_id = ? AND organization_id = ? AND project_id = ?
              AND EXISTS (
@@ -495,46 +506,60 @@ export class D1RfiRecordsRepository {
                  AND workflow_status IN ('open', 'returned_for_clarification')
                  AND lock_version = ?
              )`,
-        )
-        .bind(
-          response.response,
-          response.respondedBy,
-          now,
-          rfi.id,
-          rfi.organizationId,
-          rfi.projectId,
-          rfi.lockVersion,
-        ),
-      this.database
-        .prepare(
-          `UPDATE records SET workflow_status = 'response_received',
+          )
+          .bind(
+            response.response,
+            input.recordedByUserId,
+            now,
+            rfi.id,
+            rfi.organizationId,
+            rfi.projectId,
+            rfi.lockVersion,
+          ),
+        this.database
+          .prepare(
+            `UPDATE records SET workflow_status = 'response_received',
              returned_at = ?, lock_version = ?, updated_at = ?
            WHERE id = ? AND organization_id = ? AND project_id = ?
              AND workflow_status IN ('open', 'returned_for_clarification')
              AND lock_version = ?`,
-        )
-        .bind(
-          now,
-          nextLock,
-          now,
-          rfi.id,
-          rfi.organizationId,
-          rfi.projectId,
-          rfi.lockVersion,
+          )
+          .bind(
+            now,
+            nextLock,
+            now,
+            rfi.id,
+            rfi.organizationId,
+            rfi.projectId,
+            rfi.lockVersion,
+          ),
+        eventStatement(
+          this.database,
+          {
+            ...event,
+            organizationId: rfi.organizationId,
+            objectId: rfi.id,
+            priorState: priorState(rfi),
+            newState: null,
+            metadata: { ...event.metadata, responseId: response.id },
+          },
+          rfi,
         ),
-      eventStatement(
-        this.database,
-        {
-          ...event,
-          organizationId: rfi.organizationId,
-          objectId: rfi.id,
-          priorState: priorState(rfi),
-          newState: null,
-          metadata: { ...event.metadata, responseId: response.id },
-        },
-        rfi,
-      ),
-    ]);
+      ]);
+    } catch (error) {
+      // Deliberately omit response text, free-text responder, credentials, and
+      // all client-provided request material from operational logging.
+      console.error("rfi_response_commit_failed", {
+        requestId: event.correlationId,
+        organizationId: rfi.organizationId,
+        projectId: rfi.projectId,
+        rfiId: rfi.id,
+        errorName: safeErrorName(error),
+        safeErrorMessage: "The RFI response transaction failed.",
+        stackTrace: safeStackTrace(error),
+      });
+      throw new RfiResponsePersistenceError(error);
+    }
     if (results.some((result) => result.meta.changes !== 1)) {
       await this.throwWriteFailure(rfi, "be responded to");
     }

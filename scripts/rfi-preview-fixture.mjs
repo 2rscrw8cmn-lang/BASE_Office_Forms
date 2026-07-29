@@ -1,6 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import definition from "../src/domain/rfis/base-rfi-template-definition.json" with { type: "json" };
+import {
+  previewTemplateIds,
+  reconcilePreviewTemplate,
+} from "./rfi-preview-template-reconciliation.mjs";
 
 const previewDatabase = "base-office-forms-rfi-preview";
 const previewDatabaseId = "5169cd7c-60d8-4dbd-a66c-75155f745216";
@@ -13,7 +18,7 @@ const fixture = {
   userId: "rfi-preview-access-user",
   contactId: "rfi-preview-contact",
   templateId: "rfi-preview-template",
-  templateVersionId: "rfi-preview-template-v1",
+  templateVersionId: previewTemplateIds.stale,
   recordId: "rfi-preview-record",
   revisionId: "rfi-preview-record:draft-v1",
 };
@@ -91,7 +96,19 @@ function resolveIdentity() {
   return matches[0];
 }
 
-function seed() {
+async function reconcile() {
+  const plan = await reconcilePreviewTemplate({
+    query: (command) => query(previewDatabase, command, true),
+    execute,
+    sql,
+  });
+  console.log(
+    `Combined RFI preview template reconciled: canonical version ${plan.canonicalVersionId}; published=${plan.publishCanonicalVersion}; eligible RFIs rebound=${plan.rebindRecordIds.length}.`,
+  );
+  return plan.canonicalVersionId;
+}
+
+async function seed() {
   const identity = resolveIdentity();
   execute(`INSERT INTO users (id, identity_subject, email, display_name, status, created_at, updated_at)
     VALUES (${sql(fixture.userId)}, ${sql(identity.identity_subject)}, ${sql(identity.email)}, ${sql(identity.display_name)}, 'active', datetime('now'), datetime('now'))
@@ -118,11 +135,12 @@ function seed() {
     `INSERT OR IGNORE INTO template_version_sequences (template_id, organization_id, last_number) VALUES (${sql(fixture.templateId)}, ${sql(fixture.organizationId)}, 1)`,
   );
   execute(`INSERT INTO template_versions (id, organization_id, template_id, version_number, definition_json, status, created_by, created_at, published_at, published_by)
-    VALUES (${sql(fixture.templateVersionId)}, ${sql(fixture.organizationId)}, ${sql(fixture.templateId)}, 1, '{"kind":"form","title":"RFI","sections":[]}', 'published', ${sql(fixture.userId)}, datetime('now'), datetime('now'), ${sql(fixture.userId)})
-    ON CONFLICT(id) DO UPDATE SET status = 'published'`);
+    VALUES (${sql(fixture.templateVersionId)}, ${sql(fixture.organizationId)}, ${sql(fixture.templateId)}, 1, ${sql(JSON.stringify(definition))}, 'published', ${sql(fixture.userId)}, datetime('now'), datetime('now'), ${sql(fixture.userId)})
+    ON CONFLICT(id) DO NOTHING`);
+  const canonicalTemplateVersionId = await reconcile();
   execute(`INSERT INTO records (id, organization_id, project_id, record_type, record_type_key, record_number, sequence_no, title, status, workflow_status, source, created_by, template_version_id, current_responsible_contact_id, lock_version, created_at, updated_at)
-    VALUES (${sql(fixture.recordId)}, ${sql(fixture.organizationId)}, ${sql(fixture.projectId)}, 'other', 'rfi', NULL, NULL, 'Preview RFI draft', 'active', 'draft', 'rfi', ${sql(fixture.userId)}, ${sql(fixture.templateVersionId)}, ${sql(fixture.contactId)}, 1, datetime('now'), datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET archived_at = NULL, workflow_status = 'draft', updated_at = datetime('now')`);
+    VALUES (${sql(fixture.recordId)}, ${sql(fixture.organizationId)}, ${sql(fixture.projectId)}, 'other', 'rfi', NULL, NULL, 'Preview RFI draft', 'active', 'draft', 'rfi', ${sql(fixture.userId)}, ${sql(canonicalTemplateVersionId)}, ${sql(fixture.contactId)}, 1, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET archived_at = NULL, workflow_status = 'draft', template_version_id = excluded.template_version_id, updated_at = datetime('now')`);
   execute(`INSERT INTO rfi_details (record_id, organization_id, project_id, question, contractor_suggestion, issuance_reconciliation_state)
     VALUES (${sql(fixture.recordId)}, ${sql(fixture.organizationId)}, ${sql(fixture.projectId)}, 'Is the proposed lintel elevation acceptable?', 'Provide an updated elevation if not.', 'not_issued')
     ON CONFLICT(record_id) DO UPDATE SET question = excluded.question, contractor_suggestion = excluded.contractor_suggestion`);
@@ -165,9 +183,9 @@ function verify() {
   ])
     if (Number(row[key]) !== 1)
       throw new Error(`Combined preview fixture verification failed: ${key}.`);
-  if (Number(row.migration_count) !== 14)
+  if (Number(row.migration_count) !== 15)
     throw new Error(
-      `Combined preview fixture requires ledger 0001-0014; found ${row.migration_count} entries.`,
+      `Combined preview fixture requires ledger 0001-0015; found ${row.migration_count} entries.`,
     );
   console.log(
     "Combined RFI preview fixture verified: authenticated user, organization, project, contact, template, RFI draft, and revision are ready.",
@@ -184,9 +202,6 @@ function cleanup() {
     DELETE FROM rfi_details WHERE record_id = ${sql(fixture.recordId)};
     DELETE FROM records WHERE id = ${sql(fixture.recordId)};
     DELETE FROM project_record_type_sequences WHERE organization_id = ${sql(fixture.organizationId)} AND project_id = ${sql(fixture.projectId)} AND record_type_key = 'rfi';
-    DELETE FROM template_version_sequences WHERE template_id = ${sql(fixture.templateId)};
-    DELETE FROM template_versions WHERE id = ${sql(fixture.templateVersionId)};
-    DELETE FROM templates WHERE id = ${sql(fixture.templateId)};
     DELETE FROM project_memberships WHERE id = 'rfi-preview-project-manager';
     DELETE FROM project_contacts WHERE id = ${sql(fixture.contactId)};
     DELETE FROM projects WHERE id = ${sql(fixture.projectId)};
@@ -195,7 +210,7 @@ function cleanup() {
     DELETE FROM organizations WHERE id = ${sql(fixture.organizationId)};
   COMMIT;`);
   console.log(
-    "Combined RFI preview fixture cleanup completed; migrations remain untouched.",
+    "Combined RFI preview fixture cleanup completed; immutable preview template versions remain for audit and migrations remain untouched.",
   );
 }
 
@@ -204,4 +219,5 @@ if (!existsSync(wranglerCli))
 assertPreviewTarget();
 if (process.argv[2] === "cleanup") cleanup();
 else if (process.argv[2] === "verify") verify();
-else seed();
+else if (process.argv[2] === "reconcile") await reconcile();
+else await seed();

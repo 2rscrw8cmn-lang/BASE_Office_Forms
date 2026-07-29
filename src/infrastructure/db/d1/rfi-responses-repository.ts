@@ -23,6 +23,8 @@ function mapResponse(row: RfiResponseRow): RfiResponse {
 export interface RfiResponseWriteInput {
   response: string;
   respondedBy: string | null;
+  /** Authenticated BASE user who recorded the response, never its free-text author. */
+  recordedByUserId: string | null;
 }
 
 export class D1RfiResponsesRepository {
@@ -51,7 +53,8 @@ export class D1RfiResponsesRepository {
       id: crypto.randomUUID(),
       organizationId,
       rfiId,
-      ...input,
+      response: input.response,
+      respondedBy: input.respondedBy,
       createdAt: new Date().toISOString(),
     };
   }

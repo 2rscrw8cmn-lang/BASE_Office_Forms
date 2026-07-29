@@ -119,9 +119,12 @@ Replace the split Notion/PDF RFI workflow for one live project.
 #### Rendering and logs
 
 - RFI template binding
-- issued RFI render payload (**Slice 2A backend implemented; review pending**)
-- immutable issued artifact (**Slice 2A `record_only` backend implemented;
+- issued RFI render payload (**Slice 2A backend complete in code; merged as
+  PR #49**)
+- immutable issued artifact (**Slice 2A `record_only` backend complete in code;
   production rollout not performed**)
+- browser issue workflow (**Slice 2B record-only issuance UI implemented; draft
+  PR on `feature/rfi-slice-2b-issuance-ui`; not merged**)
 - project RFI table
 - filters and search
 - PDF/CSV/XLSX log export
@@ -140,9 +143,12 @@ OHPA Conway.
 - Project routing populates the correct recipients.
 - User can identify internal, client, architect, and owner project numbers.
 
-Slice 2A supplies the official issue backend portion only. Response/close,
-delivery, issuance UI, and log export remain open before the Phase 1 exit gate
-is complete.
+Slice 2A supplies the official issue backend and Slice 2B supplies its
+record-only browser workflow (mark ready, issue, and issued evidence). An
+operator can now draft, mark ready, and officially issue an RFI without leaving
+the application. Response/close, email/share delivery, and log export remain
+open before the Phase 1 exit gate is complete, and no production migration or
+deployment has been performed for either slice.
 
 ## 4. Phase 2 — R2 files and submittal lifecycle
 

@@ -8,17 +8,19 @@
 
 import type { RfiStatus } from "../../../domain/rfis/rfi";
 
-const DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
-
-export function formatDate(value: string | null | undefined): string {
+export function formatDate(
+  value: string | null | undefined,
+  timeZone?: string,
+): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return DATE_FORMAT.format(date);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(date);
 }
 
 const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {

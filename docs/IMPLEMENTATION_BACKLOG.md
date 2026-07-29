@@ -3,7 +3,6 @@
 **Status:** Architecture v1.0 — implementation source of truth  
 **Version date:** 2026-07-19
 
-
 This backlog is organized as issue-ready epics. IDs are stable planning references, not GitHub issue numbers.
 
 ## Definition of done
@@ -156,12 +155,24 @@ Acceptance:
 - [x] RFI-02.5 Generate and privately persist issued artifact.
 - [x] RFI-02.6 Snapshot recipients.
 - [x] RFI-02.7 Add authorized artifact download through the existing RFI file
-  route.
+      route.
 - RFI-02.8 Add final-closed artifact option.
 
-Slice 2A closeout still requires PR review and the guarded rollout in
-`RFI_SLICE_2A_ROLLOUT.md`. Email/share delivery and issuance UI are separate
-work, not hidden completion criteria for the checked backend items.
+- [x] RFI-02.9 Add the capability-gated browser mark-ready and official-issue
+      workflow, browser-side idempotency, ambiguous-outcome and reconciliation
+      handling, and issued-evidence presentation (Slice 2B; draft PR, not merged).
+- RFI-02.10 Converge the dedicated strict RFI official-PDF adapter with the
+  reusable Library/Studio controlled-document renderer. The exact immutable
+  Library template version remains the authoritative issue binding throughout;
+  do not replace it with a browser definition or relax the strict compiler as a
+  shortcut.
+
+Slice 2A is complete in code and merged as PR #49; its closeout still requires
+the guarded production rollout in `RFI_SLICE_2A_ROLLOUT.md`, which has not been
+performed. Slice 2B adds the record-only issuance UI on
+`feature/rfi-slice-2b-issuance-ui` and is awaiting review. Email, share-link,
+and portal delivery remain separate later work, not hidden completion criteria
+for the checked items above.
 
 Acceptance:
 

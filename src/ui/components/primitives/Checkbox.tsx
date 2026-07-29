@@ -1,9 +1,11 @@
 import { Checkbox as RadixCheckbox } from "radix-ui";
-import { useId, type ReactNode } from "react";
+import { useId, type ReactNode, type Ref } from "react";
 import { cx } from "../util/cx";
 import { Icon } from "../icons/Icon";
 
 export interface CheckboxProps {
+  /** The control itself, so a dialog can place initial focus on it. */
+  ref?: Ref<HTMLButtonElement>;
   checked?: boolean;
   defaultChecked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
@@ -22,6 +24,7 @@ export interface CheckboxProps {
  * form semantics; BASE owns the rendered box, check glyph, and states.
  */
 export function Checkbox({
+  ref,
   checked,
   defaultChecked,
   onCheckedChange,
@@ -38,6 +41,7 @@ export function Checkbox({
   return (
     <span className={cx("base-checkbox", className)}>
       <RadixCheckbox.Root
+        ref={ref}
         id={controlId}
         className="base-checkbox__box"
         checked={checked}

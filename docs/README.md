@@ -22,7 +22,14 @@ human-approved production rollout plan.
 
 For RFI Slice 2A review and release, also read
 `RFI_SLICE_2A_ROLLOUT.md` for migration 0015 rehearsal, D1/R2 deployment order,
-rollback limits, and orphan reconciliation.
+rollback limits, and orphan reconciliation. Slice 2A is complete in code and
+merged (PR #49); no production migration or deployment has been performed.
+
+RFI Slice 2B — the record-only mark-ready, official-issue, and issued-evidence
+UI — is implemented on `feature/rfi-slice-2b-issuance-ui` (draft PR; not
+merged). It adds no endpoint, schema, or server change. See
+`UI_PROGRAM_STATUS.md` §5I, `UX_RFI_SPEC.md` §6A, `WORKFLOWS.md` §5.3/§5.4A, and
+the RFI Slice 2B consumer note in `API_CONTRACTS.md` §8.
 
 1. `ARCHITECTURE_V1_ACCEPTANCE.md` — authority, binding rules, and acceptance gates.
 2. `PRODUCT_ARCHITECTURE.md` — product boundary, topology, modules, and release definition.

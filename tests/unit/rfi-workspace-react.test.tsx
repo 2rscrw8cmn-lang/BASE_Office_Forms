@@ -15,6 +15,7 @@ import {
   attachment,
   installWorkspaceFetch,
   jsonResponse,
+  officialIssueSummary,
   PROJECT_ID,
   RFI_ID,
   renderWorkspace,
@@ -636,13 +637,45 @@ describe("RFI workspace — immutable original issue evidence", () => {
     expect(evidence?.textContent).toContain("Original issue");
     expect(evidence?.textContent).toContain("ISS-014");
     expect(evidence?.textContent).toContain("Original Issue");
-    const pdf = screen.getByRole("link", { name: "Download RFI-014.pdf" });
+    expect(evidence?.textContent).toContain("RFI-014.pdf");
+    const pdf = screen.getByRole("link", {
+      name: "Download the official PDF RFI-014.pdf",
+    });
     expect(pdf.getAttribute("href")).toBe(
       `/api/v2/projects/${PROJECT_ID}/rfis/${RFI_ID}/attachments/official-rfi-pdf/content`,
     );
     // Current lifecycle state comes from top-level rfi.status, not the immutable
     // evidence object (which has no status or capabilities).
     expect(root().textContent).toContain("Closed");
+  });
+
+  it("uses the project timezone for workspace and original-issue dates", async () => {
+    const issuedAt = "2026-07-29T01:30:00.000Z";
+    installWorkspaceFetch({
+      rfi: rfiWorkspace({
+        rfi: { rfiNumber: "RFI-015", status: "open", issuedAt },
+        currentVersion: {
+          id: "rfi-draft-1",
+          label: "Original Issue",
+          status: "published",
+        },
+        officialIssue: officialIssueSummary({
+          officialDisplayNumber: "RFI-015",
+          issuedAt,
+        }),
+        capabilities: { updateDraft: false },
+      }),
+    });
+    render();
+    await waitForWorkspace();
+
+    expect(
+      root().querySelector(".base-workspace__metadata")?.textContent,
+    ).toContain("July 28, 2026");
+    expect(
+      root().querySelector(".rfi-workspace-original-issue")?.textContent,
+    ).toContain("July 28, 2026");
+    expect(root().textContent).not.toContain("July 29, 2026");
   });
 });
 

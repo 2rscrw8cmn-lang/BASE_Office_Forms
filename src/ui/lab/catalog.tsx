@@ -194,6 +194,35 @@ function FormDialogSheetDemo() {
   );
 }
 
+function FormDialogSafetyStateDemo() {
+  return (
+    <FormDialog
+      trigger={<Button variant="secondary">Review locked request</Button>}
+      title="Issue outcome needs reconciliation"
+      description="The submitted request stays visible, but it cannot be changed or sent again."
+      fieldsDisabled
+      hideSubmit
+      cancelLabel="Close"
+      secondaryAction={
+        <Button variant="ghost" disabled>
+          Back
+        </Button>
+      }
+      errorSummary="Contact support with the request ID before taking another issue action."
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
+    >
+      <Field label="Submitted recipient">
+        <TextInput defaultValue="Project Architect — Design Co" />
+      </Field>
+      <Field label="Response due">
+        <DateInput defaultValue="2026-08-14" />
+      </Field>
+    </FormDialog>
+  );
+}
+
 function DrawerDemo({
   side = "left",
   size = "navigation",
@@ -681,10 +710,11 @@ export const CATALOG: LabEntry[] = [
     name: "FormDialog",
     group: "interactive",
     description:
-      "Create/edit form dialog with error summary, loading, explicit initial focus, and sheet presentation.",
+      "Create/edit form dialog with error summary, loading, explicit initial focus, sheet presentation, and locked no-resubmit states.",
     examples: [
       { state: "default", render: () => <FormDialogDemo /> },
       { state: "focus", render: () => <FormDialogSheetDemo /> },
+      { state: "error", render: () => <FormDialogSafetyStateDemo /> },
     ],
   },
   {

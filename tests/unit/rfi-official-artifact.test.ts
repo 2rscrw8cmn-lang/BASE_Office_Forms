@@ -7,7 +7,10 @@ import {
   canonicalRfiIssueRequest,
   type FrozenRfiRenderPayload,
 } from "../../src/domain/rfis/official-issue";
-import { RfiPdfArtifactRenderer } from "../../src/infrastructure/rendering/rfi-pdf-artifact-renderer";
+import {
+  formatOfficialIssueDate,
+  RfiPdfArtifactRenderer,
+} from "../../src/infrastructure/rendering/rfi-pdf-artifact-renderer";
 
 function payload(): FrozenRfiRenderPayload {
   const definition = buildBaseRfiTemplateDefinition();
@@ -83,6 +86,14 @@ function payload(): FrozenRfiRenderPayload {
 }
 
 describe("official RFI artifact contract", () => {
+  it("uses the project calendar date when UTC has advanced to the next day", () => {
+    const issuedAt = "2026-07-29T01:30:00.000Z";
+    expect(formatOfficialIssueDate(issuedAt, "America/New_York")).toBe(
+      "2026-07-28",
+    );
+    expect(formatOfficialIssueDate(issuedAt, "UTC")).toBe("2026-07-29");
+  });
+
   it("renders deterministic, non-empty PDF bytes from one frozen payload", async () => {
     const renderer = new RfiPdfArtifactRenderer();
     const first = await renderer.render(payload());
@@ -127,6 +138,19 @@ describe("official RFI artifact contract", () => {
     expect(plan.footnotes).toEqual([
       "This RFI is a controlled project record. The official number is assigned when the RFI is issued.",
     ]);
+  });
+
+  it("rejects the stale preview stub while accepting the canonical BASE RFI definition", () => {
+    expect(() =>
+      compileBaseRfiOfficialDocument({
+        kind: "form",
+        title: "RFI",
+        sections: [],
+      }),
+    ).toThrow(/not supported by the BASE RFI/);
+    expect(() =>
+      compileBaseRfiOfficialDocument(buildBaseRfiTemplateDefinition()),
+    ).not.toThrow();
   });
 
   it("rejects meaningful published-template changes instead of silently misrendering", async () => {

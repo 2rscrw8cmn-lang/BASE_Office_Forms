@@ -1,9 +1,11 @@
 # Current Application Structure
 
-**Status:** Authenticated workspace with the accepted RFI Slice 2A
-official-issuance backend and UI-7 native detail workspaces. Only the Work
-Dashboard and Project Overview remain compatibility-mounted.
-**Updated:** 2026-07-28 (UI-7 rebase and Slice 2A contract integration)
+**Status:** Authenticated workspace with the merged RFI Slice 2A
+official-issuance backend (PR #49), the merged UI-7 native detail workspaces
+(PR #48), and the RFI Slice 2B record-only issuance UI on
+`feature/rfi-slice-2b-issuance-ui`. Only the Work Dashboard and Project
+Overview remain compatibility-mounted.
+**Updated:** 2026-07-28 (RFI Slice 2B mark-ready and official issuance UI)
 
 ## Runtime shape
 
@@ -33,6 +35,16 @@ SHA-256), generates a deterministic PDF with the strict
 then commits the number, promoted immutable revision, issuance/file snapshots,
 render/template/recipient snapshots, activity, and idempotency result in one
 guarded D1 batch.
+
+The canonical BASE RFI definition is shared by
+`src/domain/rfis/base-rfi-template.ts` and the isolated preview reconciliation
+through `src/domain/rfis/base-rfi-template-definition.json`. The preview-only
+`scripts/rfi-preview-template-reconciliation.mjs` preserves a stale template
+version, publishes one immutable canonical successor, and deliberately rebinds
+only eligible pre-official RFIs. At the renderer boundary, failed artifact
+generation emits a redacted structured log with request/resource IDs, the
+template version, error classification, safe message, and stack frames; it
+never includes RFI/routing content, credentials, idempotency keys, or R2 keys.
 
 The original shared revision is promoted from `draft` to `published`; its
 user-facing label is `Original Issue`. `records.current_revision_id` remains
@@ -145,11 +157,16 @@ Browser
 │   ├── RfiResponsePanel.tsx                    response editor and recorded response
 │   ├── RfiAttachmentsPanel.tsx                 role-explicit attachments + upload
 │   ├── RfiTemplatePreview.tsx                  read-only template-bound document view
+│   ├── RfiIssueDialog.tsx                   (2B) two-stage official issue workflow
+│   ├── issueAttempt.ts                      (2B) idempotency key + attempt state rules
+│   ├── cache.ts                             (2B) one lifecycle cache-invalidation point
 │   ├── useRfiWorkspace.ts                      TanStack Query hook, key ["rfi-workspace", …]
 │   ├── api.ts                                   typed workspace/patch/respond/attachment/transition
+│   │                                            + (2B) markRfiReady and issueRfi
 │   ├── format.ts                                ported activity/role/field vocabulary + dates
-│   ├── types.ts                                 RFI workspace read-model types
+│   ├── types.ts                                 RFI workspace read-model types + issue request/result
 │   └── rfi-workspace.css                        composition-only, token-based layout CSS
+├── src/ui/app/queryKeys.ts                   (2B) shared dashboard/overview keys for invalidation
 ├── src/ui/theme/tokens.css                    application semantic tokens (single source)
 ├── src/ui/theme/tokens.ts                     token registry for enforcement tests
 ├── src/ui/components/index.ts                 BASE component library barrel + CSS import
@@ -944,9 +961,9 @@ document's current version; the breadcrumb keeps the owning document one click
 away. Published and superseded versions state that they are immutable, and an
 archived document's notice takes precedence over the revision's own. Upload
 appears only when the server returns `revision.capabilities.uploadFile`, and
-Publish only when `publishRevision` is true *and* the draft has at least one
+Publish only when `publishRevision` is true _and_ the draft has at least one
 file — otherwise the workspace explains the requirement rather than offering a
-disabled control. A failed upload refetches the workspace *before* offering a
+disabled control. A failed upload refetches the workspace _before_ offering a
 retry, so the file list on screen is confirmed server truth and a repeat attempt
 cannot silently attach a second copy; this is the UI-6B staged-work rule applied
 to a single-stage sequence.
@@ -957,6 +974,12 @@ The RFI is a structured record, so its "current work" is its authoritative
 content rather than a file list. Response content is a separate section from the
 question and is never merged into it. Attachments carry an explicit role
 (supporting attachment / reference drawing) and their exact draft revision.
+Free-text response attribution is persisted only in response history;
+`rfi_details.response_by_user_id` stores the authenticated recording actor, not
+an external responder display string, so its user foreign key remains intact.
+The response history/current-summary/status/activity write is one D1 batch; an
+unexpected constraint failure becomes safe `503 RFI_RESPONSE_COMMIT_FAILED`
+with redacted structured context and no partial state.
 Draft editing is one form gated on `capabilities.updateDraft`, carries the
 server's `lockVersion`, and on `409 RFI_VERSION_CONFLICT` reloads the
 authoritative values and asks for a deliberate retry; a 403 says permission was
@@ -964,7 +987,7 @@ lost rather than retrying. While the draft is editable, Assigned to and Response
 due live in the editor and are omitted from the metadata strip, so each fact has
 exactly one authoritative location. Close, Reopen, Void, and the intentional
 pre-issue **Return to draft** correction are confirmed transitions from
-top-level server capabilities. The full issuance dialog remains out of scope.
+top-level server capabilities.
 After reload, `officialIssue` renders its immutable Original Issue evidence and
 authorized official-PDF download; it never supplies current status or actions,
 which remain top-level `rfi.status` and `capabilities`. A legacy RFI that
@@ -975,6 +998,87 @@ template-bound document view is read-only, rendered on demand inside a
 the controlled renderer is not loaded in the authenticated workspace when
 `globalThis.BASE` is absent (unchanged from the legacy workspace — see "Known
 limitations" in `UI_PROGRAM_STATUS.md` §5G).
+Official issue timestamps remain UTC storage values but are presented as the
+project-local calendar date in the workspace evidence and strict PDF adapter;
+the renderer does not derive dates by slicing UTC timestamps. The shared
+desktop `WorkspacePage` rail places an opaque, token-surface sticky facts wrapper
+above scrolling main content, while tablet/mobile retain the non-sticky
+single-column layout.
+
+### RFI mark ready and official issuance (Slice 2B)
+
+The RFI workspace completes the record-only issue path. Nothing here
+reimplements server authority: numbering, validation, idempotency persistence,
+and artifact commit stay on the server, and no endpoint, request shape, response
+shape, migration, or server behaviour changed.
+
+**Mark ready.** Gated on `capabilities.markReady`. The label is **Mark ready**
+for a clean draft and **Save and mark ready** when the form is dirty, so
+`POST .../ready` is never issued against stale server content. `RfiContentPanel`
+keeps sole ownership of the form state and exposes a narrow coordination
+boundary to the header — `onDirtyChange` plus one validated `save()` through
+`handleRef` — rather than the feature duplicating the form. The confirmed
+sequence is validate → save with the current `lockVersion` → confirm → refetch
+the workspace → `/ready` → refetch workspace and register. A save that succeeds
+while `/ready` fails reports exactly that and leaves the draft saved and
+editable; a `409` save conflict reloads and stops before `/ready`.
+
+**Ready to issue.** `Issue RFI` is the primary action, `Return to draft` moves to
+the overflow, and a lifecycle notice states that content and routing are locked.
+When the server does not authorize `issue`, `Return to draft` is promoted back to
+primary and is not also listed in the overflow.
+
+**Issue workflow.** `RfiIssueDialog` composes the shared `FormDialog` in two
+stages — details, then review and confirm. Recipients and CC come from the
+existing `responsibleContacts` collection (every non-archived project contact,
+which is exactly the eligibility rule the issue service enforces), so no
+read-model or server change was required and no email, phone, or address is
+exposed. Included files are the current draft revision's attachments, grouped by
+role and selected by default; the generated official PDF is never one of them.
+Delivery is a fixed **Record only** summary — no disabled email or portal
+controls that would imply features that do not exist. The final action is
+**Issue official RFI**, and no official number is ever predicted in the browser.
+
+**Idempotency (`issueAttempt.ts`).** One deliberate attempt carries exactly one
+key from `createIdempotencyKey` (`crypto.randomUUID`, with a
+`crypto.getRandomValues` v4 fallback). The key is reused for every retry of the
+same canonical payload and spent only when the operator changes an unused
+payload or the server definitively refuses. The key is never persisted to
+storage, rendered, logged, or placed in a URL.
+
+**Ambiguous outcomes.** Every failure first re-reads the authoritative workspace
+through `refetchRfiWorkspace`. A present `officialIssue` means the attempt
+committed and is presented as success, whatever the response said. Otherwise
+`classifyIssueFailure` decides: transient server failures offer **Retry issue**
+with the same key and payload; a failed fetch or unexplained 5xx offers **Check
+issue status**, which is a read and never a second POST;
+`RFI_ARTIFACT_RECONCILIATION_REQUIRED` shows a support notice with the request
+ID, offers no retry, and lets the operator close and return later. The submitted
+payload is locked while an outcome is unknown.
+
+**Cache invalidation (`cache.ts`).** Mark ready, return to draft, and issue all
+invalidate the RFI workspace, the project RFI register, and the reserved
+`dashboardQueryKey()` / `projectOverviewQueryKey(projectId)` from one place. The
+workflow never navigates, so the register's search/filter/sort URL state is
+preserved and no manual refresh is needed. The Dashboard and Project Overview are
+still compatibility-mounted and refetch on mount; their keys in
+`src/ui/app/queryKeys.ts` are reserved for the UI-8 migration.
+
+**Issued evidence.** The Original Issue section leads with the generated
+official PDF through the authenticated attachment content route, then the issued
+version, issuance number, issued date, response-due snapshot, To and CC
+snapshots, and the files included with the original issue labelled by role and
+kept distinct from the generated artifact. Storage keys and R2 URLs are never
+exposed.
+
+**Shared components.** `FormDialog` gained additive optional props
+(`secondaryAction`, `submitDisabled`, `hideSubmit`, `fieldsDisabled`) and
+`Checkbox` gained `ref`, so the workflow uses the shared dialog, focus trap,
+buttons, fields, and error summary rather than a feature-local substitute.
+`base-components-keyboard.test.tsx` independently covers all four new dialog
+states, `base-components-behavior.test.tsx` independently proves that the
+checkbox ref targets the focusable control, and the UI Lab includes the locked
+reconciliation/no-resubmit dialog state.
 
 ### Rollback
 
@@ -1486,10 +1590,13 @@ scripts/capture-ui4-evidence.mjs  dev-only Playwright/Chromium screenshot captur
 scripts/capture-ui5-evidence.mjs  dev-only Chrome DevTools Protocol evidence capture with exact mobile CSS viewports
 scripts/capture-ui6a-evidence.mjs deterministic native Projects evidence capture at exact viewports
 scripts/capture-ui6b-evidence.mjs deterministic Document Register evidence capture; waits on state selectors
+scripts/capture-ui7-evidence.mjs  deterministic detail-workspace evidence capture at exact viewports
+scripts/capture-rfi2b-evidence.mjs deterministic RFI mark-ready/issue/evidence capture; drives the real workflow
 docs/evidence/ui-3/          committed UI Lab desktop/mobile captures
 docs/evidence/ui-4/          committed React shell desktop/mobile/drawer captures
 docs/evidence/ui-5/          committed native RFI register desktop/mobile/tablet and Drawer-state captures
 docs/evidence/ui-6a/         committed native Projects desktop/mobile/register-state captures
+docs/evidence/rfi-2b/        committed RFI mark-ready, issue-workflow, failure, and issued-evidence captures
 .github/workflows/           pull-request validation
 ```
 

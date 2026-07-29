@@ -81,6 +81,17 @@ export class RfiIssuePersistenceError extends Error {
   }
 }
 
+// A response write updates the response history, current response summary,
+// lifecycle state, and activity in one D1 batch. A database failure must be
+// distinguishable from a workflow conflict so operators can investigate it
+// without the browser claiming that no work was attempted.
+export class RfiResponsePersistenceError extends Error {
+  constructor(readonly cause?: unknown) {
+    super("The RFI response could not be recorded.");
+    this.name = "RfiResponsePersistenceError";
+  }
+}
+
 export class RfiIssueCompensationError extends Error {
   constructor(readonly cause?: unknown) {
     super(

@@ -19,6 +19,21 @@ export interface FormDialogProps {
   cancelLabel?: string;
   /** Submission in progress: disables the form and shows the primary spinner. */
   loading?: boolean;
+  /**
+   * Disables the fields without claiming a submission is in flight. Used when an
+   * already-submitted request must not be edited until its outcome is known.
+   */
+  fieldsDisabled?: boolean;
+  /** Blocks submission while the form is shown (e.g. an unmet precondition). */
+  submitDisabled?: boolean;
+  /**
+   * Removes the primary action entirely. For states where re-submitting is not
+   * a safe offer at all, which is different from a disabled button the user
+   * expects to become available again.
+   */
+  hideSubmit?: boolean;
+  /** Extra footer action shown before Cancel, e.g. a multi-step Back. */
+  secondaryAction?: ReactNode;
   /** Submission error summary shown above the footer. */
   errorSummary?: ReactNode;
   /** Optional first field for create/edit workflows. */
@@ -47,6 +62,10 @@ export function FormDialog({
   submitLabel = "Save",
   cancelLabel = "Cancel",
   loading = false,
+  fieldsDisabled = false,
+  submitDisabled = false,
+  hideSubmit = false,
+  secondaryAction,
   errorSummary,
   initialFocusRef,
   variant = "modal",
@@ -96,7 +115,10 @@ export function FormDialog({
               </RadixDialog.Close>
             </header>
             <div className="base-dialog__body base-form-dialog__body">
-              <fieldset className="base-form-dialog__fields" disabled={loading}>
+              <fieldset
+                className="base-form-dialog__fields"
+                disabled={loading || fieldsDisabled}
+              >
                 {children}
               </fieldset>
               {errorSummary != null ? (
@@ -107,14 +129,22 @@ export function FormDialog({
               ) : null}
             </div>
             <footer className="base-dialog__footer">
+              {secondaryAction}
               <RadixDialog.Close asChild>
                 <Button variant="secondary" disabled={loading}>
                   {cancelLabel}
                 </Button>
               </RadixDialog.Close>
-              <Button type="submit" variant="primary" loading={loading}>
-                {submitLabel}
-              </Button>
+              {hideSubmit ? null : (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={loading}
+                  disabled={submitDisabled}
+                >
+                  {submitLabel}
+                </Button>
+              )}
             </footer>
           </form>
         </RadixDialog.Content>

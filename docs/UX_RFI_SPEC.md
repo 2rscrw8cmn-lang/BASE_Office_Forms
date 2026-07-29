@@ -167,12 +167,74 @@ Structure:
 - **Activity**: the timeline of meaningful events (created, subject changed,
   question changed, responsible party changed, response date changed, attachment
   added). Raw activity JSON is never exposed.
-- **Lifecycle actions**: Close, Reopen, Void, and the pre-issue **Return to
-  draft** correction are confirmed transitions driven by server capabilities.
-  The workspace does not add the separate full issuance dialog; it presents the
-  persisted original-issue evidence and official PDF after the Slice 2A server
-  operation completes. `returnForClarification` remains server-side only; its
-  browser surface is a Slice 3 decision.
+- **Lifecycle actions**: Mark ready / Save and mark ready, Issue RFI, Return to
+  draft, Close, Reopen, and Void are confirmed transitions driven solely by
+  server capabilities. Slice 2B adds the mark-ready and official-issue surfaces
+  (§6A) and presents the persisted original-issue evidence and official PDF.
+  `returnForClarification` remains server-side only; its browser surface is a
+  Slice 3 decision.
+
+## 6A. Mark ready and official issuance (Slice 2B)
+
+The workspace completes the operator path
+`draft → save → mark ready → review issue details → issue once →
+server-assigned number → immutable Original Issue evidence`. Delivery is
+`record_only`; email, share links, and an external recipient portal remain
+deferred and are never shown as disabled controls.
+
+**Primary-action priority.** Draft: *Mark ready* (or *Save and mark ready* when
+the form is dirty); ordinary *Save draft* stays part of the content form; *Void*
+stays in the overflow when authorized. Ready to issue: *Issue RFI* is primary,
+*Return to draft* is secondary/overflow, *Void* stays destructive overflow.
+Open / response received / closed keep their existing capability-driven
+behaviour.
+
+**Mark ready.** Never call `/ready` against stale server content: a dirty draft
+is saved with its `lockVersion` and the authoritative workspace re-read first.
+The confirmation states that content and routing become read-only, that no
+official number is assigned yet, that the RFI can be deliberately returned to
+draft, and that issuing officially is a separate final action. A save that
+succeeds while mark ready fails says exactly that and leaves the draft editable.
+
+**Ready to issue.** Content fields render read-only under a notice: "This RFI is
+ready to issue. Its content and routing are locked. Return it to draft to make
+changes."
+
+**Issue workflow.** Two stages. *Issue details* — To (responsible contact
+prefilled, at least one required), CC (optional, never overlapping To), Response
+due (prefilled, real calendar date required), Included files (current-revision
+attachments grouped by role, selected by default; the generated official PDF is
+not one of them), and a fixed **Record only** delivery summary. *Review and
+confirm* — subject, template name and version, assigned contact, To, CC, response
+due date, selected files, delivery mode, and the statements that the server
+assigns the number and that the issued version and artifact become immutable.
+The final button reads **Issue official RFI**.
+
+**Recipient source.** The workspace's existing `responsibleContacts` collection
+is reused: it already lists every non-archived contact in the project, which is
+exactly the eligibility rule the server enforces. Contacts are never queried one
+at a time, free-typed, or filtered for eligibility in the browser.
+
+**One attempt, one key.** One deliberate issue attempt carries exactly one
+idempotency key, reused for every retry of the same canonical payload. A network
+failure, a timeout, or an ambiguous response never mints a second key. A failed
+request is never read as proof that nothing committed: the workspace is re-read
+first, and a present `officialIssue` is presented as success. Transient failures
+offer *Retry issue* with the same key; an unknown outcome offers *Check issue
+status*, which only reads; `RFI_ARTIFACT_RECONCILIATION_REQUIRED` offers no retry
+and shows a support/reconciliation notice with the request ID.
+
+**Issued evidence.** Original Issue presents the official PDF as the clearest
+action (through the authenticated attachment route), the issued version, the
+issuance number, the issued date, the response-due snapshot, the To and CC
+snapshots, and the files included with the original issue labelled by role —
+distinct from the generated artifact and from later response files. It is
+immutable evidence only: current status and available actions always come from
+top-level `rfi.status` and `capabilities`.
+
+**Register integration.** Mark ready, return to draft, and issue invalidate the
+RFI register; the workflow never navigates, so the operator's search, filter, and
+sort URL state is preserved and no manual refresh is required.
 
 ## 7. Table/detail shared-data rule
 
@@ -207,13 +269,16 @@ Additional states: `returned_for_clarification`, `void`. Overdue and due-soon ar
 Sequence across the vertical slice (this slice delivers the register + draft
 workspace; later slices build on the preserved architecture):
 
-- **Slice 2A backend — Issue (implemented, review/rollout pending)**:
-  ready-to-issue validation, sequential numbering,
-  project/routing snapshot, immutable issued revision, generated official PDF,
-  issuance record, durable idempotency, and D1/R2 compensation. The shared
-  revision is presented as `Original Issue`; only `record_only` is supported.
-- **Slice 2B UI/delivery**: capability-gated Issue dialog and result/artifact
-  presentation against the Slice 2A API contract. Email/share delivery remains
+- **Slice 2A backend — Issue (complete in code; merged as PR #49; no production
+  migration or deployment yet)**: ready-to-issue validation, sequential
+  numbering, project/routing snapshot, immutable issued revision, generated
+  official PDF, issuance record, durable idempotency, and D1/R2 compensation. The
+  shared revision is presented as `Original Issue`; only `record_only` is
+  supported.
+- **Slice 2B UI (implemented; draft PR)**: capability-gated mark-ready action,
+  the two-stage Issue dialog, browser-side idempotency, ambiguous-outcome and
+  reconciliation handling, and issued-evidence presentation against the accepted
+  Slice 2A API contract. See §6A. Email, share-link, and portal delivery remain
   later work.
 - **Slice 3 — Response/Close**: response text/responder/returned date, response
   attachments, immutable response snapshot, cost/schedule impacts, close /

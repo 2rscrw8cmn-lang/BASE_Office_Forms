@@ -99,6 +99,29 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function safeRendererErrorName(error: unknown): string {
+  const name = error instanceof Error ? error.name : "NonErrorThrown";
+  return /^[A-Za-z][A-Za-z0-9_]{0,127}$/.test(name)
+    ? name
+    : "UnknownRendererError";
+}
+
+function safeRendererErrorMessage(error: unknown): string {
+  if (safeRendererErrorName(error) === "UnsupportedBaseRfiTemplateError")
+    return "The published template is not supported by the BASE RFI official-document compiler.";
+  return "The official RFI artifact renderer failed before an artifact was generated.";
+}
+
+function safeRendererStackTrace(error: unknown): string | null {
+  if (!(error instanceof Error) || !error.stack) return null;
+  const frames = error.stack
+    .split(/\r?\n/u)
+    .slice(1)
+    .filter((line) => /^\s*at\s/u.test(line))
+    .slice(0, 20);
+  return frames.length > 0 ? frames.join("\n") : null;
+}
+
 export class RfiOfficialIssueService {
   constructor(
     private readonly projects: ProjectService,
@@ -319,6 +342,16 @@ export class RfiOfficialIssueService {
     try {
       rendered = await this.renderer.render(payload);
     } catch (error) {
+      console.error("rfi_artifact_render_failed", {
+        requestId,
+        organizationId: actor.organizationId,
+        projectId: project.id,
+        rfiId: rfi.id,
+        templateVersionId: template.templateVersionId,
+        rendererErrorName: safeRendererErrorName(error),
+        safeErrorMessage: safeRendererErrorMessage(error),
+        stackTrace: safeRendererStackTrace(error),
+      });
       throw new RfiIssueRenderError(error);
     }
     if (rendered.bytes.byteLength === 0) {

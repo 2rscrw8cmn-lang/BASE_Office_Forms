@@ -53,6 +53,13 @@ const workspaceScenario = params.get("workspaceScenario") ?? "none";
 const workspaceUploadMode = params.get("workspaceUploadMode") ?? "success";
 const rfiWorkspaceFixture = params.get("rfiWorkspaceFixture") ?? "draft";
 const rfiWorkspaceScenario = params.get("rfiWorkspaceScenario") ?? "none";
+// RFI Slice 2B evidence drives the real mark-ready and official-issue
+// workflows. `rfiReadyMode` and `rfiIssueMode` choose the authoritative server
+// answer (success, refusal, transient failure, unknown outcome, or
+// reconciliation), so every documented state is produced by the production
+// components reacting to a real response rather than by static markup.
+const rfiReadyMode = params.get("rfiReadyMode") ?? "success";
+const rfiIssueMode = params.get("rfiIssueMode") ?? "success";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -510,6 +517,49 @@ const RFI_ATTACHMENTS = [
   },
 ];
 
+const LONG_RFI_ATTACHMENTS = [
+  {
+    ...RFI_ATTACHMENTS[0],
+    originalFilename:
+      "second-floor-corridor-ceiling-height-and-duct-clearance-coordination-sketch-revision-c-superseding-the-july-issue.pdf",
+  },
+  {
+    ...RFI_ATTACHMENTS[1],
+    originalFilename:
+      "A2-11-reflected-ceiling-plan-with-acoustic-soffit-and-sprinkler-head-coordination-overlay.pdf",
+  },
+];
+
+const RFI_ISSUE_RECIPIENTS = {
+  to: [
+    {
+      projectContactId: RFI_CONTACT.id,
+      contactName: RFI_CONTACT.name,
+      companyName: RFI_CONTACT.companyName,
+      email: "alex@meridian.example",
+    },
+  ],
+  cc: [
+    {
+      projectContactId: "contact-2",
+      contactName: "Sam Engineer",
+      companyName: "Northline MEP",
+      email: null,
+    },
+  ],
+};
+
+function issuedFileSnapshot(attachment: (typeof RFI_ATTACHMENTS)[number]) {
+  return {
+    fileId: attachment.id,
+    role: attachment.role,
+    originalFilename: attachment.originalFilename,
+    mediaType: attachment.mediaType,
+    byteSize: attachment.byteSize,
+    sha256: "0".repeat(64),
+  };
+}
+
 const LONG_RFI_SUBJECT =
   "Resolve conflicting ceiling height, duct clearance, acoustic soffit, and sprinkler head layout requirements across the second-floor corridor between grid lines C and G, including coordination with the adjacent classroom wing";
 const LONG_RFI_QUESTION = [
@@ -518,13 +568,20 @@ const LONG_RFI_QUESTION = [
   "Please also confirm whether the acoustic treatment above the soffit needs to extend into the adjacent classroom wing, since the existing RCP only shows it terminating at the corridor line and the specification section referenced below implies continuous treatment across the corridor-to-classroom transition.",
 ].join(" ");
 
+let rfiIssueCommitted = false;
+
 function currentRfiWorkspace() {
-  const long = rfiWorkspaceFixture === "long";
+  const long =
+    rfiWorkspaceFixture === "long" || rfiWorkspaceFixture === "ready-long";
   const issued =
-    ["issued", "responded", "legacy"].includes(rfiWorkspaceFixture) && !long;
+    (["issued", "responded", "legacy"].includes(rfiWorkspaceFixture) &&
+      !long) ||
+    rfiIssueCommitted;
   const legacy = rfiWorkspaceFixture === "legacy";
   const responded = rfiWorkspaceFixture === "responded";
-  const ready = rfiWorkspaceFixture === "ready";
+  const ready =
+    (rfiWorkspaceFixture === "ready" || rfiWorkspaceFixture === "ready-long") &&
+    !rfiIssueCommitted;
   return {
     rfi: {
       id: "rfi-1",
@@ -593,8 +650,20 @@ function currentRfiWorkspace() {
     organization: { id: "org-1", name: "BASE Construction Group" },
     template: null,
     attachments: {
-      supporting_attachment: [RFI_ATTACHMENTS[0]],
-      reference_drawing: [RFI_ATTACHMENTS[1]],
+      // The server labels an attachment with the revision it belongs to, which
+      // becomes "Original Issue" once that revision is promoted at issue.
+      supporting_attachment: [
+        {
+          ...(long ? LONG_RFI_ATTACHMENTS[0] : RFI_ATTACHMENTS[0]),
+          revisionLabel: issued ? "Original Issue" : "Current Draft",
+        },
+      ],
+      reference_drawing: [
+        {
+          ...(long ? LONG_RFI_ATTACHMENTS[1] : RFI_ATTACHMENTS[1]),
+          revisionLabel: issued ? "Original Issue" : "Current Draft",
+        },
+      ],
     },
     officialIssue:
       issued && !legacy
@@ -616,8 +685,10 @@ function currentRfiWorkspace() {
               byteSize: 42_000,
               sha256: "0".repeat(64),
             },
-            includedFiles: [],
-            recipients: { to: [], cc: [] },
+            includedFiles: (long ? LONG_RFI_ATTACHMENTS : RFI_ATTACHMENTS).map(
+              issuedFileSnapshot,
+            ),
+            recipients: RFI_ISSUE_RECIPIENTS,
             originalIssueRequestId: "req-original-issue",
           }
         : null,
@@ -726,11 +797,11 @@ function currentRfiWorkspace() {
           },
         ],
     capabilities: {
-      updateDraft: !issued,
+      updateDraft: !issued && !ready,
       uploadAttachment: !issued,
-      markReady: false,
+      markReady: !issued && !ready && !legacy,
       returnToDraft: ready,
-      issue: false,
+      issue: ready,
       recordResponse: issued && !responded,
       returnForClarification: false,
       close: responded,
@@ -857,6 +928,100 @@ globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
       response({
         data: currentRecordWorkspace(),
         meta: { requestId: "req-ui7-record" },
+      }),
+    );
+  }
+
+  // --- RFI Slice 2B lifecycle -------------------------------------------
+  if (/\/rfis\/[^/?]+\/ready$/.test(url) && method === "POST") {
+    if (rfiReadyMode === "validation-failure") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RFI_READY_VALIDATION_FAILED",
+              message:
+                "A responsible project contact must be active on this project before this RFI can be marked ready.",
+              requestId: "req-rfi2b-ready",
+            },
+          },
+          422,
+        ),
+      );
+    }
+    return Promise.resolve(response({ data: {} }));
+  }
+
+  if (/\/rfis\/[^/?]+\/issue$/.test(url) && method === "POST") {
+    if (rfiIssueMode === "pending") {
+      // Never settles, so the capture documents the real in-flight state.
+      return new Promise<Response>(() => undefined);
+    }
+    if (rfiIssueMode === "retryable") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RFI_ARTIFACT_RENDER_FAILED",
+              message: "The official RFI artifact could not be generated.",
+              requestId: "req-rfi2b-render",
+            },
+          },
+          503,
+        ),
+      );
+    }
+    if (rfiIssueMode === "reconcile") {
+      return Promise.resolve(
+        response(
+          {
+            error: {
+              code: "RFI_ARTIFACT_RECONCILIATION_REQUIRED",
+              message:
+                "The issuance outcome is uncertain and its artifact requires reconciliation.",
+              requestId: "req-rfi2b-reconcile",
+            },
+          },
+          500,
+        ),
+      );
+    }
+    rfiIssueCommitted = true;
+    return Promise.resolve(
+      response({
+        data: {
+          rfiId: "rfi-1",
+          recordId: "rfi-1",
+          officialDisplayNumber: "RFI-014",
+          status: "open",
+          issuedRevision: {
+            id: "rfi-draft-1",
+            internalRevisionNumber: 1,
+            userFacingVersion: "Original Issue",
+          },
+          issuance: { id: "issuance-1", issueNumber: "ISS-014" },
+          issuedAt: "2026-07-10T09:00:00Z",
+          responseDueDate: "2026-08-05",
+          officialArtifact: {
+            fileId: "official-rfi-pdf",
+            role: "generated_artifact",
+            originalFilename: "RFI-014.pdf",
+            mediaType: "application/pdf",
+            byteSize: 42_000,
+            sha256: "0".repeat(64),
+          },
+          includedFiles: RFI_ATTACHMENTS.map(issuedFileSnapshot),
+          recipients: RFI_ISSUE_RECIPIENTS,
+          capabilities: {
+            issue: false,
+            recordResponse: true,
+            returnForClarification: false,
+            close: false,
+            reopen: false,
+            void: true,
+          },
+          requestId: "req-rfi2b-issue",
+        },
       }),
     );
   }
@@ -1463,7 +1628,139 @@ async function runRfiWorkspaceScenario() {
     setNativeValue(subject, "");
     ((await waitForSelector("[data-save-draft]")) as HTMLButtonElement).click();
     await waitForSelector('[role="alert"], .base-field__error');
+    return;
   }
+
+  await runRfiIssueScenario();
+}
+
+/*
+ * RFI Slice 2B scenarios. Each drives the production mark-ready and official
+ * issue workflows through real DOM events against the real API layer, so the
+ * captures document the shipped components in the state they claim -- including
+ * the ones only a failing server can produce.
+ */
+async function runRfiIssueScenario() {
+  const scenario = rfiWorkspaceScenario;
+
+  if (scenario === "dirty-draft") {
+    const subject = (await waitForSelector(
+      '[data-rfi-field="subject"]',
+    )) as HTMLInputElement;
+    setNativeValue(
+      subject,
+      "Resolve conflicting ceiling height requirements at the second-floor corridor and classroom wing",
+    );
+    await waitForSelector('[data-rfi-content-form][data-rfi-dirty="true"]');
+    return;
+  }
+
+  if (
+    scenario === "mark-ready-confirm" ||
+    scenario === "mark-ready-dirty-confirm" ||
+    scenario === "mark-ready-failure"
+  ) {
+    if (scenario === "mark-ready-dirty-confirm") {
+      const subject = (await waitForSelector(
+        '[data-rfi-field="subject"]',
+      )) as HTMLInputElement;
+      setNativeValue(
+        subject,
+        "Resolve conflicting ceiling height requirements at the second-floor corridor and classroom wing",
+      );
+      await waitForSelector('[data-rfi-content-form][data-rfi-dirty="true"]');
+    }
+    ((await waitForSelector("[data-mark-ready]")) as HTMLButtonElement).click();
+    const confirm = await waitForSelector('[role="alertdialog"]');
+    if (scenario !== "mark-ready-failure") return;
+    [...confirm.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent.startsWith("Mark ready"))
+      ?.click();
+    const alert = await waitForSelector(".rfi-workspace-error");
+    alert.scrollIntoView({ block: "center", behavior: "instant" });
+    return;
+  }
+
+  if (scenario === "ready-overflow") {
+    const actions = (await waitForSelector(
+      "[data-rfi-actions]",
+    )) as HTMLButtonElement;
+    openMenuTrigger(actions);
+    await waitForSelector(".base-menu");
+    return;
+  }
+
+  // The immutable evidence sits below the content and files sections, so the
+  // capture scrolls to it rather than claiming an above-the-fold screenshot
+  // shows it.
+  if (scenario === "issued-evidence") {
+    (await waitForSelector("[data-issued-files]")).scrollIntoView({
+      block: "center",
+      behavior: "instant",
+    });
+    return;
+  }
+
+  if (scenario === "sticky-rail") {
+    (
+      await waitForSelector(".base-workspace-section--secondary")
+    ).scrollIntoView({
+      block: "center",
+      behavior: "instant",
+    });
+    return;
+  }
+
+  if (!scenario.startsWith("issue-")) return;
+
+  ((await waitForSelector("[data-issue-rfi]")) as HTMLButtonElement).click();
+  await waitForSelector("[data-issue-recipients]");
+  if (scenario === "issue-details") return;
+
+  if (scenario === "issue-recipients") {
+    const cc = await waitForSelector("[data-issue-cc]");
+    [...cc.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')][1].click();
+    await waitForSelector(
+      '[data-issue-cc] [role="checkbox"][data-state="checked"]',
+    );
+    return;
+  }
+
+  if (scenario === "issue-files") {
+    const files = await waitForSelector("[data-issue-files]");
+    [
+      ...files.querySelectorAll<HTMLButtonElement>('[role="checkbox"]'),
+    ][1].click();
+    await waitForSelector(
+      '[data-issue-files] [role="checkbox"][data-state="unchecked"]',
+    );
+    return;
+  }
+
+  const dialog = await waitForSelector('[role="dialog"]');
+  const submit = () => {
+    dialog.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  };
+  submit();
+  await waitForSelector("[data-issue-review]");
+  if (scenario === "issue-review") return;
+
+  submit();
+  if (scenario === "issue-pending") {
+    await waitForSelector("[data-issue-pending]");
+    return;
+  }
+  const settled = await waitForSelector(
+    ".rfi-issue-failure, [data-official-pdf-download]",
+  );
+  if (scenario === "issue-commit") {
+    (await waitForSelector("[data-issued-files]")).scrollIntoView({
+      block: "center",
+      behavior: "instant",
+    });
+    return;
+  }
+  settled.scrollIntoView({ block: "center", behavior: "instant" });
 }
 
 void runRfiWorkspaceScenario();

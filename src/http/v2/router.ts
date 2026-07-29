@@ -15,6 +15,7 @@ import {
   RfiIssueCompensationError,
   RfiIssueIdempotencyConflictError,
   RfiIssuePersistenceError,
+  RfiResponsePersistenceError,
   RfiIssueRenderError,
   RfiIssueRequestError,
   RfiIssueStorageError,
@@ -1335,6 +1336,8 @@ function projectError(context: ApiRequestContext, error: unknown): Response {
     );
   if (error instanceof RfiIssuePersistenceError)
     return apiError(context, 503, "RFI_ISSUE_COMMIT_FAILED", error.message);
+  if (error instanceof RfiResponsePersistenceError)
+    return apiError(context, 503, "RFI_RESPONSE_COMMIT_FAILED", error.message);
   if (error instanceof RfiResponsibleContactError)
     return apiError(
       context,

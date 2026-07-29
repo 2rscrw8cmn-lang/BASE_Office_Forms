@@ -32,6 +32,33 @@ const MUTED = rgb(0.39, 0.39, 0.42);
 const RULE = rgb(0.72, 0.69, 0.69);
 const WHITE = rgb(1, 1, 1);
 
+/**
+ * Official timestamps are stored in UTC, while controlled documents display
+ * the project-local calendar date. Never obtain that date by slicing the UTC
+ * timestamp: an evening issue can belong to the next UTC day.
+ */
+export function formatOfficialIssueDate(
+  issuedAt: string,
+  projectTimezone: string,
+): string {
+  const issued = new Date(issuedAt);
+  if (Number.isNaN(issued.getTime())) {
+    throw new TypeError("Official issue timestamp is invalid.");
+  }
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: projectTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(issued);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function splitWord(
   word: string,
   font: PDFFont,
@@ -227,7 +254,7 @@ export class RfiPdfArtifactRenderer implements RfiArtifactRenderer {
       cursor.y,
       half,
       "Issue date / response due",
-      `${payload.issuedAt.slice(0, 10)} / ${payload.rfi.responseDueDate}`,
+      `${formatOfficialIssueDate(payload.issuedAt, payload.project.timezone)} / ${payload.rfi.responseDueDate}`,
     );
     drawControlCell(
       MARGIN + half,

@@ -141,6 +141,7 @@ npm run db:migrations:list:rfi-preview
 $env:RFI_PREVIEW_FIXTURE_EMAIL = '<Access email>'
 npm run db:fixture:rfi-preview
 npm run db:fixture:rfi-preview:verify
+npm run db:reconcile:rfi-preview-template
 npm run db:fixture:rfi-preview:cleanup
 npm run db:rehearse:rfi-0014
 npm run db:rehearse:rfi-0014:cleanup
@@ -148,9 +149,14 @@ npm run db:rehearse:rfi-0014:cleanup
 
 These commands are guarded to their exact non-production identities. The
 combined fixture reads only the matching active production user identity and
-writes synthetic preview data; the rehearsal has no production access. See
-`RFI_SLICE_1_ROLLOUT.md` for database identities, cleanup, and the production
-approval plan. Migrations 0013/0014 are never production commands in this task.
+writes synthetic preview data; the rehearsal has no production access. The
+template reconciliation is idempotent: it preserves a stale preview template
+version for audit, publishes one immutable canonical successor, and rebinds
+only unnumbered/unissued draft or ready preview RFIs with no official issue,
+published official revision, or generated artifact. Fixture cleanup leaves
+those immutable template versions intact for audit. See `RFI_SLICE_1_ROLLOUT.md`
+for database identities, cleanup, and the production approval plan. Migrations
+0013/0014 are never production commands in this task.
 
 ### Retained UI-2 schema-only tooling
 

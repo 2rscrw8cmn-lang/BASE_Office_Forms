@@ -82,6 +82,50 @@ describe("FormDialog shared presentation and focus", () => {
       expect(trigger).toHaveFocus();
     });
   });
+
+  it("supports additive locked, secondary-action, disabled-submit, and no-resubmit states", () => {
+    const first = render(
+      <FormDialog
+        open
+        title="Review submitted request"
+        description="The outcome is still being checked."
+        fieldsDisabled
+        submitDisabled
+        secondaryAction={<Button>Back</Button>}
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <Field label="Recipient">
+          <TextInput defaultValue="Project Architect" />
+        </Field>
+      </FormDialog>,
+    );
+
+    expect(screen.getByRole("textbox", { name: "Recipient" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    first.unmount();
+
+    render(
+      <FormDialog
+        open
+        title="Reconciliation required"
+        hideSubmit
+        cancelLabel="Close"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <p>Contact support before another submission.</p>
+      </FormDialog>,
+    );
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
 });
 
 describe("Drawer keyboard and focus", () => {
