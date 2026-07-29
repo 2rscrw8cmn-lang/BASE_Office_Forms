@@ -1858,6 +1858,14 @@ only their intentional Slice 2B edits, reducing those files' final comparison
 with `origin/main` to a narrow semantic diff. The full gate and all 26 evidence
 captures were rerun after the correction.
 
+**Preview artifact correction (2026-07-28).** A captured authenticated preview
+issue returned `503 RFI_ARTIFACT_RENDER_FAILED` because the retained preview
+fixture had published a stale RFI definition. This branch adds a reviewed,
+idempotent preview-only canonical-template reconciliation and safe structured
+renderer-failure logging. It preserves the stale version for audit and never
+touches production; product-owner preview verification remains required before
+this draft PR can merge.
+
 ### What this slice delivers
 
 The complete browser-operable record-only issue path inside the existing UI-7

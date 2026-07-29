@@ -660,6 +660,9 @@ The Slice 2A gate includes:
   concurrency coverage;
 - strict template-compiler parity/rejection, multiline/long-token/page-break,
   deterministic server-PDF, and resource-scoped canonical-idempotency tests;
+- stale-preview-template rejection plus canonical-template acceptance,
+  idempotent preview reconciliation eligibility guards, and redacted
+  artifact-render failure logs;
 - empty-database and populated post-0014 migration rehearsals through schema
   version 13 with foreign-key checks;
 - successful number/revision/artifact/issuance/file/recipient/activity/API

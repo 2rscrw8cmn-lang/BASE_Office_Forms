@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OrganizationService } from "../../src/application/identity/organization-service";
 import { ProjectService } from "../../src/application/projects/project-service";
@@ -185,6 +185,7 @@ const storage = new FakeStorage();
 class TestRenderer implements RfiArtifactRenderer {
   private readonly delegate = new RfiPdfArtifactRenderer();
   fail = false;
+  failure: Error | null = null;
   versionOverride: string | null = null;
 
   get rendererVersion(): string {
@@ -193,15 +194,28 @@ class TestRenderer implements RfiArtifactRenderer {
 
   reset(): void {
     this.fail = false;
+    this.failure = null;
     this.versionOverride = null;
   }
 
   render(payload: FrozenRfiRenderPayload): Promise<RenderedRfiArtifact> {
-    if (this.fail) return Promise.reject(new Error("forced render failure"));
+    if (this.fail)
+      return Promise.reject(this.failure ?? new Error("forced render failure"));
     return this.delegate.render(payload);
   }
 }
 const renderer = new TestRenderer();
+
+interface RendererFailureLog {
+  requestId: string;
+  organizationId: string;
+  projectId: string;
+  rfiId: string;
+  templateVersionId: string;
+  rendererErrorName: string;
+  safeErrorMessage: string;
+  stackTrace: string | null;
+}
 
 const issueRepositoryControls = {
   failBeforeCommit: false,
@@ -2402,6 +2416,50 @@ describe("RFI register & workspace (Slice 1)", () => {
     ).toBe(503);
     expect(storage.objectCount).toBe(0);
     storage.failHead = false;
+  });
+
+  it("logs renderer failures with safe structured diagnostics only", async () => {
+    const renderCase = await prepareIssuableRfi("P-RFI-RENDER-LOG");
+    renderer.fail = true;
+    renderer.failure = new Error(
+      "secret subject; recipient@example.test; idempotency-key; organizations/org-a/private.pdf",
+    );
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      const response = await issue(
+        renderCase.project.id,
+        renderCase.draft.id,
+        undefined,
+        { key: "do-not-log-idempotency-key" },
+      );
+      expect(response.status).toBe(503);
+      expect(error).toHaveBeenCalledOnce();
+      const [event, details] = error.mock.calls[0] as unknown as [
+        string,
+        RendererFailureLog,
+      ];
+      expect(event).toBe("rfi_artifact_render_failed");
+      expect(details.requestId).toMatch(/^req_/);
+      expect(details.organizationId).toBe("org-a");
+      expect(details.projectId).toBe(renderCase.project.id);
+      expect(details.rfiId).toBe(renderCase.draft.id);
+      expect(details.templateVersionId).not.toHaveLength(0);
+      expect(details.rendererErrorName).toBe("Error");
+      expect(details.safeErrorMessage).toBe(
+        "The official RFI artifact renderer failed before an artifact was generated.",
+      );
+      expect(details.stackTrace).toMatch(/^\s*at\s/u);
+      const serialized = JSON.stringify([event, details]);
+      expect(serialized).not.toContain("secret subject");
+      expect(serialized).not.toContain("recipient@example.test");
+      expect(serialized).not.toContain("do-not-log-idempotency-key");
+      expect(serialized).not.toContain("organizations/org-a/private.pdf");
+    } finally {
+      error.mockRestore();
+      renderer.reset();
+    }
   });
 
   it("durably records an orphan when R2 compensation deletion fails", async () => {

@@ -190,6 +190,18 @@ only for intentional content or routing correction.
 If an official issue row does reference the key, stop: do not delete it. That
 is an integrity incident requiring investigation and a reviewed forward fix.
 
+## Preview template reconciliation (2026-07-28)
+
+The isolated Pages-preview fixture originally carried a stale published RFI
+stub. `npm run db:reconcile:rfi-preview-template` is the reviewed forward
+correction: it retains that immutable row for audit, publishes exactly one
+canonical successor, and is safe to rerun. It may rebind only preview RFI rows
+in `draft` or `ready_to_issue` that remain unnumbered, unissued, and without an
+official issue, published revision, or generated artifact. Issued, numbered,
+open, closed, and void rows remain bound to their existing version. This is a
+preview-fixture correction only; it does not change a production template,
+migration, or official record.
+
 ## Deliberate limitations
 
 - `record_only` only; no email, share, inbox, or portal delivery.

@@ -36,6 +36,16 @@ then commits the number, promoted immutable revision, issuance/file snapshots,
 render/template/recipient snapshots, activity, and idempotency result in one
 guarded D1 batch.
 
+The canonical BASE RFI definition is shared by
+`src/domain/rfis/base-rfi-template.ts` and the isolated preview reconciliation
+through `src/domain/rfis/base-rfi-template-definition.json`. The preview-only
+`scripts/rfi-preview-template-reconciliation.mjs` preserves a stale template
+version, publishes one immutable canonical successor, and deliberately rebinds
+only eligible pre-official RFIs. At the renderer boundary, failed artifact
+generation emits a redacted structured log with request/resource IDs, the
+template version, error classification, safe message, and stack frames; it
+never includes RFI/routing content, credentials, idempotency keys, or R2 keys.
+
 The original shared revision is promoted from `draft` to `published`; its
 user-facing label is `Original Issue`. `records.current_revision_id` remains
 authoritative. Migration `0015_rfi_official_issuance.sql` advances the schema to

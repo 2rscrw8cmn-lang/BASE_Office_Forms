@@ -129,6 +129,19 @@ describe("official RFI artifact contract", () => {
     ]);
   });
 
+  it("rejects the stale preview stub while accepting the canonical BASE RFI definition", () => {
+    expect(() =>
+      compileBaseRfiOfficialDocument({
+        kind: "form",
+        title: "RFI",
+        sections: [],
+      }),
+    ).toThrow(/not supported by the BASE RFI/);
+    expect(() =>
+      compileBaseRfiOfficialDocument(buildBaseRfiTemplateDefinition()),
+    ).not.toThrow();
+  });
+
   it("rejects meaningful published-template changes instead of silently misrendering", async () => {
     const changed = buildBaseRfiTemplateDefinition();
     changed.title = "Changed RFI";
