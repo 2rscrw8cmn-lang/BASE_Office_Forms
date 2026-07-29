@@ -257,6 +257,24 @@ export function planFingerprint(plan) {
   return createHash("sha256").update(stable(plan)).digest("hex");
 }
 
+function assertApprovedRebindScope(plan, reviewedRebindRecordIds) {
+  const unexpected = plan.changes.rebindRecordIds.filter(
+    (recordId) => !reviewedRebindRecordIds.has(recordId),
+  );
+  if (unexpected.length > 0)
+    throw new Error(
+      `Production reconciliation found newly eligible RFI IDs outside the reviewed dry-run scope: ${unexpected.join(", ")}.`,
+    );
+}
+
+function sqlIdList(recordIds, sql) {
+  if (recordIds.length === 0)
+    throw new Error(
+      "Production reconciliation cannot build an empty authorized rebind set.",
+    );
+  return recordIds.map(sql).join(", ");
+}
+
 export async function inspectProductionTemplate({ query, sql }) {
   const [bound] =
     await query(`SELECT version.organization_id, version.template_id
@@ -312,6 +330,7 @@ export async function applyProductionTemplateReconciliation({
       "An actor user ID is required for the immutable version 2 audit record.",
     );
 
+  const reviewedRebindRecordIds = new Set(before.changes.rebindRecordIds);
   let plan = before;
   if (plan.changes.createCanonicalVersion) {
     const canonicalVersionId = randomUUID();
@@ -335,6 +354,7 @@ export async function applyProductionTemplateReconciliation({
           WHERE organization_id = ${sql(plan.organizationId)} AND template_id = ${sql(plan.templateId)}
             AND version_number = 2);`);
     plan = await inspectProductionTemplate({ query, sql });
+    assertApprovedRebindScope(plan, reviewedRebindRecordIds);
     if (plan.changes.createCanonicalVersion || !plan.canonicalVersionId)
       throw new Error(
         "Production reconciliation could not verify the immutable version 2 stage; version 1 was not retired.",
@@ -358,6 +378,7 @@ export async function applyProductionTemplateReconciliation({
         AND organization_id = ${sql(plan.organizationId)} AND version_number = 2
         AND status = 'retired';`);
     plan = await inspectProductionTemplate({ query, sql });
+    assertApprovedRebindScope(plan, reviewedRebindRecordIds);
   }
 
   if (plan.changes.advanceSequenceTo) {
@@ -365,9 +386,12 @@ export async function applyProductionTemplateReconciliation({
       WHERE organization_id = ${sql(plan.organizationId)}
         AND template_id = ${sql(plan.templateId)} AND last_number = 1;`);
     plan = await inspectProductionTemplate({ query, sql });
+    assertApprovedRebindScope(plan, reviewedRebindRecordIds);
   }
 
   if (plan.changes.rebindRecordIds.length > 0) {
+    plan = await inspectProductionTemplate({ query, sql });
+    assertApprovedRebindScope(plan, reviewedRebindRecordIds);
     await execute(`UPDATE records AS record
       SET template_version_id = ${sql(plan.canonicalVersionId)},
           lock_version = lock_version + 1,
@@ -375,6 +399,7 @@ export async function applyProductionTemplateReconciliation({
       WHERE record.organization_id = ${sql(plan.organizationId)}
         AND record.record_type_key = 'rfi'
         AND record.template_version_id = ${sql(productionReconciliation.affectedVersionId)}
+        AND record.id IN (${sqlIdList([...reviewedRebindRecordIds], sql)})
         AND record.workflow_status IN ('draft', 'ready_to_issue')
         AND record.sequence_no IS NULL AND record.record_number IS NULL
         AND record.issued_at IS NULL
@@ -387,6 +412,7 @@ export async function applyProductionTemplateReconciliation({
   }
 
   const after = await inspectProductionTemplate({ query, sql });
+  assertApprovedRebindScope(after, reviewedRebindRecordIds);
   if (
     after.changes.createCanonicalVersion ||
     after.changes.retireVersionId ||

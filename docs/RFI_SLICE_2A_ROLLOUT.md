@@ -257,7 +257,10 @@ Remove-Item Env:RFI_PRODUCTION_RECONCILIATION_APPROVED
 ```
 
 The runner re-reads production before writing and refuses to proceed unless the
-fingerprint still matches. It stages a new immutable canonical version 2,
+fingerprint still matches. It freezes the eligible RFI IDs from that approved
+report as the only authorized rebind set, rejects any later inspection that
+finds another eligible version-1 RFI, and includes the exact frozen IDs in the
+guarded SQL update. It stages a new immutable canonical version 2,
 retires version 1, promotes version 2, and advances
 `template_version_sequences.last_number` from 1 to 2. It never edits version
 1's JSON. Its record update is independently guarded to rebind only records
@@ -270,6 +273,13 @@ ineligible records remain bound to version 1.
 The successful apply report must have no planned create, retire, promotion,
 sequence, or rebind change. Immediately run the read-only command a second
 time and retain its zero-change report as the idempotence proof.
+
+If any apply step has written (including staging version 2), the original
+dry-run fingerprint no longer represents production state. Stop rather than
+reusing it: run a fresh read-only dry run, obtain explicit approval of that
+new staged-state fingerprint, and only then resume. A separate reviewed resume
+mechanism would be required to authorize reuse of the original fingerprint;
+none exists in this release.
 
 ### Post-apply failed-RFI and issuance verification
 

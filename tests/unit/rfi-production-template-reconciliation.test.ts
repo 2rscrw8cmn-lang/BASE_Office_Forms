@@ -308,6 +308,9 @@ describe("production RFI template reconciliation", () => {
     );
     expect(rebind).toContain("record.record_type_key = 'rfi'");
     expect(rebind).toContain(
+      `record.id IN ('${productionReconciliation.failedRfiId}')`,
+    );
+    expect(rebind).toContain(
       "record.workflow_status IN ('draft', 'ready_to_issue')",
     );
     expect(rebind).toContain(
@@ -317,5 +320,87 @@ describe("production RFI template reconciliation", () => {
     expect(rebind).toContain("NOT EXISTS (SELECT 1 FROM rfi_official_issues");
     expect(rebind).toContain("revision.status = 'published'");
     expect(rebind).toContain("file.role = 'generated_artifact'");
+  });
+
+  it("aborts without rebinding a newly eligible RFI outside the reviewed set", async () => {
+    const versions = [
+      version(oldVersion, 1, expectedPreFieldIdDefinition(), "published"),
+    ];
+    const reviewed = {
+      ...record(productionReconciliation.failedRfiId),
+      template_version_id: oldVersion,
+    };
+    const records = [reviewed];
+    let sequence = 1;
+    const executed: string[] = [];
+    const query = (command: string) => {
+      if (command.includes("FROM template_versions version"))
+        return Promise.resolve([
+          {
+            organization_id: "production-org",
+            template_id: "production-template",
+          },
+        ]);
+      if (command.includes("FROM template_versions\n    WHERE"))
+        return Promise.resolve(versions);
+      if (command.includes("FROM template_version_sequences"))
+        return Promise.resolve([{ last_number: sequence }]);
+      if (command.includes("FROM records record"))
+        return Promise.resolve(
+          records.filter((item) => item.template_version_id === oldVersion),
+        );
+      throw new Error(`Unexpected query: ${command}`);
+    };
+    const execute = (command: string) => {
+      executed.push(command);
+      if (command.startsWith("INSERT INTO template_versions")) {
+        versions.push(
+          version("canonical-v2", 2, canonicalDefinition, "retired"),
+        );
+      } else if (
+        command.startsWith("UPDATE template_versions SET status = 'retired'")
+      ) {
+        versions[0].status = "retired";
+      } else if (
+        command.startsWith("UPDATE template_versions SET status = 'published'")
+      ) {
+        versions[1].status = "published";
+      } else if (command.startsWith("UPDATE template_version_sequences")) {
+        sequence = 2;
+        records.push({
+          ...record("newly-eligible"),
+          template_version_id: oldVersion,
+        });
+      } else if (command.startsWith("UPDATE records AS record")) {
+        throw new Error("The rebind must not execute after scope expansion.");
+      } else {
+        throw new Error(`Unexpected execute: ${command}`);
+      }
+      return Promise.resolve();
+    };
+    const sql = (value: string) => `'${value}'`;
+    const before = plan(versions, records, sequence);
+
+    await expect(
+      applyProductionTemplateReconciliation({
+        query,
+        execute,
+        sql,
+        actorUserId: "active-operator",
+        reviewedPlanFingerprint: planFingerprint(before),
+      }),
+    ).rejects.toThrow(
+      "newly eligible RFI IDs outside the reviewed dry-run scope: newly-eligible",
+    );
+    expect(records).toMatchObject([
+      {
+        id: productionReconciliation.failedRfiId,
+        template_version_id: oldVersion,
+      },
+      { id: "newly-eligible", template_version_id: oldVersion },
+    ]);
+    expect(executed).not.toContainEqual(
+      expect.stringMatching(/^UPDATE records AS record/),
+    );
   });
 });
